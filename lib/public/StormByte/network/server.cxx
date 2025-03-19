@@ -59,10 +59,21 @@ void Server::AcceptClients() {
 	while (m_status.load() == Status::Connected) {
 		auto expected_client_socket = m_socket->Accept();
 		if (expected_client_socket) {
-			std::lock_guard<std::mutex> lock(m_clientsMutex);
-			m_clients.push_back(std::make_unique<Socket::Client>(std::move(expected_client_socket.value())));
+			AddClient(std::move(expected_client_socket.value()));
 		}
 	}
+}
+
+void Server::AddClient(Socket::Client&& client) {
+	std::lock_guard<std::mutex> lock(m_clientsMutex);
+	m_clients.push_back(std::make_unique<Socket::Client>(std::move(client)));
+}
+
+void Server::RemoveClient(std::unique_ptr<Socket::Client>& client) {
+	std::lock_guard<std::mutex> lock(m_clientsMutex);
+	m_clients.erase(std::remove_if(m_clients.begin(), m_clients.end(), [&client](const std::unique_ptr<Socket::Client>& c) {
+		return c.get() == client.get();
+	}), m_clients.end());
 }
 
 void Server::HandleClientMessages() {
@@ -106,7 +117,7 @@ void Server::HandleClientMessages() {
 				} else if (bytes_read == 0) {
 					// Client disconnected
 					//std::cout << "Client disconnected" << std::endl;
-					client->Disconnect();
+					RemoveClient(client);
 				} else {
 					// m_handler->LastError();
 				}

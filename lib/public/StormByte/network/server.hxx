@@ -99,6 +99,18 @@ namespace StormByte::Network {
 			 * @brief The function to accept clients.
 			 */
 			void 													AcceptClients();
+
+			/**
+			 * @brief Adds a client to the server.
+			 * @param client The client to add.
+			 */
+			void 													AddClient(Socket::Client&& client);
+
+			/**
+			 * @brief Removes a client from the server.
+			 * @param client The client to remove.
+			 */
+			void 													RemoveClient(std::unique_ptr<Socket::Client>& client);
 			
 			/**
 			 * @brief The function to handle client messages.
