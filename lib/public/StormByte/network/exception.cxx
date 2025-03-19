@@ -6,4 +6,4 @@ using namespace StormByte::Network;
 
 Exception::Exception(const std::string& message): StormByte::Exception(message) {}
 
-InvalidAddress::InvalidAddress(const std::string& address): Exception(std::format("The address {} is invalid", address)) {}
+ConnectionError::ConnectionError(const std::string& message): Exception(std::format("Connection error: {}", message)) {}

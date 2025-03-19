@@ -2,16 +2,24 @@
 
 #include <StormByte/network/visibility.h>
 
-#include <string>
+#ifdef LINUX
+#include <sys/socket.h>
+#else
+#include <winsock2.h>
+#endif
 
-struct sockaddr; 	// Forward declaration
+#include <string>
 
 /**
  * @namespace Network
  * @brief The namespace containing all the network related classes.
  */
 namespace StormByte::Network {
-	class STORMBYTE_NETWORK_PUBLIC Address {
+	/**
+	 * @class Address
+	 * @brief The class representing an address.
+	 */
+	class STORMBYTE_NETWORK_PRIVATE Address {
 		public:
 			/**
 			 * @brief The constructor of the Address class.
@@ -74,10 +82,10 @@ namespace StormByte::Network {
 			 */
 			bool 													IsValid() const noexcept;
 
-			// /**
-			//  * @brief The function to get the socket address
-			//  * @return The sock address
-			//  */
+			/**
+			 * @brief The function to get the socket address
+			 * @return The sock address
+			 */
 			const sockaddr*											SockAddr() const noexcept;
 
 		private:
