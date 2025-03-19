@@ -12,6 +12,10 @@ set_target_properties(StormByte-Network PROPERTIES
 	SOVERSION		${CMAKE_PROJECT_VERSION}
 	VERSION 		${CMAKE_PROJECT_VERSION}
 )
+# Link against the Winsock library (for Windows)
+if(WIN32)
+	target_link_libraries(StormByte-Network PRIVATE ws2_32)
+endif()
 
 # Compile options
 if(MSVC)
