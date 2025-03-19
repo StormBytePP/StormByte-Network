@@ -22,7 +22,7 @@ namespace StormByte::Network::Socket {
 	 * @class Socket
 	 * @brief The class representing a socket.
 	 */
-	class STORMBYTE_NETWORK_PRIVATE Socket {
+	class STORMBYTE_NETWORK_PUBLIC Socket {
 		public:
 			/**
 			 * @brief The constructor of the Socket class.

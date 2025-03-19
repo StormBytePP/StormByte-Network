@@ -19,7 +19,7 @@ namespace StormByte::Network {
 	 * @class Address
 	 * @brief The class representing an address.
 	 */
-	class STORMBYTE_NETWORK_PRIVATE Address {
+	class STORMBYTE_NETWORK_PUBLIC Address final {
 		public:
 			/**
 			 * @brief The constructor of the Address class.

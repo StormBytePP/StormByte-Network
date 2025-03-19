@@ -1,7 +1,5 @@
 #include <StormByte/network/address.hxx>
 #include <StormByte/network/server.hxx>
-#include <StormByte/network/socket/client.hxx>
-#include <StormByte/network/socket/server.hxx>
 
 #ifdef LINUX
 #include <sys/select.h>
@@ -36,6 +34,13 @@ StormByte::Expected<void, ConnectionError> Server::Connect() noexcept {
 	// Start a thread to accept client connections
     m_acceptThread = std::thread(&Server::AcceptClients, this);
 
+	// Start a thread to handle client messages
+    m_messageThread = std::thread([this]() {
+        while (m_status.load() == Status::Connected) {
+            HandleClientMessages();
+        }
+    });
+
 	return {};
 }
 
@@ -48,8 +53,10 @@ void Server::Disconnect() noexcept {
 	if (m_acceptThread.joinable()) {
 		m_acceptThread.join();
 	}
-	std::lock_guard<std::mutex> lock(m_clientsMutex);
-	m_clients.clear();
+	if (m_messageThread.joinable()) {
+        m_messageThread.join();
+    }
+	RemoveAllClients();
 	m_socket.reset();
 
 	m_status.store(Status::Disconnected);
@@ -69,14 +76,19 @@ void Server::AddClient(Socket::Client&& client) {
 	m_clients.push_back(std::make_unique<Socket::Client>(std::move(client)));
 }
 
-void Server::RemoveClient(std::unique_ptr<Socket::Client>& client) {
+void Server::RemoveClient(std::unique_ptr<Socket::Client>& client) noexcept {
 	std::lock_guard<std::mutex> lock(m_clientsMutex);
 	m_clients.erase(std::remove_if(m_clients.begin(), m_clients.end(), [&client](const std::unique_ptr<Socket::Client>& c) {
 		return c.get() == client.get();
 	}), m_clients.end());
 }
 
-void Server::HandleClientMessages() {
+void Server::RemoveAllClients() noexcept {
+	std::lock_guard<std::mutex> lock(m_clientsMutex);
+	m_clients.clear();
+}
+
+void Server::HandleClientMessages() noexcept {
 	fd_set readfds;
 	FD_ZERO(&readfds);
 
@@ -107,20 +119,8 @@ void Server::HandleClientMessages() {
 	{
 		std::lock_guard<std::mutex> lock(m_clientsMutex);
 		for (auto& client : m_clients) {
-			Handler::Type client_fd = *client->Handle();
-			if (FD_ISSET(client_fd, &readfds)) {
-				// Handle incoming message from client
-				char buffer[1024];
-				int bytes_read = recv(client_fd, buffer, sizeof(buffer), 0);
-				if (bytes_read > 0) {
-					//std::cout << "Received message from client: " << std::string(buffer, bytes_read) << std::endl;
-				} else if (bytes_read == 0) {
-					// Client disconnected
-					//std::cout << "Client disconnected" << std::endl;
-					RemoveClient(client);
-				} else {
-					// m_handler->LastError();
-				}
+			if (!this->HandleRead(client)) {
+				RemoveClient(client);
 			}
 		}
 	}

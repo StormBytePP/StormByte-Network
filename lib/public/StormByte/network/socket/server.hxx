@@ -11,7 +11,7 @@ namespace StormByte::Network::Socket {
 	 * @class Server
 	 * @brief The class representing a server socket.
 	 */
-	class STORMBYTE_NETWORK_PRIVATE Server: public Socket {
+	class STORMBYTE_NETWORK_PUBLIC Server final: public Socket {
 		public:
 			/**
 			 * @brief The constructor of the Server class.

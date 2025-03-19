@@ -5,6 +5,8 @@
 #include <StormByte/network/exception.hxx>
 #include <StormByte/network/handler.hxx>
 #include <StormByte/network/status.hxx>
+#include <StormByte/network/socket/client.hxx>
+#include <StormByte/network/socket/server.hxx>
 
 #include <atomic>
 #include <memory>
@@ -17,13 +19,6 @@
  * @brief The namespace containing all the network related classes.
  */
 namespace StormByte::Network {
-	// Forward declarations
-	class Address;
-	namespace Socket {
-		class Server;
-		class Client;
-	}
-
 	/**
 	 * @class Server
 	 * @brief The class representing a server.
@@ -48,13 +43,13 @@ namespace StormByte::Network {
 			 * @brief The copy constructor of the Server class.
 			 * @param address The address of the server.
 			 */
-			Server(const Server& other)								= delete;
+			Server(const Server& other)										= delete;
 
 			/**
 			 * @brief The move constructor of the Server class.
 			 * @param address The address of the server.
 			 */
-			Server(Server&& other) noexcept							= delete;
+			Server(Server&& other) noexcept									= delete;
 
 			/**
 			 * @brief The destructor of the Server class.
@@ -66,7 +61,7 @@ namespace StormByte::Network {
 			 * @param other The other server to assign.
 			 * @return The reference to the assigned server.
 			 */
-			Server& operator=(const Server& other)					= delete;
+			Server& operator=(const Server& other)							= delete;
 
 			/**
 			 * @brief The assignment operator of the Server class.
@@ -79,42 +74,55 @@ namespace StormByte::Network {
 			 * @brief The function to connect a server.
 			 * @return The the server object.
 			 */
-			StormByte::Expected<void, ConnectionError>				Connect() noexcept;
+			StormByte::Expected<void, ConnectionError>						Connect() noexcept;
 
 			/**
 			 * @brief The function to disconnect the server.
 			 */
-			void 													Disconnect() noexcept;
+			void 															Disconnect() noexcept;
 
 		private:
-			std::unique_ptr<Address> m_address;						///< The address of the server.
-			std::unique_ptr<Socket::Server> m_socket;				///< The address of the server.
-			std::atomic<Status> m_status;							///< The status of the server.
-			std::thread m_acceptThread;								///< The thread to accept incoming connections.
-            std::vector<std::unique_ptr<Socket::Client>> m_clients;	///< The clients connected to the server.
-            std::mutex m_clientsMutex;								///< The mutex to protect the clients vector.
-			std::shared_ptr<const Handler> m_handler;				///< The handler of the server.
+			std::unique_ptr<Address> m_address;								///< The address of the server.
+			std::unique_ptr<Socket::Server> m_socket;						///< The address of the server.
+			std::atomic<Status> m_status;									///< The status of the server.
+			std::thread m_acceptThread;										///< The thread to accept incoming connections.
+			std::thread m_messageThread;									///< The thread to handle client messages.
+            std::vector<std::unique_ptr<Socket::Client>> m_clients;			///< The clients connected to the server.
+            std::mutex m_clientsMutex;										///< The mutex to protect the clients vector.
+			std::shared_ptr<const Handler> m_handler;						///< The handler of the server.
 
 			/**
 			 * @brief The function to accept clients.
 			 */
-			void 													AcceptClients();
+			void 															AcceptClients();
 
 			/**
 			 * @brief Adds a client to the server.
 			 * @param client The client to add.
 			 */
-			void 													AddClient(Socket::Client&& client);
+			void 															AddClient(Socket::Client&& client);
 
 			/**
 			 * @brief Removes a client from the server.
 			 * @param client The client to remove.
 			 */
-			void 													RemoveClient(std::unique_ptr<Socket::Client>& client);
+			void 															RemoveClient(std::unique_ptr<Socket::Client>& client) noexcept;
+
+			/**
+			 * @brief Removes all clients from the server.
+			 */
+			void 															RemoveAllClients() noexcept;
 			
 			/**
 			 * @brief The function to handle client messages.
 			 */
-			void 													HandleClientMessages();
+			void 															HandleClientMessages() noexcept;
+
+			/**
+			 * @brief The function to handle read from clients
+			 * @param client The client to read from
+			 * @return The result of the operation.
+			 */
+			virtual bool 													HandleRead(std::unique_ptr<Socket::Client>& client) noexcept = 0;
 	};
 }
