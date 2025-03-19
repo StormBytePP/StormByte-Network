@@ -1,0 +1,3 @@
+[submodule "thirdparty/StormByte/base"]
+	path = thirdparty/StormByte/base
+	url = https://github.com/StormBytePP/StormByte.git

@@ -1,0 +1,4 @@
+option(ENABLE_TEST "Enable Unit Tests" OFF)
+if(ENABLE_TEST AND NOT STORMBYTE_AS_DEPENDENCY)
+	
+endif()
