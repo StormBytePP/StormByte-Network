@@ -1,0 +1,6 @@
+option(ENABLE_TEST "Enable Unit Tests" OFF)
+if(ENABLE_TEST AND NOT STORMBYTE_AS_DEPENDENCY)
+	add_executable(SocketTests socket_test.cxx)
+	target_link_libraries(SocketTests StormByte::Network)
+	add_test(NAME SocketTests COMMAND SocketTests)
+endif()
