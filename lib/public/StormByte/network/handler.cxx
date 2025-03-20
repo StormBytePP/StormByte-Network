@@ -16,7 +16,7 @@ Handler::Handler() {
 	#endif
 }
 
-Handler::~Handler() {
+Handler::~Handler() noexcept {
 	#ifdef WINDOWS
 	WSACleanup();
 	#endif
