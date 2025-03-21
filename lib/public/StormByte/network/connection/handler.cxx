@@ -1,4 +1,4 @@
-#include <StormByte/network/handler.hxx>
+#include <StormByte/network/connection/handler.hxx>
 #include <StormByte/util/string.hxx>
 
 #ifdef LINUX
@@ -8,11 +8,13 @@
 #include <windows.h>
 #endif
 
-using namespace StormByte::Network;
+using namespace StormByte::Network::Connection;
 
 Handler::Handler() {
 	#ifdef WINDOWS
-	WSAStartup(MAKEWORD(2, 2), &m_wsaData);
+	m_initialized = WSAStartup(MAKEWORD(2, 2), &m_wsaData) != 0;
+	#else
+	m_initialized = true;
 	#endif
 }
 
@@ -32,7 +34,7 @@ std::string Handler::LastError() const {
 	error_string = StormByte::Util::String::UTF8Encode(errorMsg);
 	LocalFree(errorMsg);
 	#else
-	if (errno == 0)
+	if (errno != 0)
 		error_string = strerror(errno);
 	#endif
 	return error_string;

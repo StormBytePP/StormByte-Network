@@ -16,7 +16,7 @@ set_target_properties(StormByte-Network PROPERTIES
 )
 # Link against the Winsock library (for Windows)
 if(WIN32)
-	target_link_libraries(StormByte-Network PRIVATE ws2_32)
+	target_link_libraries(StormByte-Network PRIVATE ws2_32.dll iphlpapi.dll)
 endif()
 
 # Compile options

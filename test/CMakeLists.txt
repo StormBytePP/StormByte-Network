@@ -1,4 +1,6 @@
 option(ENABLE_TEST "Enable Unit Tests" OFF)
 if(ENABLE_TEST AND NOT STORMBYTE_AS_DEPENDENCY)
-	
+	add_executable(CommunicationTests communication_test.cxx)
+	target_link_libraries(CommunicationTests StormByte::Network)
+	add_test(NAME CommunicationTests COMMAND CommunicationTests)
 endif()

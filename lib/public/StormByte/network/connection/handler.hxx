@@ -9,10 +9,10 @@
 #include <string>
 
 /**
- * @namespace Network
- * @brief The namespace containing all the network related classes.
+ * @namespace Connection
+ * @brief The namespace containing connection items
  */
-namespace StormByte::Network {
+namespace StormByte::Network::Connection {
 	class STORMBYTE_NETWORK_PUBLIC Handler {
 		public:
 			#ifdef LINUX
@@ -64,6 +64,7 @@ namespace StormByte::Network {
 			std::string 										LastError() const;
 
 		private:
+			bool m_initialized = false;							///< The initialization flag.
 			#ifdef WINDOWS
 			WSADATA m_wsaData;		///< The Handler data.
 			#endif

@@ -97,46 +97,45 @@ namespace StormByte::Network {
 	};
 
 	/**
-	 * @class DataError
-	 * @brief The class representing an error in the data.
+	 * @class ConnectionClosed
+	 * @brief The class representing a terminated connection.
 	 */
-	class STORMBYTE_NETWORK_PUBLIC DataError final: public Exception {
+	class STORMBYTE_NETWORK_PUBLIC ConnectionClosed final: public Exception {
 		public:
 			/**
-			 * @brief The constructor of the DataError class.
+			 * @brief The constructor of the ConnectionClosed class.
+			 */
+			ConnectionClosed();
+
+			/**
+			 * @brief The constructor of the ConnectionClosed class.
 			 * @param message The message of the exception.
 			 */
-			DataError(const std::string& message);
+			ConnectionClosed(const ConnectionClosed& other)					= default;
 
 			/**
-			 * @brief The constructor of the DataError class.
+			 * @brief The constructor of the ConnectionClosed class.
 			 * @param message The message of the exception.
 			 */
-			DataError(const DataError& other)					= default;
+			ConnectionClosed(ConnectionClosed&& other) noexcept				= default;
 
 			/**
-			 * @brief The constructor of the DataError class.
-			 * @param message The message of the exception.
+			 * @brief The destructor of the ConnectionClosed class.
 			 */
-			DataError(DataError&& other) noexcept				= default;
+			~ConnectionClosed() noexcept override								= default;
 
 			/**
-			 * @brief The destructor of the DataError class.
-			 */
-			~DataError() noexcept override						= default;
-
-			/**
-			 * @brief The assignment operator of the DataError class.
+			 * @brief The assignment operator of the ConnectionClosed class.
 			 * @param other The other exception to assign.
 			 * @return The reference to the assigned exception.
 			 */
-			DataError& operator=(const DataError& other)		= default;
+			ConnectionClosed& operator=(const ConnectionClosed& other)		= default;
 
 			/**
-			 * @brief The assignment operator of the DataError class.
+			 * @brief The assignment operator of the ConnectionClosed class.
 			 * @param other The other exception to assign.
 			 * @return The reference to the assigned exception.
 			 */
-			DataError& operator=(DataError&& other) noexcept	= default;
+			ConnectionClosed& operator=(ConnectionClosed&& other) noexcept	= default;
 	};
 }

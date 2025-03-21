@@ -1,12 +1,16 @@
 #pragma once
 
-#include <StormByte/network/socket/client.hxx>
+#include <StormByte/network/socket/socket.hxx>
+
+#include <string>
 
 /**
  * @namespace Socket
  * @brief The namespace containing all the socket related classes.
  */
 namespace StormByte::Network::Socket {
+	class Client; // Forward declaration
+
 	/**
 	 * @class Server
 	 * @brief The class representing a server socket.
@@ -15,10 +19,10 @@ namespace StormByte::Network::Socket {
 		public:
 			/**
 			 * @brief The constructor of the Server class.
-			 * @param address The address to create the socket.
+			 * @param protocol The protocol of the socket.
 			 * @param handler The handler of the socket.
 			 */
-			Server(const Address& address, std::shared_ptr<const Handler> handler);
+			Server(const Connection::Protocol& protocol, std::shared_ptr<const Connection::Handler> handler);
 
 			/**
 			 * @brief The copy constructor of the Server class.
@@ -55,7 +59,7 @@ namespace StormByte::Network::Socket {
 			 * @brief The function to listen for incoming connections.
 			 * @return The expected result of the operation.
 			 */
-			StormByte::Expected<void, ConnectionError>			Listen() noexcept;
+			StormByte::Expected<void, ConnectionError>			Listen(const std::string& hostname, const unsigned short& port) noexcept;
 
 			/**
 			 * @brief The function to accept a client connection.
