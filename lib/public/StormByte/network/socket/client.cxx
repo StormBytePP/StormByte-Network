@@ -17,13 +17,7 @@ typedef SSIZE_T ssize_t;
 #include <format>
 #include <future>
 #include <iostream>
-#include <memory>
-#include <span>
-#include <stdexcept>
-#include <string>
 #include <thread>
-#include <utility>
-#include <vector>
 
 // Adjust BUFFER_SIZE as needed.
 constexpr const std::size_t BUFFER_SIZE = 4096;
@@ -88,8 +82,44 @@ Client::Send(std::span<const std::byte> data) noexcept {
 
 	std::size_t total_bytes_sent = 0;
 
-	// Loop until all data is sent.
 	while (!data.empty()) {
+		// Wait for the socket to be writable
+#ifdef LINUX
+		fd_set writefds;
+		FD_ZERO(&writefds);
+		FD_SET(*m_handle, &writefds);
+		timeval tv;
+		tv.tv_sec  = 0;
+		tv.tv_usec = 50000; // wait up to 50ms for writability
+		int sel = select(*m_handle + 1, nullptr, &writefds, nullptr, &tv);
+		if (sel < 0) {
+			return StormByte::Unexpected<ConnectionError>(
+				std::format("Select error: {} (error code: {})",
+							m_conn_handler->LastError(), m_conn_handler->LastErrorCode()));
+		} else if (sel == 0) {
+			// Timeout: no readiness detected, so sleep a little and retry.
+			std::this_thread::sleep_for(std::chrono::milliseconds(10));
+			continue;
+		}
+#else // WINDOWS
+		fd_set writefds;
+		FD_ZERO(&writefds);
+		FD_SET(*m_handle, &writefds);
+		TIMEVAL tv;
+		tv.tv_sec  = 0;
+		tv.tv_usec = 50000; // 50ms
+		int sel = select(0, nullptr, &writefds, nullptr, &tv);
+		if (sel == SOCKET_ERROR) {
+			return StormByte::Unexpected<ConnectionError>(
+				std::format("Select error: {} (error code: {})",
+							m_conn_handler->LastError(), m_conn_handler->LastErrorCode()));
+		} else if (sel == 0) {
+			std::this_thread::sleep_for(std::chrono::milliseconds(10));
+			continue;
+		}
+#endif
+
+		// Now that the socket is writable, send a chunk.
 		std::size_t chunk_size = std::min(BUFFER_SIZE, data.size());
 		std::span<const std::byte> chunk = data.subspan(0, chunk_size);
 
@@ -98,15 +128,16 @@ Client::Send(std::span<const std::byte> data) noexcept {
 										chunk.size(), 0);
 
 		if (written <= 0) {
-			return StormByte::Unexpected<ConnectionError>(std::format(
-				"Failed to write: {} (error code: {})",
-				m_conn_handler->LastError(),
-				m_conn_handler->LastErrorCode()));
+			return StormByte::Unexpected<ConnectionError>(
+				std::format("Failed to write: {} (error code: {})",
+							m_conn_handler->LastError(), m_conn_handler->LastErrorCode()));
 		}
 
 		total_bytes_sent += written;
-		// Advance the span by the number of bytes written.
 		data = data.subspan(written);
+
+		// Optional: add a brief sleep here to further throttle if needed
+		// std::this_thread::sleep_for(std::chrono::milliseconds(1));
 	}
 
 	std::cout << "All data sent successfully! Total bytes sent: " << total_bytes_sent << " bytes" << std::endl;

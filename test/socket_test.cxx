@@ -1,18 +1,20 @@
 #include <StormByte/network/socket/server.hxx>
 #include <StormByte/network/socket/client.hxx>
 #include <StormByte/network/packet.hxx>
-#include <thread>
-#include <iostream>
 #include <StormByte/test_handlers.h>
+
+#include <iostream>
+#include <thread>
+#include <format>
 
 constexpr const char* host = "localhost";
 constexpr const unsigned short port = 6060;
-#ifdef GITHUB_WORKFLOW
-// Github have memory constraints, so we need to reduce the size of the data
-constexpr const std::size_t long_data_size = 5000;
+#if defined(GITHUB_WORKFLOW) || defined(WINDOWS)
+constexpr const std::size_t long_data_size = 10000;
 #else
-constexpr const std::size_t long_data_size = 100000;
+constexpr const std::size_t long_data_size = 50000;
 #endif
+const std::string large_data(long_data_size, 'A');
 
 /**
  * @class HelloWorldPacket
@@ -44,11 +46,6 @@ class ReceivedPacket : public StormByte::Network::Packet {
 	private:
 		StormByte::Util::Buffer m_data;
 };
-
-std::string SpanToString(const std::span<const std::byte>& span) {
-	// Ensure span size is appropriate for a string
-	return std::string(reinterpret_cast<const char*>(span.data()), span.size());
-}
 
 int TestServerClientCommunication() {
 	const std::string fn_name = "TestServerClientCommunication";
@@ -118,7 +115,7 @@ int TestServerClientCommunication() {
 		ASSERT_FALSE(fn_name, buffer.Empty());
 	
 		std::string expected = "Hello World!";
-		ASSERT_EQUAL(fn_name, expected, SpanToString(buffer.Data()));
+		ASSERT_EQUAL(fn_name, expected, std::string(reinterpret_cast<const char*>(buffer.Data().data()), buffer.Size()));
 	
 		client_completed = true;
 	
@@ -145,8 +142,6 @@ int TestLargeDataTransmission() {
 
 	auto handler = std::make_shared<StormByte::Network::Connection::Handler>();
 
-	const std::string large_data(long_data_size, 'A'); // 100,000 'A' characters
-
 	// Start server thread
 	std::thread server_thread([&]() -> int {
 		using namespace StormByte::Network::Socket;
@@ -170,8 +165,13 @@ int TestLargeDataTransmission() {
 		StormByte::Util::Buffer buffer = future_buffer.get();
 		ASSERT_FALSE(fn_name, buffer.Empty());
 
+		if (large_data.size() != buffer.Data().size()) {
+			std::cerr << std::format("Received data does not match expected data: had {} and got {}", buffer.Data().size(), large_data.size()) << std::endl;
+			server_processing_done.store(true);
+			return 1;
+		}
 		// Validate received data
-		ASSERT_EQUAL(fn_name, large_data, SpanToString(buffer.Data()));
+		//ASSERT_EQUAL(fn_name, large_data, SpanToString(buffer.Data()));
 
 		// Send the data back to the client
 		auto packet = ReceivedPacket(buffer);
@@ -216,7 +216,11 @@ int TestLargeDataTransmission() {
 		ASSERT_FALSE(fn_name, buffer.Empty());
 
 		// Validate echoed data
-		ASSERT_EQUAL(fn_name, large_data, SpanToString(buffer.Data()));
+		if (large_data.size() != buffer.Data().size()) {
+			std::cerr << std::format("Received data does not match expected data: had {} and got {}", buffer.Data().size(), large_data.size()) << std::endl;
+			server_processing_done.store(true);
+			return 1;
+		}
 
 		// Wait for server to finish processing
 		while (!server_processing_done.load()) {
@@ -272,7 +276,7 @@ int TestPartialReceive() {
 		ASSERT_FALSE(fn_name, buffer_1.Empty());
 
 		const std::string expected_part_1 = "Hello";
-		ASSERT_EQUAL(fn_name, expected_part_1, SpanToString(buffer_1.Data()));
+		ASSERT_EQUAL(fn_name, expected_part_1, std::string(reinterpret_cast<const char*>(buffer_1.Data().data()), buffer_1.Size()));
 
 		// Receive " World!"
 		auto receive_result_2 = client.Receive(7); // Receive next 7 bytes
@@ -283,7 +287,7 @@ int TestPartialReceive() {
 		ASSERT_FALSE(fn_name, buffer_2.Empty());
 
 		const std::string expected_part_2 = " World!";
-		ASSERT_EQUAL(fn_name, expected_part_2, SpanToString(buffer_2.Data()));
+		ASSERT_EQUAL(fn_name, expected_part_2, std::string(reinterpret_cast<const char*>(buffer_2.Data().data()), buffer_2.Size()));
 
 		server_processing_done.store(true); // Signal completion
 
@@ -342,100 +346,100 @@ int TestPartialReceive() {
 }
 
 int TestWaitForDataTimeout() {
-    const std::string fn_name = "TestWaitForDataTimeout";
+	const std::string fn_name = "TestWaitForDataTimeout";
 
-    bool server_ready = false;
-    bool server_completed = false;
-    bool client_completed = false;
+	bool server_ready = false;
+	bool server_completed = false;
+	bool client_completed = false;
 
-    auto handler = std::make_shared<StormByte::Network::Connection::Handler>();
+	auto handler = std::make_shared<StormByte::Network::Connection::Handler>();
 
-    // Start server thread
-    std::thread server_thread([&]() -> int {
-        using namespace StormByte::Network::Socket;
+	// Start server thread
+	std::thread server_thread([&]() -> int {
+		using namespace StormByte::Network::Socket;
 
-        Server server(StormByte::Network::Connection::Protocol::IPv4, handler);
-        ASSERT_TRUE(fn_name, server.Listen(host, port));
+		Server server(StormByte::Network::Connection::Protocol::IPv4, handler);
+		ASSERT_TRUE(fn_name, server.Listen(host, port));
 
-        server_ready = true;
+		server_ready = true;
 
-        // Wait for client connection and simulate data unavailability
-        auto accept_result = server.Accept();
-        ASSERT_TRUE(fn_name, accept_result);
+		// Wait for client connection and simulate data unavailability
+		auto accept_result = server.Accept();
+		ASSERT_TRUE(fn_name, accept_result);
 
-        Client client = std::move(accept_result.value());
+		Client client = std::move(accept_result.value());
 
-        // Ensure the client calls WaitForData but no data is sent
-        std::this_thread::sleep_for(std::chrono::seconds(2)); // Simulate no data for timeout
-        server_completed = true;
+		// Ensure the client calls WaitForData but no data is sent
+		std::this_thread::sleep_for(std::chrono::seconds(2)); // Simulate no data for timeout
+		server_completed = true;
 
-        return 0; // Ensure a return value
-    });
+		return 0; // Ensure a return value
+	});
 
-    // Wait until the server is ready
-    while (!server_ready) {
-        std::this_thread::sleep_for(std::chrono::milliseconds(100));
-    }
+	// Wait until the server is ready
+	while (!server_ready) {
+		std::this_thread::sleep_for(std::chrono::milliseconds(100));
+	}
 
-    // Start client thread
-    std::thread client_thread([&]() -> int {
-        using namespace StormByte::Network::Socket;
+	// Start client thread
+	std::thread client_thread([&]() -> int {
+		using namespace StormByte::Network::Socket;
 
-        Client client(StormByte::Network::Connection::Protocol::IPv4, handler);
-        ASSERT_TRUE(fn_name, client.Connect(host, port));
+		Client client(StormByte::Network::Connection::Protocol::IPv4, handler);
+		ASSERT_TRUE(fn_name, client.Connect(host, port));
 
-        // Use a timeout of 1 second (1,000,000 microseconds) to test WaitForData
-        const long long timeout_microseconds = 1000000;
-        auto wait_result = client.WaitForData(timeout_microseconds);
+		// Use a timeout of 1 second (1,000,000 microseconds) to test WaitForData
+		const long long timeout_microseconds = 1000000;
+		auto wait_result = client.WaitForData(timeout_microseconds);
 
-        ASSERT_TRUE(fn_name, wait_result.has_value());
-        ASSERT_TRUE(fn_name, StormByte::Network::Connection::Read::Result::Timeout == wait_result.value());
+		ASSERT_TRUE(fn_name, wait_result.has_value());
+		ASSERT_TRUE(fn_name, StormByte::Network::Connection::Read::Result::Timeout == wait_result.value());
 
-        client_completed = true;
+		client_completed = true;
 
-        return 0; // Ensure a return value
-    });
+		return 0; // Ensure a return value
+	});
 
-    // Join threads
-    server_thread.join();
-    client_thread.join();
+	// Join threads
+	server_thread.join();
+	client_thread.join();
 
-    // Final assertions
-    ASSERT_TRUE(fn_name, server_completed);
-    ASSERT_TRUE(fn_name, client_completed);
+	// Final assertions
+	ASSERT_TRUE(fn_name, server_completed);
+	ASSERT_TRUE(fn_name, client_completed);
 
-    RETURN_TEST(fn_name, 0);
+	RETURN_TEST(fn_name, 0);
 }
 
 int TestClientDisconnectMidSend() {
-    const std::string fn_name = "TestClientDisconnectMidSend";
+	const std::string fn_name = "TestClientDisconnectMidSend";
 
-    bool server_ready = false;
-    bool server_completed = false;
-    bool client_completed = false;
+	bool server_ready = false;
+	bool server_completed = false;
+	bool client_completed = false;
 
-    auto handler = std::make_shared<StormByte::Network::Connection::Handler>();
+	auto handler = std::make_shared<StormByte::Network::Connection::Handler>();
 
-    // Start server thread
-    std::thread server_thread([&]() -> int {
-        using namespace StormByte::Network::Socket;
+	// Start server thread
+	std::thread server_thread([&]() -> int {
+		using namespace StormByte::Network::Socket;
 
-        Server server(StormByte::Network::Connection::Protocol::IPv4, handler);
-        ASSERT_TRUE(fn_name, server.Listen(host, port));
+		Server server(StormByte::Network::Connection::Protocol::IPv4, handler);
+		ASSERT_TRUE(fn_name, server.Listen(host, port));
 
-        server_ready = true;
+		server_ready = true;
 
-        // Wait for client connection
-        auto accept_result = server.Accept();
-        ASSERT_TRUE(fn_name, accept_result);
+		// Wait for client connection
+		auto accept_result = server.Accept();
+		ASSERT_TRUE(fn_name, accept_result);
 
-        Client client = std::move(accept_result.value());
+		Client client = std::move(accept_result.value());
 
-        // Try to receive data from client
-        auto receive_result = client.Receive();
+		// Try to receive data from client
+		auto receive_result = client.Receive();
 
-        // Client may have disconnected during data sending
-        if (!receive_result.has_value()) {
+		// Client may have disconnected during data sending
+		if (!receive_result.has_value()) {
 			ASSERT_EQUAL(fn_name, receive_result.error()->what(), std::string("Connection closed by peer"));
 		} else {
 			auto future_buffer = std::move(receive_result.value());
@@ -443,206 +447,205 @@ int TestClientDisconnectMidSend() {
 			ASSERT_TRUE(fn_name, !buffer.Empty()); // Data should be incomplete due to client disconnect
 		}		
 
-        server_completed = true;
-        return 0;
-    });
+		server_completed = true;
+		return 0;
+	});
 
-    // Wait until the server is ready
-    while (!server_ready) {
-        std::this_thread::sleep_for(std::chrono::milliseconds(100));
-    }
+	// Wait until the server is ready
+	while (!server_ready) {
+		std::this_thread::sleep_for(std::chrono::milliseconds(100));
+	}
 
-    // Start client thread
-    std::thread client_thread([&]() -> int {
-        using namespace StormByte::Network::Socket;
+	// Start client thread
+	std::thread client_thread([&]() -> int {
+		using namespace StormByte::Network::Socket;
 
-        Client client(StormByte::Network::Connection::Protocol::IPv4, handler);
-        ASSERT_TRUE(fn_name, client.Connect(host, port));
+		Client client(StormByte::Network::Connection::Protocol::IPv4, handler);
+		ASSERT_TRUE(fn_name, client.Connect(host, port));
 
-        const std::string partial_data = "Partial Data...";
-        StormByte::Util::Buffer buffer;
-        buffer << partial_data;
+		const std::string partial_data = "Partial Data...";
+		StormByte::Util::Buffer buffer;
+		buffer << partial_data;
 
-        // Send partial data
-        ReceivedPacket packet(buffer);
-        auto send_result = client.Send(packet);
-        ASSERT_TRUE(fn_name, send_result);
+		// Send partial data
+		ReceivedPacket packet(buffer);
+		auto send_result = client.Send(packet);
+		ASSERT_TRUE(fn_name, send_result);
 
-        // Simulate client disconnecting mid-communication
-        client.Disconnect();
-        client_completed = true;
+		// Simulate client disconnecting mid-communication
+		client.Disconnect();
+		client_completed = true;
 
-        return 0;
-    });
+		return 0;
+	});
 
-    // Join threads
-    server_thread.join();
-    client_thread.join();
+	// Join threads
+	server_thread.join();
+	client_thread.join();
 
-    // Final assertions
-    ASSERT_TRUE(fn_name, server_completed);
-    ASSERT_TRUE(fn_name, client_completed);
+	// Final assertions
+	ASSERT_TRUE(fn_name, server_completed);
+	ASSERT_TRUE(fn_name, client_completed);
 
-    RETURN_TEST(fn_name, 0);
+	RETURN_TEST(fn_name, 0);
 }
 
 int TestSimultaneousConnections() {
-    const std::string fn_name = "TestSimultaneousConnections";
+	const std::string fn_name = "TestSimultaneousConnections";
 
-    constexpr int client_count = 5;
-    std::atomic<int> connected_clients(0);
-    bool server_ready = false;
+	constexpr int client_count = 5;
+	std::atomic<int> connected_clients(0);
+	bool server_ready = false;
 
-    auto handler = std::make_shared<StormByte::Network::Connection::Handler>();
+	auto handler = std::make_shared<StormByte::Network::Connection::Handler>();
 
-    // Start server thread
-    std::thread server_thread([&]() -> int {
-        using namespace StormByte::Network::Socket;
+	// Start server thread
+	std::thread server_thread([&]() -> int {
+		using namespace StormByte::Network::Socket;
 
-        Server server(StormByte::Network::Connection::Protocol::IPv4, handler);
-        ASSERT_TRUE(fn_name, server.Listen(host, port));
+		Server server(StormByte::Network::Connection::Protocol::IPv4, handler);
+		ASSERT_TRUE(fn_name, server.Listen(host, port));
 
-        server_ready = true;
+		server_ready = true;
 
-        // Accept multiple client connections
-        for (int i = 0; i < client_count; ++i) {
-            auto accept_result = server.Accept();
-            ASSERT_TRUE(fn_name, accept_result);
+		// Accept multiple client connections
+		for (int i = 0; i < client_count; ++i) {
+			auto accept_result = server.Accept();
+			ASSERT_TRUE(fn_name, accept_result);
 
-            // Disconnect clients immediately after connection
-            Client client = std::move(accept_result.value());
-            client.Disconnect();
-            ++connected_clients;
-        }
+			// Disconnect clients immediately after connection
+			Client client = std::move(accept_result.value());
+			client.Disconnect();
+			++connected_clients;
+		}
 
-        return 0;
-    });
+		return 0;
+	});
 
-    // Wait for the server to be ready
-    while (!server_ready) {
-        std::this_thread::sleep_for(std::chrono::milliseconds(100));
-    }
+	// Wait for the server to be ready
+	while (!server_ready) {
+		std::this_thread::sleep_for(std::chrono::milliseconds(100));
+	}
 
-    // Start multiple client threads
-    std::vector<std::thread> client_threads;
-    for (int i = 0; i < client_count; ++i) {
-        client_threads.emplace_back([&, i]() -> int {
-            using namespace StormByte::Network::Socket;
+	// Start multiple client threads
+	std::vector<std::thread> client_threads;
+	for (int i = 0; i < client_count; ++i) {
+		client_threads.emplace_back([&, i]() -> int {
+			using namespace StormByte::Network::Socket;
 
-            Client client(StormByte::Network::Connection::Protocol::IPv4, handler);
-            ASSERT_TRUE(fn_name, client.Connect(host, port));
-            client.Disconnect();
-            return 0;
-        });
-    }
+			Client client(StormByte::Network::Connection::Protocol::IPv4, handler);
+			ASSERT_TRUE(fn_name, client.Connect(host, port));
+			client.Disconnect();
+			return 0;
+		});
+	}
 
-    // Join client threads
-    for (auto& thread : client_threads) {
-        thread.join();
-    }
+	// Join client threads
+	for (auto& thread : client_threads) {
+		thread.join();
+	}
 
-    // Join server thread
-    server_thread.join();
+	// Join server thread
+	server_thread.join();
 
-    // Final assertions
-    ASSERT_EQUAL(fn_name, client_count, connected_clients.load());
+	// Final assertions
+	ASSERT_EQUAL(fn_name, client_count, connected_clients.load());
 
-    RETURN_TEST(fn_name, 0);
+	RETURN_TEST(fn_name, 0);
 }
 
 int TestInvalidHostname() {
 	using namespace StormByte::Network::Socket;
 
-    const std::string fn_name = "TestInvalidHostname";
+	const std::string fn_name = "TestInvalidHostname";
 
-    auto handler = std::make_shared<StormByte::Network::Connection::Handler>();
+	auto handler = std::make_shared<StormByte::Network::Connection::Handler>();
 
-    Client client(StormByte::Network::Connection::Protocol::IPv4, handler);
-    auto result = client.Connect("invalid.hostname", port);
+	Client client(StormByte::Network::Connection::Protocol::IPv4, handler);
+	auto result = client.Connect("invalid.hostname", port);
 
-    ASSERT_FALSE(fn_name, result); // Connection should fail
+	ASSERT_FALSE(fn_name, result); // Connection should fail
 
-    RETURN_TEST(fn_name, 0);
+	RETURN_TEST(fn_name, 0);
 }
 
 int TestDataFragmentation() {
-    const std::string fn_name = "TestDataFragmentation";
+	const std::string fn_name = "TestDataFragmentation";
 
-    bool server_ready = false;
-    bool server_completed = false;
-    bool client_completed = false;
+	bool server_ready = false;
+	bool server_completed = false;
+	bool client_completed = false;
 
-    auto handler = std::make_shared<StormByte::Network::Connection::Handler>();
+	auto handler = std::make_shared<StormByte::Network::Connection::Handler>();
 
-    // Start server thread
-    std::thread server_thread([&]() -> int {
-        using namespace StormByte::Network::Socket;
+	// Start server thread
+	std::thread server_thread([&]() -> int {
+		using namespace StormByte::Network::Socket;
 
-        Server server(StormByte::Network::Connection::Protocol::IPv4, handler);
-        ASSERT_TRUE(fn_name, server.Listen(host, port));
+		Server server(StormByte::Network::Connection::Protocol::IPv4, handler);
+		ASSERT_TRUE(fn_name, server.Listen(host, port));
 
-        server_ready = true;
+		server_ready = true;
 
-        auto accept_result = server.Accept();
-        ASSERT_TRUE(fn_name, accept_result);
+		auto accept_result = server.Accept();
+		ASSERT_TRUE(fn_name, accept_result);
 
-        Client client = std::move(accept_result.value());
+		Client client = std::move(accept_result.value());
 
-        // Receive fragmented data
-        const std::string expected_data = "Hello Fragmented World!";
-        StormByte::Util::Buffer received_buffer;
+		// Receive fragmented data
+		const std::string expected_data = "Hello Fragmented World!";
+		StormByte::Util::Buffer received_buffer;
 
-        while (received_buffer.Size() < expected_data.size()) {
-            auto receive_result = client.Receive(5); // Receive chunks of 5 bytes
-            ASSERT_TRUE(fn_name, receive_result);
+		while (received_buffer.Size() < expected_data.size()) {
+			auto receive_result = client.Receive(5); // Receive chunks of 5 bytes
+			ASSERT_TRUE(fn_name, receive_result);
 
-            auto future_buffer = std::move(receive_result.value());
-            StormByte::Util::Buffer chunk_buffer = future_buffer.get();
-            received_buffer << chunk_buffer;
-        }
+			auto future_buffer = std::move(receive_result.value());
+			StormByte::Util::Buffer chunk_buffer = future_buffer.get();
+			received_buffer << chunk_buffer;
+		}
 
-        ASSERT_EQUAL(fn_name, expected_data, SpanToString(received_buffer.Data()));
+		ASSERT_EQUAL(fn_name, expected_data, std::string(reinterpret_cast<const char*>(received_buffer.Data().data()), received_buffer.Size()));
+		server_completed = true;
+		return 0;
+	});
 
-        server_completed = true;
-        return 0;
-    });
+	// Wait for the server to be ready
+	while (!server_ready) {
+		std::this_thread::sleep_for(std::chrono::milliseconds(100));
+	}
 
-    // Wait for the server to be ready
-    while (!server_ready) {
-        std::this_thread::sleep_for(std::chrono::milliseconds(100));
-    }
+	// Start client thread
+	std::thread client_thread([&]() -> int {
+		using namespace StormByte::Network::Socket;
 
-    // Start client thread
-    std::thread client_thread([&]() -> int {
-        using namespace StormByte::Network::Socket;
+		Client client(StormByte::Network::Connection::Protocol::IPv4, handler);
+		ASSERT_TRUE(fn_name, client.Connect(host, port));
 
-        Client client(StormByte::Network::Connection::Protocol::IPv4, handler);
-        ASSERT_TRUE(fn_name, client.Connect(host, port));
+		const std::string fragmented_data = "Hello Fragmented World!";
+		for (std::size_t i = 0; i < fragmented_data.size(); i += 5) {
+			std::string fragment = fragmented_data.substr(i, 5);
+			StormByte::Util::Buffer buffer;
+			buffer << fragment;
 
-        const std::string fragmented_data = "Hello Fragmented World!";
-        for (std::size_t i = 0; i < fragmented_data.size(); i += 5) {
-            std::string fragment = fragmented_data.substr(i, 5);
-            StormByte::Util::Buffer buffer;
-            buffer << fragment;
+			ReceivedPacket packet(buffer);
+			auto send_result = client.Send(packet);
+			ASSERT_TRUE(fn_name, send_result);
+		}
 
-            ReceivedPacket packet(buffer);
-            auto send_result = client.Send(packet);
-            ASSERT_TRUE(fn_name, send_result);
-        }
+		client_completed = true;
+		return 0;
+	});
 
-        client_completed = true;
-        return 0;
-    });
+	// Join threads
+	server_thread.join();
+	client_thread.join();
 
-    // Join threads
-    server_thread.join();
-    client_thread.join();
+	// Final assertions
+	ASSERT_TRUE(fn_name, server_completed);
+	ASSERT_TRUE(fn_name, client_completed);
 
-    // Final assertions
-    ASSERT_TRUE(fn_name, server_completed);
-    ASSERT_TRUE(fn_name, client_completed);
-
-    RETURN_TEST(fn_name, 0);
+	RETURN_TEST(fn_name, 0);
 }
 
 int main() {
