@@ -38,7 +38,10 @@ jobs:
       run: |
         sudo apt update
         if [ "${{ matrix.compiler }}" == "gcc" ]; then
-          sudo apt install -y gcc g++
+          sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-14 100
+          sudo update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-14 100
+          sudo update-alternatives --set gcc /usr/bin/gcc-14
+          sudo update-alternatives --set g++ /usr/bin/g++-14
         elif [ "${{ matrix.compiler }}" == "clang" ]; then
           sudo apt install -y clang-19 libc++-19-dev libc++abi-19-dev clang-format-19 clang-tidy-19
           sudo update-alternatives --remove-all clang
