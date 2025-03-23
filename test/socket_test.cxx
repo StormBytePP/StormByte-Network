@@ -20,16 +20,13 @@ constexpr const std::size_t long_data_size = 100000;
  */
 class HelloWorldPacket : public StormByte::Network::Packet {
 	public:
-		HelloWorldPacket() : Packet(1) {
-			m_data << std::string("Hello World!");
-		}
+		HelloWorldPacket() : Packet(1) {}
 
-		StormByte::Util::Buffer Data() const noexcept override {
-			return m_data;
+		void PrepareBuffer() const noexcept override {
+			if (m_buffer.Empty()) {
+				m_buffer << std::string("Hello World!");
+			}
 		}
-
-	private:
-		StormByte::Util::Buffer m_data;
 };
 
 /**
@@ -38,11 +35,11 @@ class HelloWorldPacket : public StormByte::Network::Packet {
  */
 class ReceivedPacket : public StormByte::Network::Packet {
 	public:
-		ReceivedPacket(const StormByte::Util::Buffer& buff) : Packet(2), m_data(buff) {}
-
-		StormByte::Util::Buffer Data() const noexcept override {
-			return m_data;
+		ReceivedPacket(const StormByte::Util::Buffer& buff) : Packet(2) {
+			m_buffer = buff;
 		}
+
+		void PrepareBuffer() const noexcept override {}
 
 	private:
 		StormByte::Util::Buffer m_data;

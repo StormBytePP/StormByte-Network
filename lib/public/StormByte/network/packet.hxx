@@ -55,9 +55,16 @@ namespace StormByte::Network {
 			 * @brief The function to get the opcode of the packet.
 			 * @return The opcode of the packet.
 			 */
-			virtual Util::Buffer 							Data() const noexcept;
+			const std::span<const std::byte>				Data() const noexcept;
 
 		protected:
 			unsigned short m_opcode;						///< The opcode of the packet.
+			mutable Util::Buffer m_buffer;					///< The data buffer of the packet.
+
+			/**
+			 * @brief The function to prepare the buffer.
+			 * All derived classes need to implement this function.
+			 */
+			virtual void 									PrepareBuffer() const noexcept = 0;
 	};
 }
