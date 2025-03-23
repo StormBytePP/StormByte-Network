@@ -19,7 +19,6 @@ namespace StormByte::Network::Socket {
 	/**
 	 * @class Socket
 	 * @brief The class representing a non blocking socket.
-	 * This class is designed to be privately inherited by the Server and Client classes.
 	 */
 	class STORMBYTE_NETWORK_PUBLIC Socket {
 		friend class Server;
