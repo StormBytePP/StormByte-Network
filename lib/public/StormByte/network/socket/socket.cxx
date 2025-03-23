@@ -14,6 +14,8 @@
 #include <chrono>
 #include <format>
 
+constexpr const int SOCKET_BUFFER_SIZE = 65536;
+
 using namespace StormByte::Network::Socket;
 
 Socket::Socket(const Connection::Protocol& protocol, std::shared_ptr<const Connection::Handler> handler):
@@ -149,7 +151,10 @@ void Socket::InitializeAfterConnect() noexcept {
 	m_status = Connection::Status::Connected;
 	m_mtu = GetMTU();
 	SetNonBlocking();
-	m_status = Connection::Status::Connected;
+	
+	// Increase the socket buffer size
+	//setsockopt(*m_handle, SOL_SOCKET, SO_SNDBUF, (const char*)&SOCKET_BUFFER_SIZE, sizeof(SOCKET_BUFFER_SIZE));
+	setsockopt(*m_handle, SOL_SOCKET, SO_RCVBUF, (const char*)&SOCKET_BUFFER_SIZE, sizeof(SOCKET_BUFFER_SIZE));
 }
 
 #ifdef LINUX
