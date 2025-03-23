@@ -7,6 +7,8 @@
 
 constexpr const char* host = "localhost";
 constexpr const unsigned short port = 6060;
+// Github have memory constraints, so we need to reduce the size of the data
+constexpr const std::size_t long_data_size = 10000;
 
 /**
  * @class HelloWorldPacket
@@ -142,12 +144,7 @@ int TestLargeDataTransmission() {
 
 	auto handler = std::make_shared<StormByte::Network::Connection::Handler>();
 
-#ifdef LINUX
-	// Linux handles much better than windows
-	const std::string large_data(100000, 'A'); // 100,000 'A' characters
-#else
-	const std::string large_data(25000, 'A'); // 25,000 'A' characters
-#endif
+	const std::string large_data(long_data_size, 'A'); // 100,000 'A' characters
 
 	// Start server thread
 	std::thread server_thread([&]() -> int {
