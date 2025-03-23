@@ -134,5 +134,14 @@ int TestServerClientCommunication() {
 }
 
 int main() {
-	return TestServerClientCommunication();
+	int result = 0;
+
+	result += TestServerClientCommunication();
+
+	if (result == 0) {
+        std::cout << "All tests passed!" << std::endl;
+    } else {
+        std::cout << result << " tests failed." << std::endl;
+    }
+    return result;
 }
