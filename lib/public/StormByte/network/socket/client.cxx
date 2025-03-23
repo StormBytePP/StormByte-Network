@@ -136,7 +136,7 @@ StormByte::Expected<std::future<StormByte::Util::Buffer>, StormByte::Network::Co
 
 		std::cout << "Receive operation initiated successfully. Waiting for future..." << std::endl;
 
-		return StormByte::Expected<std::future<Util::Buffer>, ConnectionError>{std::move(future)};
+		return std::move(future);
 	} catch (const std::exception& e) {
 		std::cerr << "Failed to initiate receive operation: " << e.what() << std::endl;
 		return StormByte::Unexpected<ConnectionError>(std::format("Receive failed: {}", e.what()));

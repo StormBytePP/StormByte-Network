@@ -1,6 +1,3 @@
 [submodule "thirdparty/StormByte/base"]
 	path = thirdparty/StormByte/base
 	url = https://github.com/StormBytePP/StormByte.git
-[submodule "thirdparty/StormByte/logger"]
-	path = thirdparty/StormByte/logger
-	url = https://github.com/StormBytePP/StormByte-Logger.git
