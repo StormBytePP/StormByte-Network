@@ -58,7 +58,8 @@ jobs:
           -DCMAKE_CXX_FLAGS="${{ matrix.stdlib == 'libc++' && matrix.compiler == 'clang' && '--stdlib=libc++' || '' }}" \
           -G "Ninja" \
           -DWITH_SYSTEM_STORMBYTE=OFF \
-          -DENABLE_TEST=ON
+          -DENABLE_TEST=ON \
+          -DGITHUB_WORKFLOW=ON
     - name: Build
       run: cmake --build ${{ github.workspace }}/build --config ${{ env.BUILD_TYPE }}
 
@@ -87,7 +88,7 @@ jobs:
           arch: ${{ matrix.arch }}
 
       - name: Configure CMake
-        run: cmake -B ${{ github.workspace }}\build -G "Ninja" -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }} -DENABLE_TEST=ON -DWITH_SYSTEM_STORMBYTE=OFF
+        run: cmake -B ${{ github.workspace }}\build -G "Ninja" -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }} -DENABLE_TEST=ON -DWITH_SYSTEM_STORMBYTE=OFF -DGITHUB_WORKFLOW=ON
 
       - name: Build
         run: cmake --build ${{ github.workspace }}\build --config ${{ env.BUILD_TYPE }}

@@ -7,8 +7,12 @@
 
 constexpr const char* host = "localhost";
 constexpr const unsigned short port = 6060;
+#ifdef GITHUB_WORKFLOW
 // Github have memory constraints, so we need to reduce the size of the data
-constexpr const std::size_t long_data_size = 10000;
+constexpr const std::size_t long_data_size = 5000;
+#else
+constexpr const std::size_t long_data_size = 100000;
+#endif
 
 /**
  * @class HelloWorldPacket
