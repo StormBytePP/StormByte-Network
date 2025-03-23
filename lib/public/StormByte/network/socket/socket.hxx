@@ -4,6 +4,7 @@
 #include <StormByte/network/connection/handler.hxx>
 #include <StormByte/network/connection/info.hxx>
 #include <StormByte/network/connection/protocol.hxx>
+#include <StormByte/network/connection/rw.hxx>
 #include <StormByte/network/connection/status.hxx>
 #include <StormByte/network/exception.hxx>
 
@@ -77,9 +78,10 @@ namespace StormByte::Network::Socket {
 
 			/**
 			 * @brief The function to wait for data to be available.
+			 * @param usecs The number of microseconds to wait for data. (0 for no timeout)
 			 * @return The expected result of the operation.
 			 */
-			StormByte::Expected<void, ConnectionClosed>							WaitForData() noexcept;
+			StormByte::Expected<Connection::Read::Result, ConnectionClosed>		WaitForData(const long long& usecs = 0) noexcept;
 
 		protected:
 			Connection::Protocol m_protocol;									///< The protocol of the socket.

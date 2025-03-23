@@ -11,6 +11,7 @@
 #include <iphlpapi.h>
 #endif
 
+#include <chrono>
 #include <format>
 
 using namespace StormByte::Network::Socket;
@@ -60,43 +61,69 @@ void Socket::Disconnect() noexcept {
 	m_status = Connection::Status::Disconnected;
 }
 
-StormByte::Expected<void, StormByte::Network::ConnectionClosed> Socket::WaitForData() noexcept {
+StormByte::Expected<StormByte::Network::Connection::Read::Result, StormByte::Network::ConnectionClosed> Socket::WaitForData(const long long& usecs) noexcept {
 	if (!Connection::IsConnected(m_status)) {
 		return StormByte::Unexpected<ConnectionClosed>("Failed to wait for data: Invalid connection status");
 	}
 
 	fd_set read_fds;
-	FD_ZERO(&read_fds);
-	FD_SET(*m_handle, &read_fds);
+	struct timeval timeout;
+	struct timeval* timeout_ptr = nullptr;
 
-	int select_result;
+	// If timeout is specified, prepare timeout_ptr
+	if (usecs > 0) {
+		timeout.tv_sec = usecs / 1000000;
+		timeout.tv_usec = usecs % 1000000;
+		timeout_ptr = &timeout;
+	}
+
+	// Store the starting time
+	auto start_time = std::chrono::steady_clock::now();
+
+	while (true) {
+		FD_ZERO(&read_fds);
+		FD_SET(*m_handle, &read_fds);
+
+		int select_result;
 
 #ifdef WINDOWS
-	select_result = select(0, &read_fds, nullptr, nullptr, nullptr); // Windows needs the first argument to be ignored
+		select_result = select(0, &read_fds, nullptr, nullptr, timeout_ptr);
 #else
-	select_result = select(*m_handle + 1, &read_fds, nullptr, nullptr, nullptr); // For Linux, it's the highest FD + 1
+		select_result = select(*m_handle + 1, &read_fds, nullptr, nullptr, timeout_ptr);
 #endif
 
-	if (select_result > 0) {
-		// Data is available
-		if (FD_ISSET(*m_handle, &read_fds)) {
-			return {}; // Success, data available
-		}
-	} else if (select_result == 0) {
-		// This should not happen because timeout is nullptr (blocking indefinitely)
-		return StormByte::Unexpected<ConnectionClosed>("Failed to wait for data: Unexpected timeout occurred");
-	} else {
-		// Error occurred
-#ifdef WINDOWS
-		if (m_conn_handler->LastErrorCode() == WSAECONNRESET || m_conn_handler->LastErrorCode() == WSAENOTSOCK) {
-#else
-		if (m_conn_handler->LastErrorCode() == ECONNRESET || m_conn_handler->LastErrorCode() == EBADF) {
-#endif
-			return StormByte::Unexpected<ConnectionClosed>("Connection closed or invalid socket");
+		if (select_result > 0) {
+			// Check if our requested socket has data
+			if (FD_ISSET(*m_handle, &read_fds)) {
+				return Connection::Read::Result::Success; // Success, data available on our FD
+			} else {
+				// Data is available, but not on our requested FD
+				// Check elapsed time to determine if we should continue
+				auto elapsed_time = std::chrono::steady_clock::now() - start_time;
+				auto elapsed_microseconds = std::chrono::duration_cast<std::chrono::microseconds>(elapsed_time).count();
+
+				if (usecs > 0 && elapsed_microseconds >= usecs) {
+					return Connection::Read::Result::Timeout; // Timeout reached
+				}
+				// Otherwise, continue and retry
+				continue;
+			}
+		} else if (select_result == 0) {
+			// Timeout occurred
+			return Connection::Read::Result::Timeout;
 		} else {
-			return StormByte::Unexpected<ConnectionClosed>(std::format("Failed to wait for data: {} (error code: {})",
-																		m_conn_handler->LastError(),
-																		m_conn_handler->LastErrorCode()));
+			// Error occurred
+#ifdef WINDOWS
+			if (m_conn_handler->LastErrorCode() == WSAECONNRESET || m_conn_handler->LastErrorCode() == WSAENOTSOCK) {
+#else
+			if (m_conn_handler->LastErrorCode() == ECONNRESET || m_conn_handler->LastErrorCode() == EBADF) {
+#endif
+				return StormByte::Unexpected<ConnectionClosed>("Connection closed or invalid socket");
+			} else {
+				return StormByte::Unexpected<ConnectionClosed>(std::format("Failed to wait for data: {} (error code: {})",
+																			m_conn_handler->LastError(),
+																			m_conn_handler->LastErrorCode()));
+			}
 		}
 	}
 

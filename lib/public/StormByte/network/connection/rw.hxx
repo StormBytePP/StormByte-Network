@@ -22,7 +22,8 @@ namespace StormByte::Network::Connection {
 			Success,
 			WouldBlock,
 			Closed,
-			Failed
+			Failed,
+			Timeout
 		};
 	}
 
