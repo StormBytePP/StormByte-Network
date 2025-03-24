@@ -154,7 +154,20 @@ Client::Send(const Packet& packet) noexcept {
 
 bool Client::HasShutdownRequest() noexcept {
 	char buffer[1]; // Inspect only one byte
+#ifdef LINUX
 	ssize_t result = ::recv(*m_handle, buffer, sizeof(buffer), MSG_PEEK | MSG_DONTWAIT);
+#else
+	int result = ::recv(*m_handle, buffer, sizeof(buffer), MSG_PEEK);
+	if (result == SOCKET_ERROR) {
+		if (m_conn_handler->LastErrorCode() == WSAEWOULDBLOCK) {
+			// No data available; not a shutdown
+			return false;
+		} else {
+			// Treat other errors as a shutdown request
+			return true;
+		}
+	}
+#endif
 
 	if (result == 0) {
 		// Connection closed by peer
@@ -162,15 +175,13 @@ bool Client::HasShutdownRequest() noexcept {
 	} else if (result < 0) {
 #ifdef LINUX
 		if (m_conn_handler->LastErrorCode() == EAGAIN || m_conn_handler->LastErrorCode() == EWOULDBLOCK) {
-#else
-		if (m_conn_handler->LastErrorCode() == WSAEWOULDBLOCK) {
-#endif
 			// No data available; not a shutdown
 			return false;
 		} else {
 			// Treat other errors as a shutdown request
 			return true;
 		}
+#endif
 	}
 
 	// Data is available; not a shutdown
