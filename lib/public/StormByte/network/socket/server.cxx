@@ -11,7 +11,8 @@
 
 using namespace StormByte::Network::Socket;
 
-Server::Server(const Connection::Protocol& protocol, std::shared_ptr<const Connection::Handler> handler): Socket(protocol, handler) {}
+Server::Server(const Connection::Protocol& protocol, std::shared_ptr<const Connection::Handler> handler, std::shared_ptr<Logger::Log> logger) noexcept:
+Socket(protocol, handler, logger) {}
 
 StormByte::Expected<void, StormByte::Network::ConnectionError> Server::Listen(const std::string& hostname, const unsigned short& port) noexcept {
 	if (Connection::IsConnected(m_status))
@@ -63,6 +64,8 @@ StormByte::Expected<void, StormByte::Network::ConnectionError> Server::Listen(co
 
 	InitializeAfterConnect();
 
+	m_logger << Logger::Level::LowLevel << "Server listening on " << hostname << ":" << port << std::endl;
+
 	return {};
 }
 
@@ -87,7 +90,7 @@ StormByte::Expected<Client, StormByte::Network::ConnectionError> Server::Accept(
 		return StormByte::Unexpected<ConnectionError>("Failed to accept client connection.");
 	}
 
-	Client client_socket(m_protocol, m_conn_handler);
+	Client client_socket(m_protocol, m_conn_handler, m_logger);
 	client_socket.m_handle = std::make_unique<Connection::Handler::Type>(client_handle);
 	client_socket.InitializeAfterConnect();
 

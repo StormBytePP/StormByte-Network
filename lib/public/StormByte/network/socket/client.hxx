@@ -25,8 +25,9 @@ namespace StormByte::Network::Socket {
 		 * @brief The constructor of the Client class.
 		 * @param protocol The protocol of the socket.
 		 * @param handler The handler of the socket.
+		 * @param logger The logger to use.
 		 */
-		Client(const Connection::Protocol& protocol, std::shared_ptr<const Connection::Handler> handler);
+		Client(const Connection::Protocol& protocol, std::shared_ptr<const Connection::Handler> handler, std::shared_ptr<Logger::Log> logger) noexcept;
 
 		/**
 		 * @brief The copy constructor of the Client class.

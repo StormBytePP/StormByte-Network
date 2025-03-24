@@ -7,6 +7,8 @@
 #include <thread>
 #include <format>
 
+using namespace StormByte;
+
 constexpr const char* host = "localhost";
 constexpr const unsigned short port = 6060;
 #if defined(GITHUB_WORKFLOW) || defined(WINDOWS)
@@ -15,12 +17,14 @@ constexpr const std::size_t long_data_size = 10000;
 constexpr const std::size_t long_data_size = 50000;
 #endif
 const std::string large_data(long_data_size, 'A');
+auto logger = std::make_shared<Logger::Log>(std::cout, Logger::Level::Info);
+auto handler = std::make_shared<Network::Connection::Handler>();
 
 /**
  * @class HelloWorldPacket
  * @brief A simple packet containing a "Hello World!" message.
  */
-class HelloWorldPacket : public StormByte::Network::Packet {
+class HelloWorldPacket : public Network::Packet {
 	public:
 		HelloWorldPacket() : Packet(1) {}
 
@@ -35,7 +39,7 @@ class HelloWorldPacket : public StormByte::Network::Packet {
  * @class ReceivedPacket
  * @brief A packet containing received data.
  */
-class ReceivedPacket : public StormByte::Network::Packet {
+class ReceivedPacket : public Network::Packet {
 	public:
 		ReceivedPacket(const StormByte::Util::Buffer& buff) : Packet(2) {
 			m_buffer = buff;
@@ -54,13 +58,11 @@ int TestServerClientCommunication() {
 	bool server_completed = false;
 	bool client_completed = false;
 
-	auto handler = std::make_shared<StormByte::Network::Connection::Handler>();
-
 	// Start server thread
 	std::thread server_thread([&]() -> int {
-		using namespace StormByte::Network::Socket;
+		using namespace Network::Socket;
 	
-		Server server(StormByte::Network::Connection::Protocol::IPv4, handler);
+		Server server(Network::Connection::Protocol::IPv4, handler, logger);
 		ASSERT_TRUE(fn_name, server.Listen(host, port));
 	
 		server_ready = true;
@@ -95,9 +97,9 @@ int TestServerClientCommunication() {
 
 	// Start client thread
 	std::thread client_thread([&]() -> int {
-		using namespace StormByte::Network::Socket;
+		using namespace Network::Socket;
 	
-		Client client(StormByte::Network::Connection::Protocol::IPv4, handler);
+		Client client(Network::Connection::Protocol::IPv4, handler, logger);
 		ASSERT_TRUE(fn_name, client.Connect(host, port));
 	
 		HelloWorldPacket packet;
@@ -140,13 +142,11 @@ int TestLargeDataTransmission() {
 	bool server_ready = false;
 	bool client_completed = false;
 
-	auto handler = std::make_shared<StormByte::Network::Connection::Handler>();
-
 	// Start server thread
 	std::thread server_thread([&]() -> int {
-		using namespace StormByte::Network::Socket;
+		using namespace Network::Socket;
 
-		Server server(StormByte::Network::Connection::Protocol::IPv4, handler);
+		Server server(Network::Connection::Protocol::IPv4, handler, logger);
 		ASSERT_TRUE(fn_name, server.Listen(host, port));
 
 		server_ready = true;
@@ -191,9 +191,9 @@ int TestLargeDataTransmission() {
 
 	// Start client thread
 	std::thread client_thread([&]() -> int {
-		using namespace StormByte::Network::Socket;
+		using namespace Network::Socket;
 
-		Client client(StormByte::Network::Connection::Protocol::IPv4, handler);
+		Client client(Network::Connection::Protocol::IPv4, handler, logger);
 		ASSERT_TRUE(fn_name, client.Connect(host, port));
 
 		// Create and send data
@@ -250,13 +250,11 @@ int TestPartialReceive() {
 	bool server_ready = false;
 	bool client_completed = false;
 
-	auto handler = std::make_shared<StormByte::Network::Connection::Handler>();
-
 	// Start server thread
 	std::thread server_thread([&]() -> int {
-		using namespace StormByte::Network::Socket;
+		using namespace Network::Socket;
 
-		Server server(StormByte::Network::Connection::Protocol::IPv4, handler);
+		Server server(Network::Connection::Protocol::IPv4, handler, logger);
 		ASSERT_TRUE(fn_name, server.Listen(host, port));
 
 		server_ready = true;
@@ -301,9 +299,9 @@ int TestPartialReceive() {
 
 	// Start client thread
 	std::thread client_thread([&]() -> int {
-		using namespace StormByte::Network::Socket;
+		using namespace Network::Socket;
 
-		Client client(StormByte::Network::Connection::Protocol::IPv4, handler);
+		Client client(Network::Connection::Protocol::IPv4, handler, logger);
 		ASSERT_TRUE(fn_name, client.Connect(host, port));
 
 		// Create and send "Hello" and " World!" separately
@@ -352,13 +350,11 @@ int TestWaitForDataTimeout() {
 	bool server_completed = false;
 	bool client_completed = false;
 
-	auto handler = std::make_shared<StormByte::Network::Connection::Handler>();
-
 	// Start server thread
 	std::thread server_thread([&]() -> int {
-		using namespace StormByte::Network::Socket;
+		using namespace Network::Socket;
 
-		Server server(StormByte::Network::Connection::Protocol::IPv4, handler);
+		Server server(Network::Connection::Protocol::IPv4, handler, logger);
 		ASSERT_TRUE(fn_name, server.Listen(host, port));
 
 		server_ready = true;
@@ -383,9 +379,9 @@ int TestWaitForDataTimeout() {
 
 	// Start client thread
 	std::thread client_thread([&]() -> int {
-		using namespace StormByte::Network::Socket;
+		using namespace Network::Socket;
 
-		Client client(StormByte::Network::Connection::Protocol::IPv4, handler);
+		Client client(Network::Connection::Protocol::IPv4, handler, logger);
 		ASSERT_TRUE(fn_name, client.Connect(host, port));
 
 		// Use a timeout of 1 second (1,000,000 microseconds) to test WaitForData
@@ -393,7 +389,7 @@ int TestWaitForDataTimeout() {
 		auto wait_result = client.WaitForData(timeout_microseconds);
 
 		ASSERT_TRUE(fn_name, wait_result.has_value());
-		ASSERT_TRUE(fn_name, StormByte::Network::Connection::Read::Result::Timeout == wait_result.value());
+		ASSERT_TRUE(fn_name, Network::Connection::Read::Result::Timeout == wait_result.value());
 
 		client_completed = true;
 
@@ -418,13 +414,11 @@ int TestClientDisconnectMidSend() {
 	bool server_completed = false;
 	bool client_completed = false;
 
-	auto handler = std::make_shared<StormByte::Network::Connection::Handler>();
-
 	// Start server thread
 	std::thread server_thread([&]() -> int {
-		using namespace StormByte::Network::Socket;
+		using namespace Network::Socket;
 
-		Server server(StormByte::Network::Connection::Protocol::IPv4, handler);
+		Server server(Network::Connection::Protocol::IPv4, handler, logger);
 		ASSERT_TRUE(fn_name, server.Listen(host, port));
 
 		server_ready = true;
@@ -458,9 +452,9 @@ int TestClientDisconnectMidSend() {
 
 	// Start client thread
 	std::thread client_thread([&]() -> int {
-		using namespace StormByte::Network::Socket;
+		using namespace Network::Socket;
 
-		Client client(StormByte::Network::Connection::Protocol::IPv4, handler);
+		Client client(Network::Connection::Protocol::IPv4, handler, logger);
 		ASSERT_TRUE(fn_name, client.Connect(host, port));
 
 		const std::string partial_data = "Partial Data...";
@@ -497,13 +491,11 @@ int TestSimultaneousConnections() {
 	std::atomic<int> connected_clients(0);
 	bool server_ready = false;
 
-	auto handler = std::make_shared<StormByte::Network::Connection::Handler>();
-
 	// Start server thread
 	std::thread server_thread([&]() -> int {
-		using namespace StormByte::Network::Socket;
+		using namespace Network::Socket;
 
-		Server server(StormByte::Network::Connection::Protocol::IPv4, handler);
+		Server server(Network::Connection::Protocol::IPv4, handler, logger);
 		ASSERT_TRUE(fn_name, server.Listen(host, port));
 
 		server_ready = true;
@@ -531,9 +523,9 @@ int TestSimultaneousConnections() {
 	std::vector<std::thread> client_threads;
 	for (int i = 0; i < client_count; ++i) {
 		client_threads.emplace_back([&, i]() -> int {
-			using namespace StormByte::Network::Socket;
+			using namespace Network::Socket;
 
-			Client client(StormByte::Network::Connection::Protocol::IPv4, handler);
+			Client client(Network::Connection::Protocol::IPv4, handler, logger);
 			ASSERT_TRUE(fn_name, client.Connect(host, port));
 			client.Disconnect();
 			return 0;
@@ -555,13 +547,11 @@ int TestSimultaneousConnections() {
 }
 
 int TestInvalidHostname() {
-	using namespace StormByte::Network::Socket;
+	using namespace Network::Socket;
 
 	const std::string fn_name = "TestInvalidHostname";
 
-	auto handler = std::make_shared<StormByte::Network::Connection::Handler>();
-
-	Client client(StormByte::Network::Connection::Protocol::IPv4, handler);
+	Client client(Network::Connection::Protocol::IPv4, handler, logger);
 	auto result = client.Connect("invalid.hostname", port);
 
 	ASSERT_FALSE(fn_name, result); // Connection should fail
@@ -576,13 +566,11 @@ int TestDataFragmentation() {
 	bool server_completed = false;
 	bool client_completed = false;
 
-	auto handler = std::make_shared<StormByte::Network::Connection::Handler>();
-
 	// Start server thread
 	std::thread server_thread([&]() -> int {
-		using namespace StormByte::Network::Socket;
+		using namespace Network::Socket;
 
-		Server server(StormByte::Network::Connection::Protocol::IPv4, handler);
+		Server server(Network::Connection::Protocol::IPv4, handler, logger);
 		ASSERT_TRUE(fn_name, server.Listen(host, port));
 
 		server_ready = true;
@@ -617,9 +605,9 @@ int TestDataFragmentation() {
 
 	// Start client thread
 	std::thread client_thread([&]() -> int {
-		using namespace StormByte::Network::Socket;
+		using namespace Network::Socket;
 
-		Client client(StormByte::Network::Connection::Protocol::IPv4, handler);
+		Client client(Network::Connection::Protocol::IPv4, handler, logger);
 		ASSERT_TRUE(fn_name, client.Connect(host, port));
 
 		const std::string fragmented_data = "Hello Fragmented World!";

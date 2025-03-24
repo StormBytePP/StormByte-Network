@@ -18,9 +18,9 @@ constexpr const int SOCKET_BUFFER_SIZE = 65536;
 
 using namespace StormByte::Network::Socket;
 
-Socket::Socket(const Connection::Protocol& protocol, std::shared_ptr<const Connection::Handler> handler):
+Socket::Socket(const Connection::Protocol& protocol, std::shared_ptr<const Connection::Handler> handler, std::shared_ptr<Logger::Log> logger) noexcept:
 m_protocol(protocol), m_status(Connection::Status::Disconnected),
-m_handle(nullptr), m_conn_handler(handler), m_conn_info(nullptr), m_mtu(DEFAULT_MTU) {}
+m_handle(nullptr), m_conn_handler(handler), m_conn_info(nullptr), m_mtu(DEFAULT_MTU), m_logger(logger) {}
 
 Socket::Socket(Socket&& other) noexcept:
 m_protocol(other.m_protocol), m_status(other.m_status),
@@ -61,6 +61,7 @@ void Socket::Disconnect() noexcept {
 	m_handle.reset();
 
 	m_status = Connection::Status::Disconnected;
+	m_logger << Logger::Level::LowLevel << "Disconnected socket" << std::endl;
 }
 
 StormByte::Expected<StormByte::Network::Connection::Read::Result, StormByte::Network::ConnectionClosed> Socket::WaitForData(const long long& usecs) noexcept {
