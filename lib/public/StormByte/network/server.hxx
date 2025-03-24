@@ -18,6 +18,10 @@ namespace StormByte::Network {
 	 */
 	class STORMBYTE_NETWORK_PUBLIC Server {
 		public:
+			using FutureBuffer = std::future<Util::Buffer>;																				///< The future data type.
+			using FutureBufferFunction = std::function<StormByte::Expected<FutureBuffer, Exception>(Socket::Client&, FutureBuffer&)>;	///< The future data function type.
+			using ExpectedFutureBuffer = StormByte::Expected<FutureBuffer, Exception>;													///< The expected future type.
+
 			/**
 			 * @brief Constructor.
 			 * @param protocol The protocol to use.
@@ -75,6 +79,8 @@ namespace StormByte::Network {
 			std::shared_ptr<Connection::Handler> m_conn_handler;							///< The handler to use.
 			std::shared_ptr<Logger::Log> m_logger;											///< The logger.
 			std::atomic<Connection::Status> m_status;										///< The connection status of the server.
+			std::vector<FutureBufferFunction> m_input_pipeline;								///< The input pipeline, will be processed before the client message is processed.
+			std::vector<FutureBufferFunction> m_output_pipeline;							///< The output pipeline, will be processed before the client reply is sent.
 
 			/**
 			 * @brief The function to add a client to client's vector for store and ownership handling.
@@ -108,28 +114,12 @@ namespace StormByte::Network {
 			virtual bool 																	ClientAuthentication(Socket::Client& client) noexcept;
 
 			/**
-			 * @brief The function to preprocess a message.
-			 * @param client The client to preprocess the message for.
-			 * @param message The message to preprocess.
-			 * @return The future of the preprocessed message.
-			 */
-			virtual StormByte::Expected<std::future<Util::Buffer>, ConnectionError>			PreProcessClientMessage(Socket::Client& client, std::future<Util::Buffer>& message) noexcept;
-
-			/**
-			 * @brief The function to preprocess a reply for example to encrypt it.
-			 * @param client The client to preprocess the reply for.
-			 * @param message The message to preprocess.
-			 * @return The future of the preprocessed reply.
-			 */
-			virtual StormByte::Expected<std::future<Util::Buffer>, ConnectionError>			PreProcessClientReply(Socket::Client& client, std::future<Util::Buffer>& message) noexcept;
-
-			/**
 			 * @brief The function to process a client message and returns a reply.
 			 * @param client The client to process the message for.
 			 * @param message The message to process.
 			 * @return The expected result of the operation.
 			 */
-			virtual StormByte::Expected<std::future<Util::Buffer>, ConnectionError>			ProcessClientMessage(Socket::Client& client, std::future<Util::Buffer>& message) noexcept = 0;
+			virtual ExpectedFutureBuffer													ProcessClientMessage(Socket::Client& client, FutureBuffer& message) noexcept = 0;
 
 		private:
 			std::thread m_accept_thread;													///< The thread for accepting clients.
@@ -166,6 +156,22 @@ namespace StormByte::Network {
 			 * @param message The reply.
 			 * @return The expected result of the operation.
 			 */
-			StormByte::Expected<void, ConnectionError> 										SendClientReply(Socket::Client& client, std::future<Util::Buffer>& message) noexcept;
+			StormByte::Expected<void, ConnectionError> 										SendClientReply(Socket::Client& client, FutureBuffer& message) noexcept;
+
+			/**
+			 * @brief The function to preprocess a message.
+			 * @param client The client to preprocess the message for.
+			 * @param message The message to preprocess.
+			 * @return The future of the preprocessed message.
+			 */
+			ExpectedFutureBuffer															ProcessInputMessagePipeline(Socket::Client& client, FutureBuffer& message) noexcept;
+
+			/**
+			 * @brief The function to preprocess a reply for example to encrypt it.
+			 * @param client The client to preprocess the reply for.
+			 * @param message The message to preprocess.
+			 * @return The future of the preprocessed reply.
+			 */
+			ExpectedFutureBuffer															ProcessOutputMessagePipeline(Socket::Client& client, FutureBuffer& message) noexcept;
 	};
 }

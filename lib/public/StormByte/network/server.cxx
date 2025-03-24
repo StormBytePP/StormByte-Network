@@ -161,7 +161,7 @@ void Server::HandleClientMessages(Socket::Client& client) noexcept {
 						goto end;
 					}
 
-					auto expected_preprocessed_msg = PreProcessClientMessage(client, expected_msg.value());
+					auto expected_preprocessed_msg = ProcessInputMessagePipeline(client, expected_msg.value());
 					if (!expected_preprocessed_msg) {
 						m_logger << Logger::Level::Error << expected_preprocessed_msg.error()->what() << std::endl;
 						RemoveClientAsync(client);
@@ -192,26 +192,46 @@ void Server::HandleClientMessages(Socket::Client& client) noexcept {
 	m_logger << Logger::Level::LowLevel << "Stopping handle client messages thread" << std::endl;
 }
 
-StormByte::Expected<std::future<StormByte::Util::Buffer>, ConnectionError> Server::PreProcessClientMessage(Socket::Client&, std::future<Util::Buffer>& message) noexcept {
-	// The default function returns the message without modification
-	return std::move(message);
-}
-
-StormByte::Expected<std::future<StormByte::Util::Buffer>, ConnectionError> Server::PreProcessClientReply(Socket::Client&, std::future<Util::Buffer>& message) noexcept {
-	// The default function returns the message without modification
-	return std::move(message);
-}
-
-StormByte::Expected<void, ConnectionError> Server::SendClientReply(Socket::Client& client, std::future<StormByte::Util::Buffer>& message) noexcept {
-	auto preprocessed_reply = PreProcessClientReply(client, message);
+StormByte::Expected<void, ConnectionError> Server::SendClientReply(Socket::Client& client, FutureBuffer& message) noexcept {
+	auto preprocessed_reply = ProcessOutputMessagePipeline(client, message);
 	if (!preprocessed_reply) {
 		m_logger << Logger::Level::Error << preprocessed_reply.error()->what() << std::endl;
-		return StormByte::Unexpected(preprocessed_reply.error());
+		return StormByte::Unexpected<ConnectionError>(preprocessed_reply.error()->what());
 	}
 	auto expected_send = client.Send(preprocessed_reply.value().get().Data());
 	if (!expected_send) {
 		m_logger << Logger::Level::Error << expected_send.error()->what() << std::endl;
-		return StormByte::Unexpected(expected_send.error());
+		return StormByte::Unexpected<ConnectionError>(expected_send.error()->what());
 	}
 	return {};
+}
+
+Server::ExpectedFutureBuffer Server::ProcessInputMessagePipeline(Socket::Client& client, FutureBuffer& message) noexcept {
+	FutureBuffer processed_message = std::move(message);
+
+	for (auto& processor: m_input_pipeline) {
+		auto expected_processed = processor(client, processed_message);
+		if (!expected_processed) {
+			m_logger << Logger::Level::Error << expected_processed.error()->what() << std::endl;
+			return StormByte::Unexpected<ConnectionError>(expected_processed.error()->what());
+		}
+		processed_message = std::move(expected_processed.value());
+	}
+
+	return std::move(processed_message);
+}
+
+Server::ExpectedFutureBuffer Server::ProcessOutputMessagePipeline(Socket::Client& client, FutureBuffer& message) noexcept {
+	FutureBuffer processed_message = std::move(message);
+
+	for (auto& processor: m_output_pipeline) {
+		auto expected_processed = processor(client, processed_message);
+		if (!expected_processed) {
+			m_logger << Logger::Level::Error << expected_processed.error()->what() << std::endl;
+			return StormByte::Unexpected<ConnectionError>(expected_processed.error()->what());
+		}
+		processed_message = std::move(expected_processed.value());
+	}
+
+	return std::move(processed_message);
 }
