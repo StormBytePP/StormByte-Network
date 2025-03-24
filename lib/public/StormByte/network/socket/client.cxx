@@ -15,16 +15,14 @@
 #include <future>
 #include <thread>
 
-// Adjust BUFFER_SIZE as needed.
 constexpr const std::size_t BUFFER_SIZE = 4096;
 
-using namespace StormByte::Network::Socket;
+using namespace StormByte::Network;
 
-Client::Client(const Connection::Protocol& protocol, std::shared_ptr<const Connection::Handler> handler, std::shared_ptr<Logger::Log> logger) noexcept
+Socket::Client::Client(const Connection::Protocol& protocol, std::shared_ptr<const Connection::Handler> handler, std::shared_ptr<Logger::Log> logger) noexcept
 :Socket(protocol, handler, logger) {}
 
-StormByte::Expected<void, StormByte::Network::ConnectionError>
-Client::Connect(const std::string& hostname, const unsigned short& port) noexcept {
+ExpectedVoid Socket::Client::Connect(const std::string& hostname, const unsigned short& port) noexcept {
 	m_logger << Logger::Level::LowLevel << "Connecting to " << hostname << ":" << port << std::endl;
 
 	if (m_status != Connection::Status::Disconnected) {
@@ -67,11 +65,7 @@ Client::Connect(const std::string& hostname, const unsigned short& port) noexcep
 	return {};
 }
 
-//
-// Modified Send function that accepts a std::span<const std::byte>
-//
-StormByte::Expected<void, StormByte::Network::ConnectionError>
-Client::Send(std::span<const std::byte> data) noexcept {
+ExpectedVoid Socket::Client::Send(std::span<const std::byte> data) noexcept {
 	if (m_status != Connection::Status::Connected) {
 		return StormByte::Unexpected<ConnectionError>("Failed to send: Client is not connected");
 	}
@@ -145,15 +139,12 @@ Client::Send(std::span<const std::byte> data) noexcept {
 	return {};
 }
 
-// Optional: Overload to support sending from a Packet object, if Packet::Data()
-// can be changed to return a std::span<const std::byte>.
-StormByte::Expected<void, StormByte::Network::ConnectionError>
-Client::Send(const Data::Packet& packet) noexcept {
+ExpectedVoid Socket::Client::Send(const Data::Packet& packet) noexcept {
 	std::span<const std::byte> data = packet.Data();
 	return Send(data);
 }
 
-bool Client::HasShutdownRequest() noexcept {
+bool Socket::Client::HasShutdownRequest() noexcept {
 	char buffer[1]; // Inspect only one byte
 #ifdef LINUX
 	ssize_t result = ::recv(*m_handle, buffer, sizeof(buffer), MSG_PEEK | MSG_DONTWAIT);
@@ -189,20 +180,15 @@ bool Client::HasShutdownRequest() noexcept {
 	return false;
 }
 
-//
-// Receive methods (unchanged)
-//
-StormByte::Expected<std::future<StormByte::Util::Buffer>, StormByte::Network::ConnectionError>
-Client::Receive() noexcept {
+ExpectedFutureBuffer Socket::Client::Receive() noexcept {
 	return Receive(0);
 }
 
-StormByte::Expected<std::future<StormByte::Util::Buffer>, StormByte::Network::ConnectionError>
-Client::Receive(const std::size_t& max_size) noexcept {
+ExpectedFutureBuffer Socket::Client::Receive(const std::size_t& max_size) noexcept {
 	m_logger << Logger::Level::LowLevel << "Initiating receive operation with max_size: " << Logger::humanreadable_bytes << max_size << Logger::nohumanreadable << std::endl;
 
 	try {
-		auto promise = std::make_shared<std::promise<Util::Buffer>>();
+		auto promise = std::make_shared<PromisedBuffer>();
 		auto future = promise->get_future();
 
 		std::thread([this, promise, max_size]() {
@@ -225,7 +211,7 @@ Client::Receive(const std::size_t& max_size) noexcept {
 	}
 }
 
-void Client::Read(std::promise<Util::Buffer>& promise, std::size_t max_size) noexcept {
+void Socket::Client::Read(PromisedBuffer& promise, std::size_t max_size) noexcept {
 	m_logger << Logger::Level::LowLevel << "Starting to read data with max_size: " << Logger::humanreadable_bytes << max_size << Logger::nohumanreadable << std::endl;
 
 	Util::Buffer buffer;
@@ -277,11 +263,7 @@ void Client::Read(std::promise<Util::Buffer>& promise, std::size_t max_size) noe
 	promise.set_value(buffer);
 }
 
-//
-// Modified Write function that accepts a std::span<const std::byte>
-//
-StormByte::Expected<void, StormByte::Network::ConnectionError>
-Client::Write(std::span<const std::byte> data, const std::size_t& size) noexcept {
+ExpectedVoid Socket::Client::Write(std::span<const std::byte> data, const std::size_t& size) noexcept {
 	m_logger << Logger::Level::LowLevel << "Starting to write data..." << std::endl;
 
 	if (m_status != Connection::Status::Connected) {

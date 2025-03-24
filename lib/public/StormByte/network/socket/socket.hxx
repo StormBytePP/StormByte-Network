@@ -8,6 +8,7 @@
 #include <StormByte/network/connection/rw.hxx>
 #include <StormByte/network/connection/status.hxx>
 #include <StormByte/network/exception.hxx>
+#include <StormByte/network/typedefs.hxx>
 
 /**
  * @namespace Socket
@@ -87,7 +88,7 @@ namespace StormByte::Network::Socket {
 			 * @param usecs The number of microseconds to wait for data. (0 for no timeout)
 			 * @return The expected result of the operation.
 			 */
-			StormByte::Expected<Connection::Read::Result, ConnectionClosed>		WaitForData(const long long& usecs = 0) noexcept;
+			ExpectedReadResult 													WaitForData(const long long& usecs = 0) noexcept;
 
 		protected:
 			Connection::Protocol m_protocol;									///< The protocol of the socket.
@@ -110,7 +111,7 @@ namespace StormByte::Network::Socket {
 			 * @brief The function to create a socket.
 			 * @return The expected result of the operation.
 			 */
-			StormByte::Expected<Connection::Handler::Type, ConnectionError>		CreateSocket() noexcept;
+			ExpectedHandlerType													CreateSocket() noexcept;
 
 			/**
 			 * @brief Function to initialize the socket after connecting (or accepting a connection).

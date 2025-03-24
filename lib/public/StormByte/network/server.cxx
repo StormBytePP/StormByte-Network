@@ -9,7 +9,7 @@ Server::~Server() noexcept {
 	Stop();
 }
 
-StormByte::Expected<void, ConnectionError> Server::Start(const std::string& host, const unsigned short& port) noexcept {
+ExpectedVoid Server::Start(const std::string& host, const unsigned short& port) noexcept {
 	if (Connection::IsConnected(m_status))
 		return StormByte::Unexpected<ConnectionError>("Server is already connected");
 
@@ -192,7 +192,7 @@ void Server::HandleClientMessages(Socket::Client& client) noexcept {
 	m_logger << Logger::Level::LowLevel << "Stopping handle client messages thread" << std::endl;
 }
 
-StormByte::Expected<void, ConnectionError> Server::SendClientReply(Socket::Client& client, FutureBuffer& message) noexcept {
+ExpectedVoid Server::SendClientReply(Socket::Client& client, FutureBuffer& message) noexcept {
 	auto preprocessed_reply = ProcessOutputMessagePipeline(client, message);
 	if (!preprocessed_reply) {
 		m_logger << Logger::Level::Error << preprocessed_reply.error()->what() << std::endl;
@@ -206,7 +206,7 @@ StormByte::Expected<void, ConnectionError> Server::SendClientReply(Socket::Clien
 	return {};
 }
 
-Server::ExpectedFutureBuffer Server::ProcessInputMessagePipeline(Socket::Client& client, FutureBuffer& message) noexcept {
+ExpectedFutureBuffer Server::ProcessInputMessagePipeline(Socket::Client& client, FutureBuffer& message) noexcept {
 	FutureBuffer processed_message = std::move(message);
 
 	for (auto& processor: m_input_pipeline) {
@@ -221,7 +221,7 @@ Server::ExpectedFutureBuffer Server::ProcessInputMessagePipeline(Socket::Client&
 	return std::move(processed_message);
 }
 
-Server::ExpectedFutureBuffer Server::ProcessOutputMessagePipeline(Socket::Client& client, FutureBuffer& message) noexcept {
+ExpectedFutureBuffer Server::ProcessOutputMessagePipeline(Socket::Client& client, FutureBuffer& message) noexcept {
 	FutureBuffer processed_message = std::move(message);
 
 	for (auto& processor: m_output_pipeline) {

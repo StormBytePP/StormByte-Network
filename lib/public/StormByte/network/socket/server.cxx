@@ -9,12 +9,12 @@
 
 #include <format>
 
-using namespace StormByte::Network::Socket;
+using namespace StormByte::Network;
 
-Server::Server(const Connection::Protocol& protocol, std::shared_ptr<const Connection::Handler> handler, std::shared_ptr<Logger::Log> logger) noexcept:
+Socket::Server::Server(const Connection::Protocol& protocol, std::shared_ptr<const Connection::Handler> handler, std::shared_ptr<Logger::Log> logger) noexcept:
 Socket(protocol, handler, logger) {}
 
-StormByte::Expected<void, StormByte::Network::ConnectionError> Server::Listen(const std::string& hostname, const unsigned short& port) noexcept {
+ExpectedVoid Socket::Server::Listen(const std::string& hostname, const unsigned short& port) noexcept {
 	if (Connection::IsConnected(m_status))
 		return StormByte::Unexpected<ConnectionError>("Server is already connected");
 	
@@ -69,7 +69,7 @@ StormByte::Expected<void, StormByte::Network::ConnectionError> Server::Listen(co
 	return {};
 }
 
-StormByte::Expected<Client, StormByte::Network::ConnectionError> Server::Accept() noexcept {
+ExpectedClient Socket::Server::Accept() noexcept {
 	if (!Connection::IsConnected(m_status))
 		return StormByte::Unexpected<ConnectionError>("Socket is not connected");
 

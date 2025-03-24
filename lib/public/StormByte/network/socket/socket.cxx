@@ -64,7 +64,7 @@ void Socket::Disconnect() noexcept {
 	m_logger << Logger::Level::LowLevel << "Disconnected socket" << std::endl;
 }
 
-StormByte::Expected<StormByte::Network::Connection::Read::Result, StormByte::Network::ConnectionClosed> Socket::WaitForData(const long long& usecs) noexcept {
+StormByte::Network::ExpectedReadResult Socket::WaitForData(const long long& usecs) noexcept {
 	if (!Connection::IsConnected(m_status)) {
 		return StormByte::Unexpected<ConnectionClosed>("Failed to wait for data: Invalid connection status");
 	}
@@ -133,7 +133,7 @@ StormByte::Expected<StormByte::Network::Connection::Read::Result, StormByte::Net
 	return StormByte::Unexpected<ConnectionClosed>("Failed to wait for data: Unknown error occurred");
 }
 
-StormByte::Expected<StormByte::Network::Connection::Handler::Type, StormByte::Network::ConnectionError> Socket::CreateSocket() noexcept {
+StormByte::Network::ExpectedHandlerType Socket::CreateSocket() noexcept {
 	auto protocol = m_protocol == Connection::Protocol::IPv4 ? AF_INET : AF_INET6;
 	Connection::Handler::Type handle = ::socket(protocol, SOCK_STREAM, 0);
 	#ifdef WINDOWS

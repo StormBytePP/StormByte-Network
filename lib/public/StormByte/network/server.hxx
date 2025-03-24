@@ -3,6 +3,7 @@
 #include <StormByte/network/exception.hxx>
 #include <StormByte/network/socket/server.hxx>
 #include <StormByte/network/socket/client.hxx>
+#include <StormByte/network/typedefs.hxx>
 #include <StormByte/logger/log.hxx>
 
 #include <atomic>
@@ -18,10 +19,6 @@ namespace StormByte::Network {
 	 */
 	class STORMBYTE_NETWORK_PUBLIC Server {
 		public:
-			using FutureBuffer = std::future<Util::Buffer>;																				///< The future data type.
-			using FutureBufferFunction = std::function<StormByte::Expected<FutureBuffer, Exception>(Socket::Client&, FutureBuffer&)>;	///< The future data function type.
-			using ExpectedFutureBuffer = StormByte::Expected<FutureBuffer, Exception>;													///< The expected future type.
-
 			/**
 			 * @brief Constructor.
 			 * @param protocol The protocol to use.
@@ -79,8 +76,8 @@ namespace StormByte::Network {
 			std::shared_ptr<Connection::Handler> m_conn_handler;							///< The handler to use.
 			std::shared_ptr<Logger::Log> m_logger;											///< The logger.
 			std::atomic<Connection::Status> m_status;										///< The connection status of the server.
-			std::vector<FutureBufferFunction> m_input_pipeline;								///< The input pipeline, will be processed before the client message is processed.
-			std::vector<FutureBufferFunction> m_output_pipeline;							///< The output pipeline, will be processed before the client reply is sent.
+			std::vector<FutureBufferProcessor> m_input_pipeline;							///< The input pipeline, will be processed before the client message is processed.
+			std::vector<FutureBufferProcessor> m_output_pipeline;							///< The output pipeline, will be processed before the client reply is sent.
 
 			/**
 			 * @brief The function to add a client to client's vector for store and ownership handling.
@@ -156,7 +153,7 @@ namespace StormByte::Network {
 			 * @param message The reply.
 			 * @return The expected result of the operation.
 			 */
-			StormByte::Expected<void, ConnectionError> 										SendClientReply(Socket::Client& client, FutureBuffer& message) noexcept;
+			ExpectedVoid 																	SendClientReply(Socket::Client& client, FutureBuffer& message) noexcept;
 
 			/**
 			 * @brief The function to preprocess a message.

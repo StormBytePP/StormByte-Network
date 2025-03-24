@@ -1,6 +1,7 @@
 #pragma once
 
 #include <StormByte/network/socket/client.hxx>
+#include <StormByte/network/typedefs.hxx>
 
 /**
  * @namespace Socket
@@ -55,12 +56,12 @@ namespace StormByte::Network::Socket {
 			 * @brief The function to listen for incoming connections.
 			 * @return The expected result of the operation.
 			 */
-			StormByte::Expected<void, ConnectionError>						Listen(const std::string& hostname, const unsigned short& port) noexcept;
+			ExpectedVoid													Listen(const std::string& hostname, const unsigned short& port) noexcept;
 
 			/**
 			 * @brief The function to accept a client connection.
 			 * @return The expected result of the operation.
 			 */
-			StormByte::Expected<Client, ConnectionError>					Accept() noexcept;
+			ExpectedClient													Accept() noexcept;
 	};
 }
