@@ -7,9 +7,6 @@
 #include <sys/ioctl.h>
 #include <sys/socket.h>
 #include <unistd.h>
-#else
-#include <BaseTsd.h>
-typedef SSIZE_T ssize_t;
 #endif
 
 #include <algorithm>
@@ -122,7 +119,11 @@ Client::Send(std::span<const std::byte> data) noexcept {
 		std::size_t chunk_size = std::min(BUFFER_SIZE, data.size());
 		std::span<const std::byte> chunk = data.subspan(0, chunk_size);
 
+#ifdef LINUX
 		const ssize_t written = ::send(*m_handle,
+#else
+		const int written = ::send(*m_handle,
+#endif
 										reinterpret_cast<const char*>(chunk.data()),
 										chunk.size(), 0);
 
@@ -233,7 +234,11 @@ void Client::Read(std::promise<Util::Buffer>& promise, std::size_t max_size) noe
 
 	while (true) {
 		const std::size_t bytes_to_read = (max_size > 0) ? std::min(BUFFER_SIZE, max_size - total_bytes_read) : BUFFER_SIZE;
+#ifdef LINUX
 		const ssize_t valread = recv(*m_handle, internal_buffer, bytes_to_read, 0);
+#else
+		const int valread = recv(*m_handle, internal_buffer, bytes_to_read, 0);
+#endif
 
 		if (valread > 0) {
 			m_logger << Logger::Level::LowLevel << "Chunk received. Size: " << Logger::humanreadable_bytes << valread << Logger::nohumanreadable << std::endl;
@@ -290,7 +295,11 @@ Client::Write(std::span<const std::byte> data, const std::size_t& size) noexcept
 
 	while (total_written < bytes_to_write) {
 		auto current_data = data.subspan(total_written);
+#ifdef LINUX
 		const ssize_t written = ::send(*m_handle,
+#else
+		const int written = ::send(*m_handle,
+#endif
 										reinterpret_cast<const char*>(current_data.data()),
 										current_data.size(), 0);
 		if (written <= 0) {
