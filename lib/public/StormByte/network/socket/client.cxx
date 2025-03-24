@@ -148,7 +148,7 @@ Client::Send(std::span<const std::byte> data) noexcept {
 // Optional: Overload to support sending from a Packet object, if Packet::Data()
 // can be changed to return a std::span<const std::byte>.
 StormByte::Expected<void, StormByte::Network::ConnectionError>
-Client::Send(const Packet& packet) noexcept {
+Client::Send(const Data::Packet& packet) noexcept {
 	std::span<const std::byte> data = packet.Data();
 	return Send(data);
 }

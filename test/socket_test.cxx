@@ -1,6 +1,6 @@
+#include <StormByte/network/data/packet.hxx>
 #include <StormByte/network/socket/server.hxx>
 #include <StormByte/network/socket/client.hxx>
-#include <StormByte/network/packet.hxx>
 #include <StormByte/test_handlers.h>
 
 #include <iostream>
@@ -24,9 +24,9 @@ auto handler = std::make_shared<Network::Connection::Handler>();
  * @class HelloWorldPacket
  * @brief A simple packet containing a "Hello World!" message.
  */
-class HelloWorldPacket : public Network::Packet {
+class HelloWorldPacket : public Network::Data::Packet {
 	public:
-		HelloWorldPacket() : Packet(1) {}
+		HelloWorldPacket() : Packet() {}
 
 		void PrepareBuffer() const noexcept override {
 			if (m_buffer.Empty()) {
@@ -39,9 +39,9 @@ class HelloWorldPacket : public Network::Packet {
  * @class ReceivedPacket
  * @brief A packet containing received data.
  */
-class ReceivedPacket : public Network::Packet {
+class ReceivedPacket : public Network::Data::Packet {
 	public:
-		ReceivedPacket(const StormByte::Util::Buffer& buff) : Packet(2) {
+		ReceivedPacket(const StormByte::Util::Buffer& buff) : Packet() {
 			m_buffer = buff;
 		}
 

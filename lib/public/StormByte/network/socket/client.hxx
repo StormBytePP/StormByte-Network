@@ -1,7 +1,7 @@
 #pragma once
 
 #include <StormByte/network/connection/rw.hxx>
-#include <StormByte/network/packet.hxx>
+#include <StormByte/network/data/packet.hxx>
 #include <StormByte/network/socket/socket.hxx>
 #include <StormByte/util/buffer.hxx>
 
@@ -86,7 +86,7 @@ namespace StormByte::Network::Socket {
 		 * @param packet The packet to send.
 		 * @return The expected result of the operation.
 		 */
-		StormByte::Expected<void, ConnectionError> 						Send(const Packet& packet) noexcept;
+		StormByte::Expected<void, ConnectionError> 						Send(const Data::Packet& packet) noexcept;
 
 		/**
 		 * @brief Function to send data to the socket using a std::span of bytes.
