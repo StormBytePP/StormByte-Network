@@ -139,7 +139,7 @@ Client::Send(std::span<const std::byte> data) noexcept {
 		// std::this_thread::sleep_for(std::chrono::milliseconds(1));
 	}
 
-	m_logger << Logger::Level::LowLevel << "All data sent successfully! Total bytes sent: " << total_bytes_sent << " bytes" << std::endl;
+	m_logger << Logger::Level::LowLevel << "All data sent successfully! Total bytes sent: " << Logger::humanreadable_bytes << total_bytes_sent << Logger::nohumanreadable << std::endl;
 
 	return {};
 }
@@ -152,6 +152,31 @@ Client::Send(const Packet& packet) noexcept {
 	return Send(data);
 }
 
+bool Client::HasShutdownRequest() noexcept {
+	char buffer[1]; // Inspect only one byte
+	ssize_t result = ::recv(*m_handle, buffer, sizeof(buffer), MSG_PEEK | MSG_DONTWAIT);
+
+	if (result == 0) {
+		// Connection closed by peer
+		return true;
+	} else if (result < 0) {
+#ifdef LINUX
+		if (m_conn_handler->LastErrorCode() == EAGAIN || m_conn_handler->LastErrorCode() == EWOULDBLOCK) {
+#else
+		if (m_conn_handler->LastErrorCode() == WSAEWOULDBLOCK) {
+#endif
+			// No data available; not a shutdown
+			return false;
+		} else {
+			// Treat other errors as a shutdown request
+			return true;
+		}
+	}
+
+	// Data is available; not a shutdown
+	return false;
+}
+
 //
 // Receive methods (unchanged)
 //
@@ -162,14 +187,14 @@ Client::Receive() noexcept {
 
 StormByte::Expected<std::future<StormByte::Util::Buffer>, StormByte::Network::ConnectionError>
 Client::Receive(const std::size_t& max_size) noexcept {
-	m_logger << Logger::Level::LowLevel << "Initiating receive operation with max_size: " << max_size << " bytes" << std::endl;
+	m_logger << Logger::Level::LowLevel << "Initiating receive operation with max_size: " << Logger::humanreadable_bytes << max_size << Logger::nohumanreadable << std::endl;
 
 	try {
 		auto promise = std::make_shared<std::promise<Util::Buffer>>();
 		auto future = promise->get_future();
 
 		std::thread([this, promise, max_size]() {
-			m_logger << Logger::Level::LowLevel << "Read thread started. Max size: " << max_size << " bytes" << std::endl;
+			m_logger << Logger::Level::LowLevel << "Read thread started. Max size: " << Logger::humanreadable_bytes << max_size << Logger::nohumanreadable << std::endl;
 			try {
 				Read(*promise, max_size);
 				m_logger << Logger::Level::LowLevel << "Read thread completed successfully." << std::endl;
@@ -189,7 +214,7 @@ Client::Receive(const std::size_t& max_size) noexcept {
 }
 
 void Client::Read(std::promise<Util::Buffer>& promise, std::size_t max_size) noexcept {
-	m_logger << Logger::Level::LowLevel << "Starting to read data with max_size: " << max_size << " bytes" << std::endl;
+	m_logger << Logger::Level::LowLevel << "Starting to read data with max_size: " << Logger::humanreadable_bytes << max_size << Logger::nohumanreadable << std::endl;
 
 	Util::Buffer buffer;
 	char internal_buffer[BUFFER_SIZE];
@@ -200,7 +225,7 @@ void Client::Read(std::promise<Util::Buffer>& promise, std::size_t max_size) noe
 		const ssize_t valread = recv(*m_handle, internal_buffer, bytes_to_read, 0);
 
 		if (valread > 0) {
-			m_logger << Logger::Level::LowLevel << "Chunk received. Size: " << valread << " bytes" << std::endl;
+			m_logger << Logger::Level::LowLevel << "Chunk received. Size: " << Logger::humanreadable_bytes << valread << Logger::nohumanreadable << std::endl;
 			buffer << std::string(internal_buffer, static_cast<std::size_t>(valread));
 			total_bytes_read += valread;
 			if (max_size > 0 && total_bytes_read >= max_size) {
@@ -232,7 +257,7 @@ void Client::Read(std::promise<Util::Buffer>& promise, std::size_t max_size) noe
 		}
 	}
 
-	m_logger << Logger::Level::LowLevel << "Total data received: " << buffer.Size() << " bytes" << std::endl;
+	m_logger << Logger::Level::LowLevel << "Total data received: " << Logger::humanreadable_bytes << buffer.Size() << Logger::nohumanreadable << std::endl;
 	promise.set_value(buffer);
 }
 
@@ -268,6 +293,6 @@ Client::Write(std::span<const std::byte> data, const std::size_t& size) noexcept
 		total_written += written;
 	}
 
-	m_logger << Logger::Level::LowLevel << "Write of size " << bytes_to_write << " bytes completed successfully" << std::endl;
+	m_logger << Logger::Level::LowLevel << "Write of size " << Logger::humanreadable_bytes << bytes_to_write << Logger::nohumanreadable << " bytes completed successfully" << std::endl;
 	return {};
 }

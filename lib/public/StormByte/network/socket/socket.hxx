@@ -75,6 +75,14 @@ namespace StormByte::Network::Socket {
 			}
 
 			/**
+			 * @brief Gets the handle of the socket (don't check if it's valid!)
+			 * @return The handle of the socket.
+			 */
+			inline const Connection::Handler::Type&								Handle() const noexcept {
+				return *m_handle;
+			}
+
+			/**
 			 * @brief The function to wait for data to be available.
 			 * @param usecs The number of microseconds to wait for data. (0 for no timeout)
 			 * @return The expected result of the operation.

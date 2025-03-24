@@ -33,32 +33,32 @@ namespace StormByte::Network::Socket {
 		 * @brief The copy constructor of the Client class.
 		 * @param other The other socket to copy.
 		 */
-		Client(const Client& other) = delete;
+		Client(const Client& other) 									= delete;
 
 		/**
 		 * @brief The move constructor of the Client class.
 		 * @param other The other socket to move.
 		 */
-		Client(Client&& other) noexcept = default;
+		Client(Client&& other) noexcept 								= default;
 
 		/**
 		 * @brief The destructor of the Client class.
 		 */
-		~Client() noexcept override = default;
+		~Client() noexcept override 									= default;
 
 		/**
 		 * @brief The assignment operator of the Client class.
 		 * @param other The other socket to assign.
 		 * @return The reference to the assigned socket.
 		 */
-		Client& operator=(const Client& other) = delete;
+		Client& operator=(const Client& other) 							= delete;
 
 		/**
 		 * @brief The move assignment operator of the Client class.
 		 * @param other The other socket to assign.
 		 * @return The reference to the assigned socket.
 		 */
-		Client& operator=(Client&& other) noexcept = default;
+		Client& operator=(Client&& other) noexcept 						= default;
 
 		/**
 		 * @brief The function to connect to a server.
@@ -66,7 +66,7 @@ namespace StormByte::Network::Socket {
 		 * @param port The port of the server.
 		 * @return The expected result of the operation.
 		 */
-		StormByte::Expected<void, ConnectionError> Connect(const std::string& hostname, const unsigned short& port) noexcept;
+		StormByte::Expected<void, ConnectionError> 						Connect(const std::string& hostname, const unsigned short& port) noexcept;
 
 		/**
 		 * @brief The function to receive data from the socket.
@@ -86,14 +86,20 @@ namespace StormByte::Network::Socket {
 		 * @param packet The packet to send.
 		 * @return The expected result of the operation.
 		 */
-		StormByte::Expected<void, ConnectionError> Send(const Packet& packet) noexcept;
+		StormByte::Expected<void, ConnectionError> 						Send(const Packet& packet) noexcept;
 
 		/**
 		 * @brief Function to send data to the socket using a std::span of bytes.
 		 * @param data A view of the data to send.
 		 * @return The expected result of the operation.
 		 */
-		StormByte::Expected<void, ConnectionError> Send(std::span<const std::byte> data) noexcept;
+		StormByte::Expected<void, ConnectionError> 						Send(std::span<const std::byte> data) noexcept;
+
+		/**
+		 * @brief Function to check if a shutdown request has been made.
+		 * @return True if a shutdown request has been made, false otherwise.
+		 */
+		bool 															HasShutdownRequest() noexcept;
 
 	private:
 		/**
@@ -102,14 +108,14 @@ namespace StormByte::Network::Socket {
 		 * @param size The requested size of data.
 		 * @return The result of the operation.
 		 */
-		Connection::Read::Result ReadNonBlocking(Util::Buffer& buffer) noexcept;
+		Connection::Read::Result 										ReadNonBlocking(Util::Buffer& buffer) noexcept;
 
 		/**
 		 * @brief Function to read data from the socket asynchronously.
 		 * @param promise The promise to set the buffer to.
 		 * @param max_size The maximum size of the data to read.
 		 */
-		void Read(std::promise<Util::Buffer>& promise, std::size_t max_size) noexcept;
+		void 															Read(std::promise<Util::Buffer>& promise, std::size_t max_size) noexcept;
 
 		/**
 		 * @brief Function to write data to the socket.
@@ -117,6 +123,6 @@ namespace StormByte::Network::Socket {
 		 * @param size The number of bytes to write.
 		 * @return The expected result of the operation.
 		 */
-		StormByte::Expected<void, ConnectionError> Write(std::span<const std::byte> data, const std::size_t& size) noexcept;
+		StormByte::Expected<void, ConnectionError> 						Write(std::span<const std::byte> data, const std::size_t& size) noexcept;
 	};
 }
