@@ -31,14 +31,14 @@ jobs:
         with:
           submodules: true
 
-      - name: Install Dependencies
+      - name: Update repository
+        run: sudo apt update
+
+      - name: Install Doxygen
         run: sudo apt install -y cmake doxygen gcc g++ graphviz
 
       - name: Set up ninja
         uses: ./.github/actions/setup-ninja
-
-      - name: Update repository
-        run: sudo apt update
 
       - name: Install dependencies
         run: |
@@ -46,7 +46,7 @@ jobs:
           sudo update-alternatives --remove-all clang
           sudo update-alternatives --remove-all clang++
           sudo update-alternatives --install /usr/bin/clang clang /usr/bin/clang-19 190 --slave /usr/bin/clang++ clang++ /usr/bin/clang++-19
-          sudo apt install -y libcrypto++-dev libcrypto++-doc libcrypto++-utils # Install it to not download the full code just to make docs
+          sudo apt install -y libcrypto++-dev libcrypto++-doc libcrypto++-utils libbz2-dev # Install it to not download the full code just to make docs
 
       - name: Configure CMake
         run: |
@@ -59,7 +59,8 @@ jobs:
             -DENABLE_TEST=OFF \
             -DENABLE_DOC=ON \
             -DWITH_SYSTEM_STORMBYTE=OFF \
-            -DWITH_SYSTEM_CRYPTOPP=ON
+            -DWITH_SYSTEM_CRYPTOPP=ON \
+            -DWITH_SYSTEM_BZIP2=ON
 
       - name: Generating Doxygen documentation
         run: cmake --build ${{ github.workspace }}/build --target StormByteNetworkDoc
