@@ -12,3 +12,6 @@ ConnectionClosed::ConnectionClosed(): Exception("Connection closed by client") {
 
 ConnectionClosed::ConnectionClosed(const std::string& message):
 Exception(std::format("Connection closed: {}", message)) {}
+
+CryptoException::CryptoException(const std::string& message):
+Exception(std::format("Crypto error: {}", message)) {}

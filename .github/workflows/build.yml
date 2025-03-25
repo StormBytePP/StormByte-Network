@@ -17,10 +17,14 @@ jobs:
       matrix:
         compiler: [gcc, clang]
         stdlib: [libstdc++, libc++]
+        system-cryptopp: [ON, OFF]
         exclude:
         - compiler: gcc
           stdlib: libc++
-    name: ${{ matrix.compiler }}-${{ matrix.stdlib }}
+        - stdlib: libc++
+          system-cryptopp: ON # Ubuntu does not have crypto++ with libc++
+
+    name: ${{ matrix.compiler }}-${{ matrix.stdlib }}-system-cryptopp-${{ matrix.system-cryptopp }}
 
     steps:
     - name: Checkout repository and submodules
@@ -48,6 +52,9 @@ jobs:
           sudo update-alternatives --remove-all clang++
           sudo update-alternatives --install /usr/bin/clang clang /usr/bin/clang-19 190 --slave /usr/bin/clang++ clang++ /usr/bin/clang++-19
         fi
+        if [ "${{ matrix.system-cryptopp }}" == "ON" ]; then
+          sudo apt install -y libcrypto++-dev libcrypto++-doc libcrypto++-utils
+        fi
 
     - name: Install CMake
       run: sudo apt install -y cmake
@@ -62,7 +69,9 @@ jobs:
           -G "Ninja" \
           -DWITH_SYSTEM_STORMBYTE=OFF \
           -DENABLE_TEST=ON \
-          -DGITHUB_WORKFLOW=ON
+          -DGITHUB_WORKFLOW=ON \
+          -DWITH_SYSTEM_CRYPTOPP=${{ matrix.system-cryptopp }}
+
     - name: Build
       run: cmake --build ${{ github.workspace }}/build --config ${{ env.BUILD_TYPE }}
 
@@ -91,7 +100,7 @@ jobs:
           arch: ${{ matrix.arch }}
 
       - name: Configure CMake
-        run: cmake -B ${{ github.workspace }}\build -G "Ninja" -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }} -DENABLE_TEST=ON -DWITH_SYSTEM_STORMBYTE=OFF -DGITHUB_WORKFLOW=ON
+        run: cmake -B ${{ github.workspace }}\build -G "Ninja" -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }} -DENABLE_TEST=ON -DWITH_SYSTEM_STORMBYTE=OFF -DGITHUB_WORKFLOW=ON -DWITH_SYSTEM_CRYPTOPP=OFF
 
       - name: Build
         run: cmake --build ${{ github.workspace }}\build --config ${{ env.BUILD_TYPE }}

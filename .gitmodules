@@ -1,3 +1,6 @@
 [submodule "thirdparty/StormByte/base"]
 	path = thirdparty/StormByte/base
 	url = https://github.com/StormBytePP/StormByte.git
+[submodule "thirdparty/Crypto++/cryptopp-cmake"]
+	path = thirdparty/Crypto++/cryptopp-cmake
+	url = https://github.com/abdes/cryptopp-cmake.git

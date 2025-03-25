@@ -144,4 +144,44 @@ namespace StormByte::Network {
 			 */
 			ConnectionClosed& operator=(ConnectionClosed&& other) noexcept	= default;
 	};
+
+	class STORMBYTE_NETWORK_PUBLIC CryptoException final: public Exception {
+		public:
+			/**
+			 * @brief The constructor of the CryptoException class.
+			 * @param message The message of the exception.
+			 */
+			CryptoException(const std::string& message);
+
+			/**
+			 * @brief The constructor of the CryptoException class.
+			 * @param message The message of the exception.
+			 */
+			CryptoException(const CryptoException& other)					= default;
+
+			/**
+			 * @brief The constructor of the CryptoException class.
+			 * @param message The message of the exception.
+			 */
+			CryptoException(CryptoException&& other) noexcept				= default;
+
+			/**
+			 * @brief The destructor of the CryptoException class.
+			 */
+			~CryptoException() noexcept override							= default;
+
+			/**
+			 * @brief The assignment operator of the CryptoException class.
+			 * @param other The other exception to assign.
+			 * @return The reference to the assigned exception.
+			 */
+			CryptoException& operator=(const CryptoException& other)		= default;
+
+			/**
+			 * @brief The assignment operator of the CryptoException class.
+			 * @param other The other exception to assign.
+			 * @return The reference to the assigned exception.
+			 */
+			CryptoException& operator=(CryptoException&& other) noexcept	= default;
+	};
 }
