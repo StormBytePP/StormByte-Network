@@ -128,7 +128,6 @@ jobs:
             -DGITHUB_WORKFLOW=ON `
             -DWITH_SYSTEM_CRYPTOPP=OFF `
             -DWITH_SYSTEM_BZIP2=OFF `
-            -DBUILD_TESTING=OFF	`
             -DENABLE_LIB_ONLY=ON # For Bzip2 to enable only library build
 
       - name: Build
@@ -136,7 +135,7 @@ jobs:
 
       - name: Copy DLLs
         run: |
-          Copy-Item -Path "${{ github.workspace }}\build\thirdparty\Bzip2\src\bz2.dll" -Destination "${{ github.workspace }}\build\test\bz2-1.dll" -Force
+          Copy-Item -Path "${{ github.workspace }}\build\thirdparty\Bzip2\src\bz2.dll" -Destination "${{ github.workspace }}\build\test\bz2-1.dll" -Force # Somehow bz2-1.dll is needed
           Copy-Item -Path "${{ github.workspace }}\build\thirdparty\StormByte\base\lib\StormByte.dll" -Destination "${{ github.workspace }}\build\test" -Force
           Copy-Item -Path "${{ github.workspace }}\build\lib\StormByte-Network.dll" -Destination "${{ github.workspace }}\build\test" -Force
 
