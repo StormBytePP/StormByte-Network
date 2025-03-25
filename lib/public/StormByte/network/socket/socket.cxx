@@ -18,7 +18,7 @@ constexpr const int SOCKET_BUFFER_SIZE = 65536;
 
 using namespace StormByte::Network::Socket;
 
-Socket::Socket(const Connection::Protocol& protocol, std::shared_ptr<const Connection::Handler> handler, std::shared_ptr<Logger::Log> logger) noexcept:
+Socket::Socket(const Connection::Protocol& protocol, std::shared_ptr<const Connection::Handler> handler, std::shared_ptr<Logger> logger) noexcept:
 m_protocol(protocol), m_status(Connection::Status::Disconnected),
 m_handle(nullptr), m_conn_handler(handler), m_conn_info(nullptr), m_mtu(DEFAULT_MTU), m_logger(logger) {}
 
@@ -123,9 +123,9 @@ StormByte::Network::ExpectedReadResult Socket::WaitForData(const long long& usec
 #endif
 				return StormByte::Unexpected<ConnectionClosed>("Connection closed or invalid socket");
 			} else {
-				return StormByte::Unexpected<ConnectionClosed>(std::format("Failed to wait for data: {} (error code: {})",
+				return StormByte::Unexpected<ConnectionClosed>("Failed to wait for data: {} (error code: {})",
 																			m_conn_handler->LastError(),
-																			m_conn_handler->LastErrorCode()));
+																			m_conn_handler->LastErrorCode());
 			}
 		}
 	}

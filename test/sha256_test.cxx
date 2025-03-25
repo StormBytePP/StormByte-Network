@@ -1,5 +1,5 @@
 #include <StormByte/network/data/encryption/sha256.hxx>
-#include <StormByte/util/buffer.hxx>
+#include <StormByte/buffer.hxx>
 #include <StormByte/test_handlers.h>
 #include <iostream>
 #include <string>
@@ -16,14 +16,14 @@ int TestSHA256HashConsistencyAcrossFormats() {
 	std::string hash_from_string = hash_string_result.value();
 
 	// Compute hash for a Buffer
-	StormByte::Util::Buffer input_buffer;
+	StormByte::Buffer input_buffer;
 	input_buffer << input_data;
 	auto hash_buffer_result = Hash(input_buffer);
 	ASSERT_TRUE(fn_name, hash_buffer_result.has_value());
 	std::string hash_from_buffer = hash_buffer_result.value();
 
 	// Compute hash for a FutureBuffer
-	std::promise<StormByte::Util::Buffer> promise;
+	std::promise<StormByte::Buffer> promise;
 	promise.set_value(input_buffer);
 	auto future_buffer = promise.get_future();
 	auto hash_future_result = Hash(future_buffer);

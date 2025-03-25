@@ -19,7 +19,7 @@ constexpr const std::size_t BUFFER_SIZE = 4096;
 
 using namespace StormByte::Network;
 
-Socket::Client::Client(const Connection::Protocol& protocol, std::shared_ptr<const Connection::Handler> handler, std::shared_ptr<Logger::Log> logger) noexcept
+Socket::Client::Client(const Connection::Protocol& protocol, std::shared_ptr<const Connection::Handler> handler, std::shared_ptr<Logger> logger) noexcept
 :Socket(protocol, handler, logger) {}
 
 ExpectedVoid Socket::Client::Connect(const std::string& hostname, const unsigned short& port) noexcept {
@@ -84,8 +84,8 @@ ExpectedVoid Socket::Client::Send(std::span<const std::byte> data) noexcept {
 		int sel = select(*m_handle + 1, nullptr, &writefds, nullptr, &tv);
 		if (sel < 0) {
 			return StormByte::Unexpected<ConnectionError>(
-				std::format("Select error: {} (error code: {})",
-							m_conn_handler->LastError(), m_conn_handler->LastErrorCode()));
+							"Select error: {} (error code: {})",
+							m_conn_handler->LastError(), m_conn_handler->LastErrorCode());
 		} else if (sel == 0) {
 			// Timeout: no readiness detected, so sleep a little and retry.
 			std::this_thread::sleep_for(std::chrono::milliseconds(10));
@@ -101,8 +101,8 @@ ExpectedVoid Socket::Client::Send(std::span<const std::byte> data) noexcept {
 		int sel = select(0, nullptr, &writefds, nullptr, &tv);
 		if (sel == SOCKET_ERROR) {
 			return StormByte::Unexpected<ConnectionError>(
-				std::format("Select error: {} (error code: {})",
-							m_conn_handler->LastError(), m_conn_handler->LastErrorCode()));
+							"Select error: {} (error code: {})",
+							m_conn_handler->LastError(), m_conn_handler->LastErrorCode());
 		} else if (sel == 0) {
 			std::this_thread::sleep_for(std::chrono::milliseconds(10));
 			continue;
@@ -123,8 +123,8 @@ ExpectedVoid Socket::Client::Send(std::span<const std::byte> data) noexcept {
 
 		if (written <= 0) {
 			return StormByte::Unexpected<ConnectionError>(
-				std::format("Failed to write: {} (error code: {})",
-							m_conn_handler->LastError(), m_conn_handler->LastErrorCode()));
+							"Failed to write: {} (error code: {})",
+							m_conn_handler->LastError(), m_conn_handler->LastErrorCode());
 		}
 
 		total_bytes_sent += written;
@@ -134,7 +134,7 @@ ExpectedVoid Socket::Client::Send(std::span<const std::byte> data) noexcept {
 		// std::this_thread::sleep_for(std::chrono::milliseconds(1));
 	}
 
-	m_logger << Logger::Level::LowLevel << "All data sent successfully! Total bytes sent: " << Logger::humanreadable_bytes << total_bytes_sent << Logger::nohumanreadable << std::endl;
+	m_logger << Logger::Level::LowLevel << "All data sent successfully! Total bytes sent: " << humanreadable_bytes << total_bytes_sent << nohumanreadable << std::endl;
 
 	return {};
 }
@@ -185,21 +185,21 @@ ExpectedFutureBuffer Socket::Client::Receive() noexcept {
 }
 
 ExpectedFutureBuffer Socket::Client::Receive(const std::size_t& max_size) noexcept {
-	m_logger << Logger::Level::LowLevel << "Initiating receive operation with max_size: " << Logger::humanreadable_bytes << max_size << Logger::nohumanreadable << std::endl;
+	m_logger << Logger::Level::LowLevel << "Initiating receive operation with max_size: " << humanreadable_bytes << max_size << nohumanreadable << std::endl;
 
 	try {
 		auto promise = std::make_shared<PromisedBuffer>();
 		auto future = promise->get_future();
 
 		std::thread([this, promise, max_size]() {
-			m_logger << Logger::Level::LowLevel << "Read thread started. Max size: " << Logger::humanreadable_bytes << max_size << Logger::nohumanreadable << std::endl;
+			m_logger << Logger::Level::LowLevel << "Read thread started. Max size: " << humanreadable_bytes << max_size << nohumanreadable << std::endl;
 			try {
 				Read(*promise, max_size);
 				m_logger << Logger::Level::LowLevel << "Read thread completed successfully." << std::endl;
 			} catch (const std::exception& e) {
 				m_logger << Logger::Level::Error << "Exception in Read thread: " << e.what() << std::endl;
 				promise->set_exception(std::make_exception_ptr(
-					ConnectionError(std::format("Exception during read: {}", e.what()))));
+					ConnectionError("Exception during read: {}", e.what())));
 			}
 		}).detach();
 
@@ -207,14 +207,14 @@ ExpectedFutureBuffer Socket::Client::Receive(const std::size_t& max_size) noexce
 		return std::move(future);
 	} catch (const std::exception& e) {
 		m_logger << Logger::Level::Error << "Failed to initiate receive operation: " << e.what() << std::endl;
-		return StormByte::Unexpected<ConnectionError>(std::format("Receive failed: {}", e.what()));
+		return StormByte::Unexpected<ConnectionError>("Receive failed: {}", e.what());
 	}
 }
 
 void Socket::Client::Read(PromisedBuffer& promise, std::size_t max_size) noexcept {
-	m_logger << Logger::Level::LowLevel << "Starting to read data with max_size: " << Logger::humanreadable_bytes << max_size << Logger::nohumanreadable << std::endl;
+	m_logger << Logger::Level::LowLevel << "Starting to read data with max_size: " << humanreadable_bytes << max_size << nohumanreadable << std::endl;
 
-	Util::Buffer buffer;
+	Buffer buffer;
 	char internal_buffer[BUFFER_SIZE];
 	std::size_t total_bytes_read = 0;
 
@@ -227,7 +227,7 @@ void Socket::Client::Read(PromisedBuffer& promise, std::size_t max_size) noexcep
 #endif
 
 		if (valread > 0) {
-			m_logger << Logger::Level::LowLevel << "Chunk received. Size: " << Logger::humanreadable_bytes << valread << Logger::nohumanreadable << std::endl;
+			m_logger << Logger::Level::LowLevel << "Chunk received. Size: " << humanreadable_bytes << valread << nohumanreadable << std::endl;
 			buffer << std::string(internal_buffer, static_cast<std::size_t>(valread));
 			total_bytes_read += valread;
 			if (max_size > 0 && total_bytes_read >= max_size) {
@@ -253,13 +253,13 @@ void Socket::Client::Read(PromisedBuffer& promise, std::size_t max_size) noexcep
 			} else {
 				m_logger << Logger::Level::LowLevel << "Read error: " << m_conn_handler->LastError() << std::endl;
 				promise.set_exception(std::make_exception_ptr(
-					ConnectionError(std::format("Receive failed: {}", m_conn_handler->LastError()))));
+					ConnectionError("Receive failed: {}", m_conn_handler->LastError())));
 				return;
 			}
 		}
 	}
 
-	m_logger << Logger::Level::LowLevel << "Total data received: " << Logger::humanreadable_bytes << buffer.Size() << Logger::nohumanreadable << std::endl;
+	m_logger << Logger::Level::LowLevel << "Total data received: " << humanreadable_bytes << buffer.Size() << nohumanreadable << std::endl;
 	promise.set_value(buffer);
 }
 
@@ -287,14 +287,15 @@ ExpectedVoid Socket::Client::Write(std::span<const std::byte> data, const std::s
 		if (written <= 0) {
 			m_logger << Logger::Level::Error << "Write failed: " << m_conn_handler->LastError()
 					<< " (code: " << m_conn_handler->LastErrorCode() << ")" << std::endl;
-			return StormByte::Unexpected<ConnectionError>(std::format(
+			return StormByte::Unexpected<ConnectionError>(
 				"Write failed: {} (error code: {})",
 				m_conn_handler->LastError(),
-				m_conn_handler->LastErrorCode()));
+				m_conn_handler->LastErrorCode()
+			);
 		}
 		total_written += written;
 	}
 
-	m_logger << Logger::Level::LowLevel << "Write of size " << Logger::humanreadable_bytes << bytes_to_write << Logger::nohumanreadable << " bytes completed successfully" << std::endl;
+	m_logger << Logger::Level::LowLevel << "Write of size " << humanreadable_bytes << bytes_to_write << nohumanreadable << " bytes completed successfully" << std::endl;
 	return {};
 }

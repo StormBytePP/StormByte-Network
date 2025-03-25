@@ -4,7 +4,7 @@
 #include <StormByte/network/socket/server.hxx>
 #include <StormByte/network/socket/client.hxx>
 #include <StormByte/network/typedefs.hxx>
-#include <StormByte/logger/log.hxx>
+#include <StormByte/logger.hxx>
 
 #include <atomic>
 #include <mutex>
@@ -24,7 +24,7 @@ namespace StormByte::Network {
 			 * @param protocol The protocol to use.
 			 * @param handler The handler to use.
 			 */
-			Server(Connection::Protocol protocol, std::shared_ptr<Connection::Handler> handler, std::shared_ptr<Logger::Log> logger) noexcept;
+			Server(Connection::Protocol protocol, std::shared_ptr<Connection::Handler> handler, std::shared_ptr<Logger> logger) noexcept;
 
 			/**
 			 * @brief Copy constructor (deleted).
@@ -74,7 +74,7 @@ namespace StormByte::Network {
 			Connection::Protocol m_protocol;												///< The protocol to use.
 			Socket::Server m_socket;														///< The server socket.
 			std::shared_ptr<Connection::Handler> m_conn_handler;							///< The handler to use.
-			std::shared_ptr<Logger::Log> m_logger;											///< The logger.
+			std::shared_ptr<Logger> m_logger;											///< The logger.
 			std::atomic<Connection::Status> m_status;										///< The connection status of the server.
 			std::vector<FutureBufferProcessor> m_input_pipeline;							///< The input pipeline, will be processed before the client message is processed.
 			std::vector<FutureBufferProcessor> m_output_pipeline;							///< The output pipeline, will be processed before the client reply is sent.

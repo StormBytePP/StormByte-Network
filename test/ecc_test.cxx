@@ -19,7 +19,7 @@ int TestECCEncryptDecrypt() {
     }
 
     auto encrypted_future = std::move(encrypt_result.value());
-    StormByte::Util::Buffer encrypted_buffer = encrypted_future.get();
+    StormByte::Buffer encrypted_buffer = encrypted_future.get();
 
     auto decrypt_result = ECC::Decrypt(encrypted_buffer, private_key);
     if (!decrypt_result.has_value()) {
@@ -47,7 +47,7 @@ int TestECCDecryptionWithCorruptedData() {
     }
 
     auto encrypted_future = std::move(encrypt_result.value());
-    StormByte::Util::Buffer encrypted_buffer = encrypted_future.get();
+    StormByte::Buffer encrypted_buffer = encrypted_future.get();
 
     auto corrupted_buffer = encrypted_buffer;
     auto corrupted_span = corrupted_buffer.Data();
@@ -87,7 +87,7 @@ int TestECCDecryptWithMismatchedKey() {
     }
 
     auto encrypted_future = std::move(encrypt_result.value());
-    StormByte::Util::Buffer encrypted_buffer = encrypted_future.get();
+    StormByte::Buffer encrypted_buffer = encrypted_future.get();
 
     auto decrypt_result = ECC::Decrypt(encrypted_buffer, private_key_2);
     if (!decrypt_result.has_value()) {
@@ -139,7 +139,7 @@ int TestECCWithCorruptedKeys() {
         RETURN_TEST(fn_name, 1); // Encryption with a valid key should not fail
     }
 
-    StormByte::Util::Buffer encrypted_buffer = std::move(encrypted_future.value().get());
+    StormByte::Buffer encrypted_buffer = std::move(encrypted_future.value().get());
     auto decrypt_result = ECC::Decrypt(encrypted_buffer, corrupted_private_key);
     if (decrypt_result.has_value()) {
         std::cerr << "[" << fn_name << "] Decryption unexpectedly succeeded with corrupted private key.\n";

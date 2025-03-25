@@ -4,7 +4,7 @@
 #include <StormByte/network/data/packet.hxx>
 #include <StormByte/network/socket/socket.hxx>
 #include <StormByte/network/typedefs.hxx>
-#include <StormByte/util/buffer.hxx>
+#include <StormByte/buffer.hxx>
 
 /**
  * @namespace Socket
@@ -24,7 +24,7 @@ namespace StormByte::Network::Socket {
 		 * @param handler The handler of the socket.
 		 * @param logger The logger to use.
 		 */
-		Client(const Connection::Protocol& protocol, std::shared_ptr<const Connection::Handler> handler, std::shared_ptr<Logger::Log> logger) noexcept;
+		Client(const Connection::Protocol& protocol, std::shared_ptr<const Connection::Handler> handler, std::shared_ptr<Logger> logger) noexcept;
 
 		/**
 		 * @brief The copy constructor of the Client class.
@@ -105,7 +105,7 @@ namespace StormByte::Network::Socket {
 		 * @param size The requested size of data.
 		 * @return The result of the operation.
 		 */
-		Connection::Read::Result 										ReadNonBlocking(Util::Buffer& buffer) noexcept;
+		Connection::Read::Result 										ReadNonBlocking(Buffer& buffer) noexcept;
 
 		/**
 		 * @brief Function to read data from the socket asynchronously.

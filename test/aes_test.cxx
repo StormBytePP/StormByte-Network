@@ -1,5 +1,5 @@
 #include <StormByte/network/data/encryption/aes.hxx>
-#include <StormByte/util/buffer.hxx>
+#include <StormByte/buffer.hxx>
 #include <StormByte/test_handlers.h>
 #include <iostream>
 #include <string>
@@ -16,7 +16,7 @@ int TestAESEncryptDecryptConsistency() {
 	ASSERT_TRUE(fn_name, encrypt_result.has_value());
 
 	auto encrypted_future = std::move(encrypt_result.value());
-	StormByte::Util::Buffer encrypted_buffer = encrypted_future.get();
+	StormByte::Buffer encrypted_buffer = encrypted_future.get();
 	ASSERT_FALSE(fn_name, encrypted_buffer.Empty());
 
 	// Decrypt the data
@@ -24,7 +24,7 @@ int TestAESEncryptDecryptConsistency() {
 	ASSERT_TRUE(fn_name, decrypt_result.has_value());
 
 	auto decrypted_future = std::move(decrypt_result.value());
-	StormByte::Util::Buffer decrypted_buffer = decrypted_future.get();
+	StormByte::Buffer decrypted_buffer = decrypted_future.get();
 	ASSERT_FALSE(fn_name, decrypted_buffer.Empty());
 
 	// Validate decrypted data matches the original data
@@ -45,7 +45,7 @@ int TestAESWrongDecryptionPassword() {
 	ASSERT_TRUE(fn_name, encrypt_result.has_value());
 
 	auto encrypted_future = std::move(encrypt_result.value());
-	StormByte::Util::Buffer encrypted_buffer = encrypted_future.get();
+	StormByte::Buffer encrypted_buffer = encrypted_future.get();
 	ASSERT_FALSE(fn_name, encrypted_buffer.Empty());
 
 	// Attempt to decrypt with a wrong password
@@ -65,7 +65,7 @@ int TestAESDecryptionWithCorruptedData() {
 	ASSERT_TRUE(fn_name, encrypt_result.has_value());
 
 	auto encrypted_future = std::move(encrypt_result.value());
-	StormByte::Util::Buffer encrypted_buffer = encrypted_future.get();
+	StormByte::Buffer encrypted_buffer = encrypted_future.get();
 	ASSERT_FALSE(fn_name, encrypted_buffer.Empty());
 
 	// Corrupt the encrypted data (flip a bit in the buffer)

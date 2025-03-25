@@ -11,7 +11,7 @@
 
 using namespace StormByte::Network;
 
-Socket::Server::Server(const Connection::Protocol& protocol, std::shared_ptr<const Connection::Handler> handler, std::shared_ptr<Logger::Log> logger) noexcept:
+Socket::Server::Server(const Connection::Protocol& protocol, std::shared_ptr<const Connection::Handler> handler, std::shared_ptr<Logger> logger) noexcept:
 Socket(protocol, handler, logger) {}
 
 ExpectedVoid Socket::Server::Listen(const std::string& hostname, const unsigned short& port) noexcept {
@@ -31,16 +31,16 @@ ExpectedVoid Socket::Server::Listen(const std::string& hostname, const unsigned 
 	if (setsockopt(*m_handle, SOL_SOCKET, SO_REUSEADDR, reinterpret_cast<const char*>(&opt), sizeof(opt)) < 0) {
 		m_status = Connection::Status::Disconnected;
 		m_handle.reset();
-		return StormByte::Unexpected<ConnectionError>(std::format("Failed to set socket options: {} (error code: {})",
+		return StormByte::Unexpected<ConnectionError>("Failed to set socket options: {} (error code: {})",
 													m_conn_handler->LastError(),
-													m_conn_handler->LastErrorCode()));
+													m_conn_handler->LastErrorCode());
 	}
 
 	auto expected_connection_info = Connection::Info::FromHost(hostname, port, m_protocol, m_conn_handler);
 	if (!expected_connection_info)
-		return StormByte::Unexpected<ConnectionError>(std::format("Failed to resolve hostname: {} (error code: {})",
+		return StormByte::Unexpected<ConnectionError>("Failed to resolve hostname: {} (error code: {})",
 													m_conn_handler->LastError(),
-													m_conn_handler->LastErrorCode()));
+													m_conn_handler->LastErrorCode());
 
 	m_conn_info = std::make_unique<Connection::Info>(std::move(expected_connection_info.value()));
 
@@ -48,18 +48,20 @@ ExpectedVoid Socket::Server::Listen(const std::string& hostname, const unsigned 
 	if (bind_result == -1) {
 		m_status = Connection::Status::Disconnected;
 		m_handle.reset();
-		return StormByte::Unexpected<ConnectionError>(std::format("Failed to bind socket: {} (error code: {})",
+		return StormByte::Unexpected<ConnectionError>("Failed to bind socket: {} (error code: {})",
 													m_conn_handler->LastError(),
-													m_conn_handler->LastErrorCode()));
+													m_conn_handler->LastErrorCode()
+		);
 	}
 
 	auto listen_result = ::listen(*m_handle, SOMAXCONN);
 	if (listen_result == -1) {
 		m_status = Connection::Status::Disconnected;
 		m_handle.reset();
-		return StormByte::Unexpected<ConnectionError>(std::format("Failed to listen on socket: {} (error code: {})",
+		return StormByte::Unexpected<ConnectionError>("Failed to listen on socket: {} (error code: {})",
 													m_conn_handler->LastError(),
-													m_conn_handler->LastErrorCode()));
+													m_conn_handler->LastErrorCode()
+		);
 	}
 
 	InitializeAfterConnect();

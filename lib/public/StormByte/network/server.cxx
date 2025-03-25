@@ -2,7 +2,7 @@
 
 using namespace StormByte::Network;
 
-Server::Server(Connection::Protocol protocol, std::shared_ptr<Connection::Handler> handler, std::shared_ptr<Logger::Log> logger) noexcept:
+Server::Server(Connection::Protocol protocol, std::shared_ptr<Connection::Handler> handler, std::shared_ptr<Logger> logger) noexcept:
 m_socket(protocol, handler, logger), m_conn_handler(handler), m_logger(logger), m_status(Connection::Status::Disconnected) {}
 
 Server::~Server() noexcept {

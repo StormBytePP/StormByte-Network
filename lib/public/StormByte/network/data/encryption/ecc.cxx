@@ -75,7 +75,7 @@ ExpectedKeyPair ECC::GenerateKeyPair(const int& curve_id) noexcept {
 				privateKey.Initialize(rng, CryptoPP::ASN1::secp521r1());
 				break;
 			default:
-				return StormByte::Unexpected<CryptoException>(std::format("Unsupported curve ID {}, valid values are: {}", curve_id, "256, 384, 521"));
+				return StormByte::Unexpected<CryptoException>("Unsupported curve ID {}, valid values are: {}", curve_id, "256, 384, 521");
 		}
 
 		ECIES::PublicKey publicKey;
@@ -88,8 +88,7 @@ ExpectedKeyPair ECC::GenerateKeyPair(const int& curve_id) noexcept {
 
 		return keyPair;
 	} catch (const std::exception& e) {
-		return StormByte::Unexpected<CryptoException>(
-			std::format("Failed to generate ECC keys: {}", e.what()));
+		return StormByte::Unexpected<CryptoException>("Failed to generate ECC keys: {}", e.what());
 	}
 }
 
@@ -113,10 +112,10 @@ ExpectedCryptoBuffer ECC::Encrypt(const std::string& message, const std::string&
 																	new CryptoPP::StringSink(encryptedMessage)));
 
 		// Convert the encrypted message into a buffer
-		StormByte::Util::Buffer buffer;
+		StormByte::Buffer buffer;
 		buffer << encryptedMessage;
 
-		std::promise<StormByte::Util::Buffer> promise;
+		std::promise<StormByte::Buffer> promise;
 		promise.set_value(std::move(buffer));
 		return promise.get_future();
 	} catch (const std::exception& e) {
@@ -124,7 +123,7 @@ ExpectedCryptoBuffer ECC::Encrypt(const std::string& message, const std::string&
 	}
 }	
 
-ExpectedCryptoString ECC::Decrypt(const StormByte::Util::Buffer& encryptedBuffer, const std::string& privateKey) noexcept {
+ExpectedCryptoString ECC::Decrypt(const StormByte::Buffer& encryptedBuffer, const std::string& privateKey) noexcept {
 	try {
 		CryptoPP::AutoSeededRandomPool rng;
 

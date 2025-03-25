@@ -46,7 +46,7 @@ StormByte::Expected<std::shared_ptr<sockaddr>, StormByte::Network::Exception> In
 
 	int ret = getaddrinfo(hostname.c_str(), nullptr, &hints, &res);
 	if (ret != 0 || !res)
-		return StormByte::Unexpected<StormByte::Network::Exception>(std::format("Can't resolve host '{}': {}", hostname, handler->LastError()));
+		return StormByte::Unexpected<StormByte::Network::Exception>("Can't resolve host '{}': {}", hostname, handler->LastError());
 
 	std::unique_ptr<addrinfo, decltype(&freeaddrinfo)> res_guard(res, freeaddrinfo);
 
@@ -70,8 +70,7 @@ StormByte::Expected<std::shared_ptr<sockaddr>, StormByte::Network::Exception> In
 	resolved.sin_port = htons(port);
 
 	if (inet_pton(resolved.sin_family, ipstr, &resolved.sin_addr) <= 0) {
-		return StormByte::Unexpected<StormByte::Network::Exception>(
-			std::format("Invalid IP address '{}'", ipstr));
+		return StormByte::Unexpected<StormByte::Network::Exception>("Invalid IP address '{}'", ipstr);
 	}
 
 	// Return the resolved address as sockaddr

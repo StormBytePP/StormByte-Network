@@ -67,7 +67,7 @@ ExpectedKeyPair RSA::GenerateKeyPair(const int& keyStrength) noexcept {
 
 		return keyPair;
 	} catch (const std::exception& e) {
-		return StormByte::Unexpected<CryptoException>(std::format("Failed to generate RSA keys: {}", e.what()));
+		return StormByte::Unexpected<CryptoException>("Failed to generate RSA keys: {}", e.what());
 	}
 }
 
@@ -86,18 +86,18 @@ ExpectedCryptoBuffer RSA::Encrypt(const std::string& message, const std::string&
 								new CryptoPP::PK_EncryptorFilter(rng, encryptor,
 																	new CryptoPP::StringSink(encryptedMessage)));
 
-		StormByte::Util::Buffer buffer;
+		StormByte::Buffer buffer;
 		buffer << encryptedMessage;
 
-		std::promise<StormByte::Util::Buffer> promise;
+		std::promise<StormByte::Buffer> promise;
 		promise.set_value(std::move(buffer));
 		return promise.get_future();
 	} catch (const std::exception& e) {
-		return StormByte::Unexpected<CryptoException>(std::format("RSA encryption failed: {}", e.what()));
+		return StormByte::Unexpected<CryptoException>("RSA encryption failed: {}", e.what());
 	}
 }
 
-ExpectedCryptoString RSA::Decrypt(const StormByte::Util::Buffer& encryptedBuffer, const std::string& privateKey) noexcept {
+ExpectedCryptoString RSA::Decrypt(const StormByte::Buffer& encryptedBuffer, const std::string& privateKey) noexcept {
 	try {
 		CryptoPP::AutoSeededRandomPool rng;
 		CryptoPP::RSA::PrivateKey key = DeserializePrivateKey(privateKey);
@@ -111,6 +111,6 @@ ExpectedCryptoString RSA::Decrypt(const StormByte::Util::Buffer& encryptedBuffer
 
 		return decryptedMessage;
 	} catch (const std::exception& e) {
-		return StormByte::Unexpected<CryptoException>(std::format("RSA decryption failed: {}", e.what()));
+		return StormByte::Unexpected<CryptoException>("RSA decryption failed: {}", e.what());
 	}
 }

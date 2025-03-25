@@ -32,7 +32,7 @@ namespace {
 
 			return hashOutput;
 		} catch (const std::exception& e) {
-			return StormByte::Unexpected<StormByte::Network::CryptoException>(std::format("SHA-256 hashing failed: {}", e.what()));
+			return StormByte::Unexpected<StormByte::Network::CryptoException>("SHA-256 hashing failed: {}", e.what());
 		}
 	}
 }
@@ -45,7 +45,7 @@ ExpectedCryptoString SHA256::Hash(const std::string& input) noexcept {
 	return ComputeSHA256(dataSpan);
 }
 
-ExpectedCryptoString SHA256::Hash(const StormByte::Util::Buffer& buffer) noexcept {
+ExpectedCryptoString SHA256::Hash(const StormByte::Buffer& buffer) noexcept {
 	// Use Buffer's Data() method to get std::span<std::byte>
 	auto dataSpan = buffer.Data();
 
@@ -56,12 +56,12 @@ ExpectedCryptoString SHA256::Hash(const StormByte::Util::Buffer& buffer) noexcep
 ExpectedCryptoString SHA256::Hash(StormByte::Network::FutureBuffer& promisedBuffer) noexcept {
 	try {
 		// Retrieve Buffer from FutureBuffer
-		StormByte::Util::Buffer buffer = promisedBuffer.get(); // Use `std::future::get()` here
+		StormByte::Buffer buffer = promisedBuffer.get(); // Use `std::future::get()` here
 		auto dataSpan = buffer.Data();
 
 		// Use the common helper function to compute the hash
 		return ComputeSHA256(dataSpan);
 	} catch (const std::exception& e) {
-		return StormByte::Unexpected<CryptoException>(std::format("Failed to retrieve PromisedBuffer: {}", e.what()));
+		return StormByte::Unexpected<CryptoException>("Failed to retrieve PromisedBuffer: {}", e.what());
 	}
 }

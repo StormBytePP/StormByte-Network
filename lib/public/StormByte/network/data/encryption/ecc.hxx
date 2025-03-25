@@ -28,5 +28,5 @@ namespace StormByte::Network::Data::Encryption::ECC {
 	 * @param privateKey The ECC private key to use for decryption.
 	 * @return ExpectedCryptoString containing the decrypted message or an error.
 	 */
-	STORMBYTE_NETWORK_PUBLIC ExpectedCryptoString 	Decrypt(const StormByte::Util::Buffer& encryptedBuffer, const std::string& privateKey) noexcept;
+	STORMBYTE_NETWORK_PUBLIC ExpectedCryptoString 	Decrypt(const StormByte::Buffer& encryptedBuffer, const std::string& privateKey) noexcept;
 }

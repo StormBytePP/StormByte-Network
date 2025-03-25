@@ -1,7 +1,7 @@
 #pragma once
 
 #include <StormByte/expected.hxx>
-#include <StormByte/logger/log.hxx>
+#include <StormByte/logger.hxx>
 #include <StormByte/network/connection/handler.hxx>
 #include <StormByte/network/connection/info.hxx>
 #include <StormByte/network/connection/protocol.hxx>
@@ -97,7 +97,7 @@ namespace StormByte::Network::Socket {
 			std::shared_ptr<const Connection::Handler> m_conn_handler;			///< The handler of the socket.
 			std::unique_ptr<Connection::Info> m_conn_info;						///< The socket address.
 			unsigned long m_mtu;												///< The maximum transmission unit.
-			std::shared_ptr<Logger::Log> m_logger;								///< The logger.
+			std::shared_ptr<Logger> m_logger;								///< The logger.
 
 			/**
 			 * @brief The constructor of the Socket class.
@@ -105,7 +105,7 @@ namespace StormByte::Network::Socket {
 			 * @param handler The handler of the socket.
 			 * @param logger The logger to use.
 			 */
-			Socket(const Connection::Protocol& protocol, std::shared_ptr<const Connection::Handler> handler, std::shared_ptr<Logger::Log> logger) noexcept;
+			Socket(const Connection::Protocol& protocol, std::shared_ptr<const Connection::Handler> handler, std::shared_ptr<Logger> logger) noexcept;
 
 			/**
 			 * @brief The function to create a socket.

@@ -1,5 +1,5 @@
 #include <StormByte/network/connection/handler.hxx>
-#include <StormByte/util/string.hxx>
+#include <StormByte/string.hxx>
 
 #ifdef LINUX
 #include <cerrno> // For errno
@@ -31,7 +31,7 @@ std::string Handler::LastError() const noexcept {
 	FormatMessage(FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
 				nullptr, WSAGetLastError(), MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
 				reinterpret_cast<LPWSTR>(&errorMsg), 0, nullptr);
-	error_string = StormByte::Util::String::UTF8Encode(errorMsg);
+	error_string = StormByte::String::UTF8Encode(errorMsg);
 	LocalFree(errorMsg);
 	#else
 	if (errno != 0)

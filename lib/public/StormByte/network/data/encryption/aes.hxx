@@ -21,7 +21,7 @@ namespace StormByte::Network::Data::Encryption::AES {
 	 * @param password The password to use for encryption.
 	 * @return Expected<FutureBuffer, CryptoException> containing the encrypted Buffer or an error.
 	 */
-	STORMBYTE_NETWORK_PUBLIC ExpectedCryptoBuffer Encrypt(const StormByte::Util::Buffer& input, const std::string& password) noexcept;
+	STORMBYTE_NETWORK_PUBLIC ExpectedCryptoBuffer Encrypt(const StormByte::Buffer& input, const std::string& password) noexcept;
 
 	/**
 	 * @brief Encrypts a FutureBuffer using AES.
@@ -45,7 +45,7 @@ namespace StormByte::Network::Data::Encryption::AES {
 	 * @param password The password to use for decryption.
 	 * @return Expected<FutureBuffer, CryptoException> containing the decrypted Buffer or an error.
 	 */
-	STORMBYTE_NETWORK_PUBLIC ExpectedCryptoBuffer Decrypt(const StormByte::Util::Buffer& input, const std::string& password) noexcept;
+	STORMBYTE_NETWORK_PUBLIC ExpectedCryptoBuffer Decrypt(const StormByte::Buffer& input, const std::string& password) noexcept;
 
 	/**
 	 * @brief Decrypts a FutureBuffer using AES.
