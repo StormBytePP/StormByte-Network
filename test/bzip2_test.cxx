@@ -102,12 +102,30 @@ int TestBZip2CompressionDecompressionIntegrity() {
 	RETURN_TEST(fn_name, 0);
 }
 
+int TestBzip2CompressionProducesDifferentContent() {
+	const std::string fn_name = "TestBzip2CompressionProducesDifferentContent";
+	const std::string original_data = "Compress this data";
+
+	// Compress the data
+	auto compress_result = Compress(original_data);
+	ASSERT_TRUE(fn_name, compress_result.has_value());
+	auto compressed_future = std::move(compress_result.value());
+	StormByte::Buffer compressed_buffer = compressed_future.get();
+	ASSERT_FALSE(fn_name, compressed_buffer.Empty());
+
+	// Verify compressed content is different from original
+	ASSERT_NOT_EQUAL(fn_name, original_data, std::string(reinterpret_cast<const char*>(compressed_buffer.Data().data()), compressed_buffer.Size()));
+
+	RETURN_TEST(fn_name, 0);
+}
+
 int main() {
 	int result = 0;
 
 	result += TestBZip2CompressConsistencyAcrossFormats();
 	result += TestBZip2DecompressConsistencyAcrossFormats();
 	result += TestBZip2CompressionDecompressionIntegrity();
+	result += TestBzip2CompressionProducesDifferentContent();
 
 	if (result == 0) {
 		std::cout << "All tests passed!" << std::endl;

@@ -82,12 +82,33 @@ int TestAESDecryptionWithCorruptedData() {
 	RETURN_TEST(fn_name, 0);
 }
 
+int TestAESEncryptionProducesDifferentContent() {
+	const std::string fn_name = "TestAESEncryptionProducesDifferentContent";
+	const std::string password = "SecurePassword123!";
+	const std::string original_data = "Important data to encrypt";
+
+	// Encrypt the data
+	auto encrypt_result = AES::Encrypt(original_data, password);
+	ASSERT_TRUE(fn_name, encrypt_result.has_value());
+
+	auto encrypted_future = std::move(encrypt_result.value());
+	StormByte::Buffer encrypted_buffer = encrypted_future.get();
+	ASSERT_FALSE(fn_name, encrypted_buffer.Empty());
+
+	// Verify encrypted content is different from original
+	ASSERT_NOT_EQUAL(fn_name, original_data, std::string(reinterpret_cast<const char*>(encrypted_buffer.Data().data()), encrypted_buffer.Size()));
+
+	RETURN_TEST(fn_name, 0);
+}
+
+
 int main() {
 	int result = 0;
 
 	result += TestAESEncryptDecryptConsistency();
 	result += TestAESWrongDecryptionPassword();
 	result += TestAESDecryptionWithCorruptedData();
+	result += TestAESEncryptionProducesDifferentContent();
 
 	if (result == 0) {
 		std::cout << "All tests passed!" << std::endl;

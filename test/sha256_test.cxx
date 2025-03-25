@@ -76,12 +76,28 @@ int TestSHA256CollisionResistance() {
 	RETURN_TEST(fn_name, 0);
 }
 
+int TestSHA256ProducesDifferentContent() {
+	const std::string fn_name = "TestSHA256ProducesDifferentContent";
+	const std::string original_data = "Data to hash";
+
+	// Generate the hash
+	auto hash_result = Hash(original_data);
+	ASSERT_TRUE(fn_name, hash_result.has_value());
+	std::string hashed_data = hash_result.value();
+
+	// Verify hashed content is different from original
+	ASSERT_NOT_EQUAL(fn_name, original_data, hashed_data);
+
+	RETURN_TEST(fn_name, 0);
+}
+
 int main() {
 	int result = 0;
 
 	result += TestSHA256HashConsistencyAcrossFormats();
 	result += TestSHA256HashCorrectness();
 	result += TestSHA256CollisionResistance();
+	result += TestSHA256ProducesDifferentContent();
 
 	if (result == 0) {
 		std::cout << "All tests passed!" << std::endl;

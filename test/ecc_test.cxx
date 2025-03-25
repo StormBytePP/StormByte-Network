@@ -150,6 +150,26 @@ int TestECCWithCorruptedKeys() {
 	RETURN_TEST(fn_name, 0);
 }
 
+int TestECCEncryptionProducesDifferentContent() {
+	const std::string fn_name = "TestECCEncryptionProducesDifferentContent";
+	const std::string original_data = "ECC test message";
+
+	auto keypair_result = ECC::GenerateKeyPair();
+	ASSERT_TRUE(fn_name, keypair_result.has_value());
+	auto [private_key, public_key] = keypair_result.value();
+
+	// Encrypt the data
+	auto encrypt_result = ECC::Encrypt(original_data, public_key);
+	ASSERT_TRUE(fn_name, encrypt_result.has_value());
+	auto encrypted_future = std::move(encrypt_result.value());
+	StormByte::Buffer encrypted_buffer = encrypted_future.get();
+
+	// Verify encrypted content is different from original
+	ASSERT_NOT_EQUAL(fn_name, original_data, std::string(reinterpret_cast<const char*>(encrypted_buffer.Data().data()), encrypted_buffer.Size()));
+
+	RETURN_TEST(fn_name, 0);
+}
+
 int main() {
 	int result = 0;
 
@@ -157,6 +177,7 @@ int main() {
 	result += TestECCDecryptionWithCorruptedData();
 	result += TestECCDecryptWithMismatchedKey();
 	result += TestECCWithCorruptedKeys();
+	result += TestECCEncryptionProducesDifferentContent();
 
 	if (result == 0) {
 		std::cout << "All tests passed!" << std::endl;
