@@ -218,7 +218,7 @@ ExpectedFutureBuffer Server::ProcessInputMessagePipeline(Socket::Client& client,
 		processed_message = std::move(expected_processed.value());
 	}
 
-	return std::move(processed_message);
+	return processed_message;
 }
 
 ExpectedFutureBuffer Server::ProcessOutputMessagePipeline(Socket::Client& client, FutureBuffer& message) noexcept {
@@ -233,5 +233,5 @@ ExpectedFutureBuffer Server::ProcessOutputMessagePipeline(Socket::Client& client
 		processed_message = std::move(expected_processed.value());
 	}
 
-	return std::move(processed_message);
+	return processed_message;
 }

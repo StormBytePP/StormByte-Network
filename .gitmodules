@@ -4,3 +4,6 @@
 [submodule "thirdparty/Crypto++/cryptopp-cmake"]
 	path = thirdparty/Crypto++/cryptopp-cmake
 	url = https://github.com/abdes/cryptopp-cmake.git
+[submodule "thirdparty/Bzip2/src"]
+	path = thirdparty/Bzip2/src
+	url = https://github.com/libarchive/bzip2.git

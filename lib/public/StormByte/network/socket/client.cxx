@@ -204,7 +204,7 @@ ExpectedFutureBuffer Socket::Client::Receive(const std::size_t& max_size) noexce
 		}).detach();
 
 		m_logger << Logger::Level::LowLevel << "Receive operation initiated successfully. Waiting for future..." << std::endl;
-		return std::move(future);
+		return future;
 	} catch (const std::exception& e) {
 		m_logger << Logger::Level::Error << "Failed to initiate receive operation: " << e.what() << std::endl;
 		return StormByte::Unexpected<ConnectionError>("Receive failed: {}", e.what());

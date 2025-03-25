@@ -18,13 +18,23 @@ jobs:
         compiler: [gcc, clang]
         stdlib: [libstdc++, libc++]
         system-cryptopp: [ON, OFF]
+        system-bzip2: [ON, OFF]
         exclude:
-        - compiler: gcc
-          stdlib: libc++
-        - stdlib: libc++
-          system-cryptopp: ON # Ubuntu does not have crypto++ with libc++
+          # Exclude incompatible combinations
+          - compiler: gcc
+            stdlib: libc++
+          - stdlib: libc++
+            system-cryptopp: ON
+          - stdlib: libc++
+            system-bzip2: ON
+        include:
+          # Force libc++ to always use system-cryptopp OFF and system-bzip2 OFF
+          - compiler: clang
+            stdlib: libc++
+            system-cryptopp: OFF
+            system-bzip2: OFF
 
-    name: ${{ matrix.compiler }}-${{ matrix.stdlib }}-system-cryptopp-${{ matrix.system-cryptopp }}
+    name: ${{ matrix.compiler }}-${{ matrix.stdlib }}-system-cryptopp(${{ matrix.system-cryptopp }})-system-bzip2(${{ matrix.system-bzip2 }})
 
     steps:
     - name: Checkout repository and submodules
@@ -54,6 +64,13 @@ jobs:
         fi
         if [ "${{ matrix.system-cryptopp }}" == "ON" ]; then
           sudo apt install -y libcrypto++-dev libcrypto++-doc libcrypto++-utils
+        else
+          sudo apt remove -y libcrypto++-dev libcrypto++-doc libcrypto++-utils
+        fi
+        if [ "${{ matrix.system-bzip2 }}" == "ON" ]; then
+          sudo apt install -y libbz2-dev
+        else
+          sudo apt remove -y libbz2-dev
         fi
 
     - name: Install CMake
@@ -70,7 +87,9 @@ jobs:
           -DWITH_SYSTEM_STORMBYTE=OFF \
           -DENABLE_TEST=ON \
           -DGITHUB_WORKFLOW=ON \
-          -DWITH_SYSTEM_CRYPTOPP=${{ matrix.system-cryptopp }}
+          -DWITH_SYSTEM_CRYPTOPP=${{ matrix.system-cryptopp }} \
+          -DWITH_SYSTEM_BZIP2=${{ matrix.system-bzip2 }} \
+          -DENABLE_LIB_ONLY=ON # For Bzip2 to enable only library build
 
     - name: Build
       run: cmake --build ${{ github.workspace }}/build --config ${{ env.BUILD_TYPE }}
@@ -100,13 +119,24 @@ jobs:
           arch: ${{ matrix.arch }}
 
       - name: Configure CMake
-        run: cmake -B ${{ github.workspace }}\build -G "Ninja" -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }} -DENABLE_TEST=ON -DWITH_SYSTEM_STORMBYTE=OFF -DGITHUB_WORKFLOW=ON -DWITH_SYSTEM_CRYPTOPP=OFF
+        run: |
+          cmake -B "${{ github.workspace }}\build" `
+            -G "Ninja" `
+            -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }} `
+            -DWITH_SYSTEM_STORMBYTE=OFF `
+            -DENABLE_TEST=ON `
+            -DGITHUB_WORKFLOW=ON `
+            -DWITH_SYSTEM_CRYPTOPP=OFF `
+            -DWITH_SYSTEM_BZIP2=OFF `
+            -DBUILD_TESTING=OFF	`
+            -DENABLE_LIB_ONLY=ON # For Bzip2 to enable only library build
 
       - name: Build
         run: cmake --build ${{ github.workspace }}\build --config ${{ env.BUILD_TYPE }}
 
       - name: Copy DLLs
         run: |
+          Copy-Item -Path "${{ github.workspace }}\build\thirdparty\Bzip2\src\bz2.dll" -Destination "${{ github.workspace }}\build\test\bz2-1.dll" -Force
           Copy-Item -Path "${{ github.workspace }}\build\thirdparty\StormByte\base\lib\StormByte.dll" -Destination "${{ github.workspace }}\build\test" -Force
           Copy-Item -Path "${{ github.workspace }}\build\lib\StormByte-Network.dll" -Destination "${{ github.workspace }}\build\test" -Force
 

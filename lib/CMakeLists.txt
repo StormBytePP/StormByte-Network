@@ -19,6 +19,12 @@ set_target_properties(StormByte-Network PROPERTIES
 if(WIN32)
 	target_link_libraries(StormByte-Network PRIVATE ws2_32.dll iphlpapi.dll)
 endif()
+# Link against the BZip2 library
+if (WITH_SYSTEM_BZIP2)
+	target_link_libraries(StormByte-Network PRIVATE ${BZIP2_LIBRARY_RELEASE})
+else()
+	target_link_libraries(StormByte-Network PRIVATE bz2)
+endif()
 
 # Compile options
 if(MSVC)

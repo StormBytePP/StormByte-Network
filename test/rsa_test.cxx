@@ -101,51 +101,51 @@ int TestRSADecryptWithMismatchedKey() {
 }
 
 int TestRSAWithCorruptedKeys() {
-    const std::string fn_name = "TestRSAWithCorruptedKeys";
-    const std::string message = "This is a test message.";
-    const int key_strength = 2048;
+	const std::string fn_name = "TestRSAWithCorruptedKeys";
+	const std::string message = "This is a test message.";
+	const int key_strength = 2048;
 
-    // Step 1: Generate a valid RSA key pair
-    auto keypair_result = RSA::GenerateKeyPair(key_strength);
-    if (!keypair_result.has_value()) {
-        RETURN_TEST(fn_name, 1);
-    }
-    auto [private_key, public_key] = keypair_result.value();
+	// Step 1: Generate a valid RSA key pair
+	auto keypair_result = RSA::GenerateKeyPair(key_strength);
+	if (!keypair_result.has_value()) {
+		RETURN_TEST(fn_name, 1);
+	}
+	auto [private_key, public_key] = keypair_result.value();
 
-    // Step 2: Corrupt the public key
-    std::string corrupted_public_key = public_key;
-    if (!corrupted_public_key.empty()) {
-        corrupted_public_key[0] = static_cast<char>(~corrupted_public_key[0]);
-    }
+	// Step 2: Corrupt the public key
+	std::string corrupted_public_key = public_key;
+	if (!corrupted_public_key.empty()) {
+		corrupted_public_key[0] = static_cast<char>(~corrupted_public_key[0]);
+	}
 
-    // Step 3: Corrupt the private key
-    std::string corrupted_private_key = private_key;
-    if (!corrupted_private_key.empty()) {
-        corrupted_private_key[0] = static_cast<char>(~corrupted_private_key[0]);
-    }
+	// Step 3: Corrupt the private key
+	std::string corrupted_private_key = private_key;
+	if (!corrupted_private_key.empty()) {
+		corrupted_private_key[0] = static_cast<char>(~corrupted_private_key[0]);
+	}
 
-    // Step 4: Attempt encryption with the corrupted public key
-    auto encrypt_result = RSA::Encrypt(message, corrupted_public_key);
-    if (encrypt_result.has_value()) {
-        std::cerr << "[" << fn_name << "] Encryption unexpectedly succeeded with corrupted public key.\n";
-        RETURN_TEST(fn_name, 1);
-    }
+	// Step 4: Attempt encryption with the corrupted public key
+	auto encrypt_result = RSA::Encrypt(message, corrupted_public_key);
+	if (encrypt_result.has_value()) {
+		std::cerr << "[" << fn_name << "] Encryption unexpectedly succeeded with corrupted public key.\n";
+		RETURN_TEST(fn_name, 1);
+	}
 
-    // Step 5: Attempt decryption with the corrupted private key
-    auto encrypted_future = RSA::Encrypt(message, public_key);
-    if (!encrypted_future.has_value()) {
-        RETURN_TEST(fn_name, 1); // Encryption with a valid key should not fail
-    }
+	// Step 5: Attempt decryption with the corrupted private key
+	auto encrypted_future = RSA::Encrypt(message, public_key);
+	if (!encrypted_future.has_value()) {
+		RETURN_TEST(fn_name, 1); // Encryption with a valid key should not fail
+	}
 
-    StormByte::Buffer encrypted_buffer = std::move(encrypted_future.value().get());
-    auto decrypt_result = RSA::Decrypt(encrypted_buffer, corrupted_private_key);
-    if (decrypt_result.has_value()) {
-        std::cerr << "[" << fn_name << "] Decryption unexpectedly succeeded with corrupted private key.\n";
-        RETURN_TEST(fn_name, 1);
-    }
+	StormByte::Buffer encrypted_buffer = std::move(encrypted_future.value().get());
+	auto decrypt_result = RSA::Decrypt(encrypted_buffer, corrupted_private_key);
+	if (decrypt_result.has_value()) {
+		std::cerr << "[" << fn_name << "] Decryption unexpectedly succeeded with corrupted private key.\n";
+		RETURN_TEST(fn_name, 1);
+	}
 
-    // Step 6: Both operations failed gracefully
-    RETURN_TEST(fn_name, 0);
+	// Step 6: Both operations failed gracefully
+	RETURN_TEST(fn_name, 0);
 }
 
 int main() {
