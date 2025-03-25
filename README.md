@@ -1,7 +1,3 @@
-Here’s the updated README based on your feedback:
-
----
-
 # StormByte
 
 StormByte is a comprehensive, cross-platform C++ library aimed at easing system programming, configuration management, logging, and database handling tasks. This library provides a unified API that abstracts away the complexities and inconsistencies of different platforms (Windows, Linux).
@@ -9,6 +5,7 @@ StormByte is a comprehensive, cross-platform C++ library aimed at easing system 
 ## Features
 
 - **Network**: Provides classes to handle portable network communication across Linux and Windows, including features such as asynchronous data handling, error management, and high-level socket APIs.
+- **Encryption**: Offers robust encryption and hashing functionality, including AES, RSA, ECC, and SHA-256.
 
 ## Table of Contents
 
@@ -24,35 +21,7 @@ StormByte is a comprehensive, cross-platform C++ library aimed at easing system 
 - [Contributing](#contributing)
 - [License](#license)
 
-## Repository
-
-You can visit the code repository at [GitHub](https://github.com/StormBytePP/StormByte-Network)
-
-## Installation
-
-### Prerequisites
-
-Ensure you have the following installed:
-
-- C++23 compatible compiler
-- CMake 3.12 or higher
-
-### Building
-
-To build the library, follow these steps:
-
-```sh
-git clone https://github.com/StormBytePP/StormByte-Network.git
-cd StormByte-Network
-mkdir build
-cd build
-cmake ..
-make
-```
-
 ## Modules
-
-StormByte Library is composed of several modules:
 
 ### Network
 
@@ -67,127 +36,156 @@ The `Network` module of StormByte provides an intuitive API to manage networking
 - **Data Transmission**: Supports partial and large data transmission.
 - **Timeouts and Disconnections**: Handles timeout scenarios and detects client/server disconnections.
 
-#### Usage
+### Encryption
 
-The `Socket` classes in this module are abstractions that handle low-level networking tasks like socket creation, data transmission, and receiving data. While not intended for direct use, they serve as a foundation for higher-level client/server classes currently under development to simplify communication workflows.
+The `Encryption` module provides robust cryptographic functions, including support for AES, RSA, ECC, and SHA-256. These functions are designed to ensure secure data transmission and storage.
 
-For example, to setup a client socket:
+#### Supported Algorithms:
+- **AES**: Symmetric encryption with password-based key derivation.
+- **RSA**: Asymmetric encryption for secure key exchange.
+- **ECC**: Elliptic Curve Cryptography for high-performance encryption.
+- **SHA-256**: Secure hashing algorithm for integrity verification.
+
+#### Example Usage
+
+##### AES Encryption and Decryption
 ```cpp
-#include <StormByte/network/socket/server.hxx>
-#include <StormByte/network/socket/client.hxx>
+#include <StormByte/network/data/encryption/aes.hxx>
 #include <iostream>
 
 int main() {
-    using namespace StormByte::Network::Socket;
+	using namespace StormByte::Network::Data::Encryption;
 
-    // Example setup for a Client
-    auto handler = std::make_shared<StormByte::Network::Connection::Handler>();
-    Client client(StormByte::Network::Connection::Protocol::IPv4, handler);
+	std::string password = "StrongPassword";
+	std::string message = "This is a sensitive message";
 
-    // Connecting to a server
-    auto connect_result = client.Connect("localhost", 6060);
-    if (!connect_result) {
-        std::cerr << "Failed to connect: " << connect_result.error()->what() << std::endl;
-        return -1;
-    }
+	// Encrypt the message
+	auto encryptedResult = AES::Encrypt(message, password);
+	if (encryptedResult) {
+		auto encryptedBuffer = encryptedResult.get();
+		std::cout << "Encrypted message: " << encryptedBuffer << std::endl;
 
-    // Waiting for data with a timeout
-    auto wait_result = client.WaitForData(500000); // 500 ms timeout
-    if (wait_result.has_value()) {
-        if (wait_result.value() == StormByte::Network::Connection::Read::Result::Timeout) {
-            std::cout << "No data received within the timeout period." << std::endl;
-        } else {
-            std::cout << "Data is available!" << std::endl;
-        }
-    } else {
-        std::cerr << "Error waiting for data: " << wait_result.error()->what() << std::endl;
-    }
+		// Decrypt the message
+		auto decryptedResult = AES::Decrypt(encryptedBuffer, password);
+		if (decryptedResult) {
+			auto decryptedMessage = decryptedResult.get();
+			std::cout << "Decrypted message: " << decryptedMessage << std::endl;
+		} else {
+			std::cerr << "Decryption failed: " << decryptedResult.error()->what() << std::endl;
+		}
+	} else {
+		std::cerr << "Encryption failed: " << encryptedResult.error()->what() << std::endl;
+	}
 
-    client.Disconnect();
-    return 0;
+	return 0;
 }
 ```
 
-Or to setup a server socket
+##### RSA Encryption and Decryption
 ```cpp
-#include <StormByte/network/socket/server.hxx>
-#include <StormByte/network/socket/client.hxx>
+#include <StormByte/network/data/encryption/rsa.hxx>
 #include <iostream>
 
 int main() {
-    using namespace StormByte::Network::Socket;
+	using namespace StormByte::Network::Data::Encryption;
 
-    // Create a handler for network operations
-    auto handler = std::make_shared<StormByte::Network::Connection::Handler>();
+	int keyStrength = 2048;
+	std::string message = "Sensitive data";
 
-    // Initialize the Server socket
-    Server server(StormByte::Network::Connection::Protocol::IPv4, handler);
+	// Generate RSA key pair
+	auto keyPairResult = RSA::GenerateKeyPair(keyStrength);
+	if (keyPairResult) {
+		auto keyPair = keyPairResult.get();
+		std::cout << "Private Key: " << keyPair.Private << std::endl;
+		std::cout << "Public Key: " << keyPair.Public << std::endl;
 
-    // Configure the server to listen on a specific host and port
-    const std::string hostname = "localhost";
-    const unsigned short port = 6060;
+		// Encrypt the message
+		auto encryptedResult = RSA::Encrypt(message, keyPair.Public);
+		if (encryptedResult) {
+			auto encryptedBuffer = encryptedResult.get();
+			std::cout << "Encrypted message: " << encryptedBuffer << std::endl;
 
-    auto listen_result = server.Listen(hostname, port);
-    if (!listen_result) {
-        std::cerr << "Server failed to listen on " << hostname << ":" << port
-                  << " - Error: " << listen_result.error()->what() << std::endl;
-        return -1;
-    }
+			// Decrypt the message
+			auto decryptedResult = RSA::Decrypt(encryptedBuffer, keyPair.Private);
+			if (decryptedResult) {
+				auto decryptedMessage = decryptedResult.get();
+				std::cout << "Decrypted message: " << decryptedMessage << std::endl;
+			} else {
+				std::cerr << "Decryption failed: " << decryptedResult.error()->what() << std::endl;
+			}
+		} else {
+			std::cerr << "Encryption failed: " << encryptedResult.error()->what() << std::endl;
+		}
+	} else {
+		std::cerr << "Key pair generation failed: " << keyPairResult.error()->what() << std::endl;
+	}
 
-    std::cout << "Server is listening on " << hostname << ":" << port << std::endl;
-
-    // Wait for an incoming connection
-    auto accept_result = server.Accept();
-    if (!accept_result) {
-        std::cerr << "Error while accepting a client connection: "
-                  << accept_result.error()->what() << std::endl;
-        return -1;
-    }
-
-    // Connection established, handle the client socket
-    Client client = std::move(accept_result.value());
-    std::cout << "Client connected!" << std::endl;
-
-    // Wait for data from the client
-    auto wait_result = client.WaitForData(500000); // 500 ms timeout
-    if (wait_result.has_value()) {
-        if (wait_result.value() == StormByte::Network::Connection::Read::Result::Timeout) {
-            std::cout << "No data received within the timeout period." << std::endl;
-        } else {
-            std::cout << "Data is available from the client." << std::endl;
-
-            // Attempt to receive data
-            auto receive_result = client.Receive();
-            if (receive_result) {
-                auto future_buffer = std::move(receive_result.value());
-                auto buffer = future_buffer.get();
-                std::cout << "Received data: "
-                          << std::string(reinterpret_cast<const char*>(buffer.Data().data()), buffer.Size())
-                          << std::endl;
-            } else {
-                std::cerr << "Failed to receive data from client: "
-                          << receive_result.error()->what() << std::endl;
-            }
-        }
-    } else {
-        std::cerr << "Error waiting for client data: "
-                  << wait_result.error()->what() << std::endl;
-    }
-
-    // Disconnect the client socket
-    client.Disconnect();
-    std::cout << "Client disconnected." << std::endl;
-
-    return 0;
+	return 0;
 }
 ```
 
-This structure is ideal for developers looking to integrate low-level networking into their applications while awaiting upcoming client/server abstractions.
+##### ECC Encryption and Decryption
+```cpp
+#include <StormByte/network/data/encryption/ecc.hxx>
+#include <iostream>
 
-## Contributing
+int main() {
+	using namespace StormByte::Network::Data::Encryption;
 
-Contributions are welcome! Please fork the repository and submit pull requests for any enhancements or bug fixes.
+	int curveId = 256; // Using P-256 curve
+	std::string message = "Highly sensitive data";
 
-## License
+	// Generate ECC key pair
+	auto keyPairResult = ECC::GenerateKeyPair(curveId);
+	if (keyPairResult) {
+		auto keyPair = keyPairResult.get();
+		std::cout << "Private Key: " << keyPair.Private << std::endl;
+		std::cout << "Public Key: " << keyPair.Public << std::endl;
 
-This project is licensed under the GPL v3 License - see the [LICENSE](LICENSE) file for details.
+		// Encrypt the message
+		auto encryptedResult = ECC::Encrypt(message, keyPair.Public);
+		if (encryptedResult) {
+			auto encryptedBuffer = encryptedResult.get();
+			std::cout << "Encrypted message: " << encryptedBuffer << std::endl;
+
+			// Decrypt the message
+			auto decryptedResult = ECC::Decrypt(encryptedBuffer, keyPair.Private);
+			if (decryptedResult) {
+				auto decryptedMessage = decryptedResult.get();
+				std::cout << "Decrypted message: " << decryptedMessage << std::endl;
+			} else {
+				std::cerr << "Decryption failed: " << decryptedResult.error()->what() << std::endl;
+			}
+		} else {
+			std::cerr << "Encryption failed: " << encryptedResult.error()->what() << std::endl;
+		}
+	} else {
+		std::cerr << "Key pair generation failed: " << keyPairResult.error()->what() << std::endl;
+	}
+
+	return 0;
+}
+```
+
+##### SHA-256 Hashing
+```cpp
+#include <StormByte/network/data/encryption/sha256.hxx>
+#include <iostream>
+
+int main() {
+	using namespace StormByte::Network::Data::Encryption;
+
+	std::string data = "Data to be hashed";
+
+	// Hash the data
+	auto hashResult = SHA256::Hash(data);
+	if (hashResult) {
+		std::string hash = hashResult.get();
+		std::cout << "SHA-256 Hash: " << hash << std::endl;
+	} else {
+		std::cerr << "Hashing failed: " << hashResult.error()->what() << std::endl;
+	}
+
+	return 0;
+}
+```
