@@ -1,10 +1,10 @@
-#include <StormByte/network/data/encryption/sha256.hxx>
+#include <StormByte/network/data/hash/sha256.hxx>
 #include <StormByte/buffer.hxx>
 #include <StormByte/test_handlers.h>
 #include <iostream>
 #include <string>
 
-using namespace StormByte::Network::Data::Encryption::SHA256;
+using namespace StormByte::Network::Data::Hash::SHA256;
 
 int TestSHA256HashConsistencyAcrossFormats() {
 	const std::string fn_name = "TestSHA256HashConsistencyAcrossFormats";

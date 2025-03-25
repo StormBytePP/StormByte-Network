@@ -1,4 +1,4 @@
-#include <StormByte/network/data/encryption/sha256.hxx>
+#include <StormByte/network/data/hash/sha256.hxx>
 
 #include <hex.h>
 #include <format>
@@ -6,7 +6,7 @@
 #include <sha.h>
 #include <vector>
 
-using namespace StormByte::Network::Data::Encryption;
+using namespace StormByte::Network::Data::Hash;
 
 namespace {
 	/**
@@ -14,7 +14,7 @@ namespace {
 	 * @param dataSpan The input data as std::span<const std::byte>.
 	 * @return Expected<std::string, CryptoException> containing the hash or an error.
 	 */
-	ExpectedCryptoString ComputeSHA256(std::span<const std::byte> dataSpan) noexcept {
+	ExpectedHashString ComputeSHA256(std::span<const std::byte> dataSpan) noexcept {
 		try {
 			// Convert std::span<std::byte> to std::vector<uint8_t>
 			std::vector<uint8_t> data;
@@ -37,7 +37,7 @@ namespace {
 	}
 }
 
-ExpectedCryptoString SHA256::Hash(const std::string& input) noexcept {
+ExpectedHashString SHA256::Hash(const std::string& input) noexcept {
 	// Create a std::span<std::byte> from the input string
 	std::span<const std::byte> dataSpan(reinterpret_cast<const std::byte*>(input.data()), input.size());
 
@@ -45,7 +45,7 @@ ExpectedCryptoString SHA256::Hash(const std::string& input) noexcept {
 	return ComputeSHA256(dataSpan);
 }
 
-ExpectedCryptoString SHA256::Hash(const StormByte::Buffer& buffer) noexcept {
+ExpectedHashString SHA256::Hash(const StormByte::Buffer& buffer) noexcept {
 	// Use Buffer's Data() method to get std::span<std::byte>
 	auto dataSpan = buffer.Data();
 
@@ -53,7 +53,7 @@ ExpectedCryptoString SHA256::Hash(const StormByte::Buffer& buffer) noexcept {
 	return ComputeSHA256(dataSpan);
 }
 
-ExpectedCryptoString SHA256::Hash(StormByte::Network::FutureBuffer& promisedBuffer) noexcept {
+ExpectedHashString SHA256::Hash(StormByte::Network::FutureBuffer& promisedBuffer) noexcept {
 	try {
 		// Retrieve Buffer from FutureBuffer
 		StormByte::Buffer buffer = promisedBuffer.get(); // Use `std::future::get()` here
