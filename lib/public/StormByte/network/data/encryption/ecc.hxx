@@ -9,9 +9,10 @@
 namespace StormByte::Network::Data::Encryption::ECC {
 	/**
 	 * @brief Generates an ECC private/public key pair.
+	 * @param curve_id The ID of the curve to use for key generation.
 	 * @return ExpectedKeyPair containing the private and public key pair or an error.
 	 */
-	STORMBYTE_NETWORK_PUBLIC ExpectedKeyPair GenerateKeyPair() noexcept;
+	STORMBYTE_NETWORK_PUBLIC ExpectedKeyPair 		GenerateKeyPair(const int& curve_id = 256) noexcept;
 
 	/**
 	 * @brief Encrypts a message using the ECC public key.
@@ -19,7 +20,7 @@ namespace StormByte::Network::Data::Encryption::ECC {
 	 * @param publicKey The ECC public key to use for encryption.
 	 * @return ExpectedCryptoBuffer containing the encrypted Buffer or an error.
 	 */
-	STORMBYTE_NETWORK_PUBLIC ExpectedCryptoBuffer Encrypt(const std::string& message, const std::string& publicKey) noexcept;
+	STORMBYTE_NETWORK_PUBLIC ExpectedCryptoBuffer 	Encrypt(const std::string& message, const std::string& publicKey) noexcept;
 
 	/**
 	 * @brief Decrypts a message using the ECC private key.
@@ -27,5 +28,5 @@ namespace StormByte::Network::Data::Encryption::ECC {
 	 * @param privateKey The ECC private key to use for decryption.
 	 * @return ExpectedCryptoString containing the decrypted message or an error.
 	 */
-	STORMBYTE_NETWORK_PUBLIC ExpectedCryptoString Decrypt(const StormByte::Util::Buffer& encryptedBuffer, const std::string& privateKey) noexcept;
+	STORMBYTE_NETWORK_PUBLIC ExpectedCryptoString 	Decrypt(const StormByte::Util::Buffer& encryptedBuffer, const std::string& privateKey) noexcept;
 }

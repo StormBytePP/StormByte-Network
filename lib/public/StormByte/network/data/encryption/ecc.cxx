@@ -59,24 +59,37 @@ namespace {
 	}	
 }
 
-ExpectedKeyPair ECC::GenerateKeyPair() noexcept {
+ExpectedKeyPair ECC::GenerateKeyPair(const int& curve_id) noexcept {
 	try {
 		CryptoPP::AutoSeededRandomPool rng;
 
 		ECIES::PrivateKey privateKey;
-		privateKey.Initialize(rng, CryptoPP::ASN1::secp256r1()); // Use the NIST P-256 curve
+		switch (curve_id) {
+			case 256:
+				privateKey.Initialize(rng, CryptoPP::ASN1::secp256r1());
+				break;
+			case 384:
+				privateKey.Initialize(rng, CryptoPP::ASN1::secp384r1());
+				break;
+			case 521:
+				privateKey.Initialize(rng, CryptoPP::ASN1::secp521r1());
+				break;
+			default:
+				return StormByte::Unexpected<CryptoException>(std::format("Unsupported curve ID {}, valid values are: {}", curve_id, "256, 384, 521"));
+		}
 
 		ECIES::PublicKey publicKey;
 		privateKey.MakePublicKey(publicKey);
 
 		KeyPair keyPair{
-			.Private = SerializeKey(privateKey), // Correct field name
-			.Public = SerializeKey(publicKey),  // Correct field name
+			.Private = SerializeKey(privateKey),
+			.Public = SerializeKey(publicKey),
 		};
 
 		return keyPair;
 	} catch (const std::exception& e) {
-		return StormByte::Unexpected<CryptoException>(std::format("Failed to generate ECC keys: {}", e.what()));
+		return StormByte::Unexpected<CryptoException>(
+			std::format("Failed to generate ECC keys: {}", e.what()));
 	}
 }
 
