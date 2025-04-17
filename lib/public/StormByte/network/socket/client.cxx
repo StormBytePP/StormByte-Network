@@ -214,7 +214,7 @@ ExpectedFutureBuffer Socket::Client::Receive(const std::size_t& max_size) noexce
 void Socket::Client::Read(PromisedBuffer& promise, std::size_t max_size) noexcept {
 	m_logger << Logger::Level::LowLevel << "Starting to read data with max_size: " << humanreadable_bytes << max_size << nohumanreadable << std::endl;
 
-	Buffer buffer;
+	Buffers::Simple buffer;
 	char internal_buffer[BUFFER_SIZE];
 	std::size_t total_bytes_read = 0;
 

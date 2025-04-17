@@ -46,8 +46,8 @@ namespace {
 						[](uint8_t byte) { return static_cast<std::byte>(byte); });
 
 			// Wrap the result into a std::promise and std::future
-			std::promise<StormByte::Buffer> promise;
-			promise.set_value(StormByte::Buffer(std::move(convertedData)));
+			std::promise<StormByte::Buffers::Simple> promise;
+			promise.set_value(StormByte::Buffers::Simple(std::move(convertedData)));
 			return promise.get_future();
 		} catch (const std::exception& e) {
 			return StormByte::Unexpected<StormByte::Network::CryptoException>(e.what());
@@ -90,8 +90,8 @@ namespace {
 						[](uint8_t byte) { return static_cast<std::byte>(byte); });
 
 			// Wrap the result into a std::promise and std::future
-			std::promise<StormByte::Buffer> promise;
-			promise.set_value(StormByte::Buffer(std::move(convertedData)));
+			std::promise<StormByte::Buffers::Simple> promise;
+			promise.set_value(StormByte::Buffers::Simple(std::move(convertedData)));
 			return promise.get_future();
 		} catch (const std::exception& e) {
 			return StormByte::Unexpected<StormByte::Network::CryptoException>(e.what());
@@ -105,13 +105,13 @@ ExpectedCryptoBuffer AES::Encrypt(const std::string& input, const std::string& p
 	return EncryptHelper(dataSpan, password);
 }
 
-ExpectedCryptoBuffer AES::Encrypt(const StormByte::Buffer& input, const std::string& password) noexcept {
+ExpectedCryptoBuffer AES::Encrypt(const StormByte::Buffers::Simple& input, const std::string& password) noexcept {
 	return EncryptHelper(input.Data(), password);
 }
 
 ExpectedCryptoBuffer AES::Encrypt(FutureBuffer& bufferFuture, const std::string& password) noexcept {
 	try {
-		StormByte::Buffer buffer = bufferFuture.get();
+		StormByte::Buffers::Simple buffer = bufferFuture.get();
 		return EncryptHelper(buffer.Data(), password);
 	} catch (const std::exception& e) {
 		return StormByte::Unexpected<StormByte::Network::CryptoException>(e.what());
@@ -124,13 +124,13 @@ ExpectedCryptoBuffer AES::Decrypt(const std::string& input, const std::string& p
 	return DecryptHelper(dataSpan, password);
 }
 
-ExpectedCryptoBuffer AES::Decrypt(const StormByte::Buffer& input, const std::string& password) noexcept {
+ExpectedCryptoBuffer AES::Decrypt(const StormByte::Buffers::Simple& input, const std::string& password) noexcept {
 	return DecryptHelper(input.Data(), password);
 }
 
 ExpectedCryptoBuffer AES::Decrypt(FutureBuffer& bufferFuture, const std::string& password) noexcept {
 	try {
-		StormByte::Buffer buffer = bufferFuture.get();
+		StormByte::Buffers::Simple buffer = bufferFuture.get();
 		return DecryptHelper(buffer.Data(), password);
 	} catch (const std::exception& e) {
 		return StormByte::Unexpected<StormByte::Network::CryptoException>(e.what());

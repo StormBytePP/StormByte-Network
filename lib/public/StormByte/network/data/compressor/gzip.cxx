@@ -26,10 +26,10 @@ namespace {
 				[](char c) { return static_cast<std::byte>(c); });
 
 			// Create Buffer from std::vector<std::byte>
-			StormByte::Buffer buffer(std::move(compressedData));
+			StormByte::Buffers::Simple buffer(std::move(compressedData));
 
 			// Wrap the result into a promise and future
-			std::promise<StormByte::Buffer> promise;
+			std::promise<StormByte::Buffers::Simple> promise;
 			promise.set_value(std::move(buffer));
 			return promise.get_future();
 		}
@@ -53,10 +53,10 @@ namespace {
 				[](char c) { return static_cast<std::byte>(c); });
 
 			// Create Buffer from std::vector<std::byte>
-			StormByte::Buffer buffer(std::move(decompressedData));
+			StormByte::Buffers::Simple buffer(std::move(decompressedData));
 
 			// Wrap the result into a promise and future
-			std::promise<StormByte::Buffer> promise;
+			std::promise<StormByte::Buffers::Simple> promise;
 			promise.set_value(std::move(buffer));
 			return promise.get_future();
 		}
@@ -72,13 +72,13 @@ ExpectedCompressorBuffer Gzip::Compress(const std::string& input) noexcept {
 	return CompressHelper(dataSpan);
 }
 
-ExpectedCompressorBuffer Gzip::Compress(const StormByte::Buffer& input) noexcept {
+ExpectedCompressorBuffer Gzip::Compress(const StormByte::Buffers::Simple& input) noexcept {
 	return CompressHelper(input.Data());
 }
 
 ExpectedCompressorBuffer Gzip::Compress(FutureBuffer& bufferFuture) noexcept {
 	try {
-		StormByte::Buffer buffer = bufferFuture.get();
+		StormByte::Buffers::Simple buffer = bufferFuture.get();
 		return CompressHelper(buffer.Data());
 	} catch (const std::exception& e) {
 		return StormByte::Unexpected<StormByte::Network::CryptoException>(e.what());
@@ -91,13 +91,13 @@ ExpectedCompressorBuffer Gzip::Decompress(const std::string& input) noexcept {
 	return DecompressHelper(dataSpan);
 }
 
-ExpectedCompressorBuffer Gzip::Decompress(const StormByte::Buffer& input) noexcept {
+ExpectedCompressorBuffer Gzip::Decompress(const StormByte::Buffers::Simple& input) noexcept {
 	return DecompressHelper(input.Data());
 }
 
 ExpectedCompressorBuffer Gzip::Decompress(FutureBuffer& bufferFuture) noexcept {
 	try {
-		StormByte::Buffer buffer = bufferFuture.get();
+		StormByte::Buffers::Simple buffer = bufferFuture.get();
 		return DecompressHelper(buffer.Data());
 	} catch (const std::exception& e) {
 		return StormByte::Unexpected<StormByte::Network::CryptoException>(e.what());

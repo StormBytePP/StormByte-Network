@@ -1,7 +1,7 @@
 #pragma once
 
+#include <StormByte/buffers/simple.hxx>
 #include <StormByte/network/visibility.h>
-#include <StormByte/buffer.hxx>
 
 /**
  * @namespace Data
@@ -59,7 +59,7 @@ namespace StormByte::Network::Data {
 
 		protected:
 			unsigned short m_opcode;									///< The opcode of the packet.
-			mutable Buffer m_buffer;								///< The data buffer of the packet.
+			mutable Buffers::Simple m_buffer;							///< The data buffer of the packet.
 
 			/**
 			 * @brief The function to prepare the buffer.

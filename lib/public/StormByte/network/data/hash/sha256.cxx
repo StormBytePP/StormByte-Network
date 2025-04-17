@@ -45,7 +45,7 @@ ExpectedHashString SHA256::Hash(const std::string& input) noexcept {
 	return ComputeSHA256(dataSpan);
 }
 
-ExpectedHashString SHA256::Hash(const StormByte::Buffer& buffer) noexcept {
+ExpectedHashString SHA256::Hash(const StormByte::Buffers::Simple& buffer) noexcept {
 	// Use Buffer's Data() method to get std::span<std::byte>
 	auto dataSpan = buffer.Data();
 
@@ -56,7 +56,7 @@ ExpectedHashString SHA256::Hash(const StormByte::Buffer& buffer) noexcept {
 ExpectedHashString SHA256::Hash(StormByte::Network::FutureBuffer& promisedBuffer) noexcept {
 	try {
 		// Retrieve Buffer from FutureBuffer
-		StormByte::Buffer buffer = promisedBuffer.get(); // Use `std::future::get()` here
+		StormByte::Buffers::Simple buffer = promisedBuffer.get(); // Use `std::future::get()` here
 		auto dataSpan = buffer.Data();
 
 		// Use the common helper function to compute the hash

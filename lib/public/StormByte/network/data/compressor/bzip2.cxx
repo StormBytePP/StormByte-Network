@@ -21,9 +21,9 @@ namespace {
 			}
 
 			compressedData.resize(compressedSize);
-			StormByte::Buffer buffer(reinterpret_cast<const char*>(compressedData.data()), compressedSize);
+			StormByte::Buffers::Simple buffer(reinterpret_cast<const char*>(compressedData.data()), compressedSize);
 
-			std::promise<StormByte::Buffer> promise;
+			std::promise<StormByte::Buffers::Simple> promise;
 			promise.set_value(std::move(buffer));
 			return promise.get_future();
 		}
@@ -44,9 +44,9 @@ namespace {
 			}
 
 			decompressedData.resize(decompressedSize);
-			StormByte::Buffer buffer(reinterpret_cast<const char*>(decompressedData.data()), decompressedSize);
+			StormByte::Buffers::Simple buffer(reinterpret_cast<const char*>(decompressedData.data()), decompressedSize);
 
-			std::promise<StormByte::Buffer> promise;
+			std::promise<StormByte::Buffers::Simple> promise;
 			promise.set_value(std::move(buffer));
 			return promise.get_future();
 		}
@@ -62,13 +62,13 @@ ExpectedCompressorBuffer BZip2::Compress(const std::string& input) noexcept {
 	return CompressHelper(dataSpan);
 }
 
-ExpectedCompressorBuffer BZip2::Compress(const StormByte::Buffer& input) noexcept {
+ExpectedCompressorBuffer BZip2::Compress(const StormByte::Buffers::Simple& input) noexcept {
 	return CompressHelper(input.Data());
 }
 
 ExpectedCompressorBuffer BZip2::Compress(FutureBuffer& bufferFuture) noexcept {
 	try {
-		StormByte::Buffer buffer = bufferFuture.get();
+		StormByte::Buffers::Simple buffer = bufferFuture.get();
 		return CompressHelper(buffer.Data());
 	}
 	catch (const std::exception& e) {
@@ -82,13 +82,13 @@ ExpectedCompressorBuffer BZip2::Decompress(const std::string& input, size_t orig
 	return DecompressHelper(dataSpan, originalSize);
 }
 
-ExpectedCompressorBuffer BZip2::Decompress(const StormByte::Buffer& input, size_t originalSize) noexcept {
+ExpectedCompressorBuffer BZip2::Decompress(const StormByte::Buffers::Simple& input, size_t originalSize) noexcept {
 	return DecompressHelper(input.Data(), originalSize);
 }
 
 ExpectedCompressorBuffer BZip2::Decompress(FutureBuffer& bufferFuture, size_t originalSize) noexcept {
 	try {
-		StormByte::Buffer buffer = bufferFuture.get();
+		StormByte::Buffers::Simple buffer = bufferFuture.get();
 		return DecompressHelper(buffer.Data(), originalSize);
 	}
 	catch (const std::exception& e) {

@@ -1,10 +1,10 @@
 #pragma once
 
+#include <StormByte/buffers/simple.hxx>
 #include <StormByte/network/connection/rw.hxx>
 #include <StormByte/network/data/packet.hxx>
 #include <StormByte/network/socket/socket.hxx>
 #include <StormByte/network/typedefs.hxx>
-#include <StormByte/buffer.hxx>
 
 /**
  * @namespace Socket
@@ -105,7 +105,7 @@ namespace StormByte::Network::Socket {
 		 * @param size The requested size of data.
 		 * @return The result of the operation.
 		 */
-		Connection::Read::Result 										ReadNonBlocking(Buffer& buffer) noexcept;
+		Connection::Read::Result 										ReadNonBlocking(Buffers::Simple& buffer) noexcept;
 
 		/**
 		 * @brief Function to read data from the socket asynchronously.

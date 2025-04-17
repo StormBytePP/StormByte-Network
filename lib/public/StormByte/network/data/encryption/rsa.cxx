@@ -86,10 +86,10 @@ ExpectedCryptoBuffer RSA::Encrypt(const std::string& message, const std::string&
 								new CryptoPP::PK_EncryptorFilter(rng, encryptor,
 																	new CryptoPP::StringSink(encryptedMessage)));
 
-		StormByte::Buffer buffer;
+		StormByte::Buffers::Simple buffer;
 		buffer << encryptedMessage;
 
-		std::promise<StormByte::Buffer> promise;
+		std::promise<StormByte::Buffers::Simple> promise;
 		promise.set_value(std::move(buffer));
 		return promise.get_future();
 	} catch (const std::exception& e) {
@@ -97,7 +97,7 @@ ExpectedCryptoBuffer RSA::Encrypt(const std::string& message, const std::string&
 	}
 }
 
-ExpectedCryptoString RSA::Decrypt(const StormByte::Buffer& encryptedBuffer, const std::string& privateKey) noexcept {
+ExpectedCryptoString RSA::Decrypt(const StormByte::Buffers::Simple& encryptedBuffer, const std::string& privateKey) noexcept {
 	try {
 		CryptoPP::AutoSeededRandomPool rng;
 		CryptoPP::RSA::PrivateKey key = DeserializePrivateKey(privateKey);

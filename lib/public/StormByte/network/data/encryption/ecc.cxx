@@ -112,10 +112,10 @@ ExpectedCryptoBuffer ECC::Encrypt(const std::string& message, const std::string&
 																	new CryptoPP::StringSink(encryptedMessage)));
 
 		// Convert the encrypted message into a buffer
-		StormByte::Buffer buffer;
+		StormByte::Buffers::Simple buffer;
 		buffer << encryptedMessage;
 
-		std::promise<StormByte::Buffer> promise;
+		std::promise<StormByte::Buffers::Simple> promise;
 		promise.set_value(std::move(buffer));
 		return promise.get_future();
 	} catch (const std::exception& e) {
@@ -123,7 +123,7 @@ ExpectedCryptoBuffer ECC::Encrypt(const std::string& message, const std::string&
 	}
 }	
 
-ExpectedCryptoString ECC::Decrypt(const StormByte::Buffer& encryptedBuffer, const std::string& privateKey) noexcept {
+ExpectedCryptoString ECC::Decrypt(const StormByte::Buffers::Simple& encryptedBuffer, const std::string& privateKey) noexcept {
 	try {
 		CryptoPP::AutoSeededRandomPool rng;
 

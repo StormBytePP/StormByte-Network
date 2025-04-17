@@ -1,10 +1,10 @@
 #pragma once
 
+#include <StormByte/buffers/simple.hxx>
 #include <StormByte/expected.hxx>
 #include <StormByte/network/connection/handler.hxx>
 #include <StormByte/network/connection/rw.hxx>
 #include <StormByte/network/exception.hxx>
-#include <StormByte/buffer.hxx>
 
 #include <functional>
 #include <future>
@@ -15,8 +15,8 @@
  */
 namespace StormByte::Network {		
 	namespace Socket { class Client; }																									///< The client socket class (forward declaration).
-	using FutureBuffer = std::future<Buffer>;																						///< The future data type.
-	using PromisedBuffer = std::promise<Buffer>;																					///< The promised data type.
+	using FutureBuffer = std::future<Buffers::Simple>;																					///< The future data type.
+	using PromisedBuffer = std::promise<Buffers::Simple>;																				///< The promised data type.
 	using ExpectedFutureBuffer = StormByte::Expected<FutureBuffer, ConnectionError>;													///< The expected future type.
 	using ExpectedVoid = StormByte::Expected<void, ConnectionError>;																	///< The expected void type.
 	using ExpectedClient = StormByte::Expected<Socket::Client, ConnectionError>;														///< The expected client type.
