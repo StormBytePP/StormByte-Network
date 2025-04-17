@@ -13,7 +13,7 @@ namespace StormByte::Network::Data::Encryption::AES {
 	 * @param password The password to use for encryption.
 	 * @return Expected<FutureBuffer, CryptoException> containing the encrypted Buffer or an error.
 	 */
-	STORMBYTE_NETWORK_PUBLIC ExpectedCryptoBuffer Encrypt(const std::string& input, const std::string& password) noexcept;
+	STORMBYTE_NETWORK_PUBLIC ExpectedCryptoFutureBuffer Encrypt(const std::string& input, const std::string& password) noexcept;
 
 	/**
 	 * @brief Encrypts a Buffer using AES.
@@ -21,7 +21,7 @@ namespace StormByte::Network::Data::Encryption::AES {
 	 * @param password The password to use for encryption.
 	 * @return Expected<FutureBuffer, CryptoException> containing the encrypted Buffer or an error.
 	 */
-	STORMBYTE_NETWORK_PUBLIC ExpectedCryptoBuffer Encrypt(const StormByte::Buffers::Simple& input, const std::string& password) noexcept;
+	STORMBYTE_NETWORK_PUBLIC ExpectedCryptoFutureBuffer Encrypt(const StormByte::Buffers::Simple& input, const std::string& password) noexcept;
 
 	/**
 	 * @brief Decrypts a string using AES.
@@ -29,7 +29,7 @@ namespace StormByte::Network::Data::Encryption::AES {
 	 * @param password The password to use for decryption.
 	 * @return Expected<FutureBuffer, CryptoException> containing the decrypted Buffer or an error.
 	 */
-	STORMBYTE_NETWORK_PUBLIC ExpectedCryptoBuffer Decrypt(const std::string& input, const std::string& password) noexcept;
+	STORMBYTE_NETWORK_PUBLIC ExpectedCryptoFutureBuffer Decrypt(const std::string& input, const std::string& password) noexcept;
 
 	/**
 	 * @brief Decrypts a Buffer using AES.
@@ -37,12 +37,12 @@ namespace StormByte::Network::Data::Encryption::AES {
 	 * @param password The password to use for decryption.
 	 * @return Expected<FutureBuffer, CryptoException> containing the decrypted Buffer or an error.
 	 */
-	STORMBYTE_NETWORK_PUBLIC ExpectedCryptoBuffer Decrypt(const StormByte::Buffers::Simple& input, const std::string& password) noexcept;
+	STORMBYTE_NETWORK_PUBLIC ExpectedCryptoFutureBuffer Decrypt(const StormByte::Buffers::Simple& input, const std::string& password) noexcept;
 
 	/**
 	 * @brief Generates a random password.
 	 * @param passwordSize The size of the password to generate.
 	 * @return The generated password.
 	 */
-	STORMBYTE_NETWORK_PUBLIC ExpectedCryptoString RandomPassword(const size_t& passwordSize = 16) noexcept;
+	STORMBYTE_NETWORK_PUBLIC ExpectedCryptoFutureString RandomPassword(const size_t& passwordSize = 16) noexcept;
 }

@@ -17,7 +17,7 @@ namespace StormByte::Network::Data::Encryption {
 		std::string Public;																			///< The public key.
 	};
 
-	using ExpectedCryptoBuffer = StormByte::Expected<FutureBuffer, CryptoException>;				///< The expected crypto buffer type.
-	using ExpectedCryptoString = StormByte::Expected<std::string, CryptoException>;					///< The expected crypto string type.
+	using ExpectedCryptoFutureBuffer = StormByte::Expected<FutureBuffer, CryptoException>;			///< The expected crypto buffer type.
+	using ExpectedCryptoFutureString = StormByte::Expected<std::string, CryptoException>;			///< The expected crypto string type.
 	using ExpectedKeyPair = StormByte::Expected<KeyPair, CryptoException>;							///< The expected key pair type.
 }

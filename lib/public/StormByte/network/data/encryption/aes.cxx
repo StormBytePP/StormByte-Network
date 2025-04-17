@@ -14,7 +14,7 @@
 using namespace StormByte::Network::Data::Encryption;
 
 namespace {
-	ExpectedCryptoBuffer EncryptHelper(std::span<const std::byte> dataSpan, const std::string& password) noexcept {
+	ExpectedCryptoFutureBuffer EncryptHelper(std::span<const std::byte> dataSpan, const std::string& password) noexcept {
 		try {
 			// Generate key and IV securely
 			CryptoPP::SecByteBlock salt(16);
@@ -54,7 +54,7 @@ namespace {
 		}
 	}
 
-	ExpectedCryptoBuffer DecryptHelper(std::span<const std::byte> encryptedSpan, const std::string& password) noexcept {
+	ExpectedCryptoFutureBuffer DecryptHelper(std::span<const std::byte> encryptedSpan, const std::string& password) noexcept {
 		try {
 			const size_t saltSize = 16;
 			const size_t ivSize = CryptoPP::AES::BLOCKSIZE;
@@ -100,27 +100,27 @@ namespace {
 }
 
 // Encrypt Function Overloads
-ExpectedCryptoBuffer AES::Encrypt(const std::string& input, const std::string& password) noexcept {
+ExpectedCryptoFutureBuffer AES::Encrypt(const std::string& input, const std::string& password) noexcept {
 	std::span<const std::byte> dataSpan(reinterpret_cast<const std::byte*>(input.data()), input.size());
 	return EncryptHelper(dataSpan, password);
 }
 
-ExpectedCryptoBuffer AES::Encrypt(const StormByte::Buffers::Simple& input, const std::string& password) noexcept {
+ExpectedCryptoFutureBuffer AES::Encrypt(const StormByte::Buffers::Simple& input, const std::string& password) noexcept {
 	return EncryptHelper(input.Data(), password);
 }
 
 // Decrypt Function Overloads
-ExpectedCryptoBuffer AES::Decrypt(const std::string& input, const std::string& password) noexcept {
+ExpectedCryptoFutureBuffer AES::Decrypt(const std::string& input, const std::string& password) noexcept {
 	std::span<const std::byte> dataSpan(reinterpret_cast<const std::byte*>(input.data()), input.size());
 	return DecryptHelper(dataSpan, password);
 }
 
-ExpectedCryptoBuffer AES::Decrypt(const StormByte::Buffers::Simple& input, const std::string& password) noexcept {
+ExpectedCryptoFutureBuffer AES::Decrypt(const StormByte::Buffers::Simple& input, const std::string& password) noexcept {
 	return DecryptHelper(input.Data(), password);
 }
 
 // RandomPassword Function
-ExpectedCryptoString AES::RandomPassword(const size_t& passwordSize) noexcept {
+ExpectedCryptoFutureString AES::RandomPassword(const size_t& passwordSize) noexcept {
 	try {
 		// Random number generator
 		CryptoPP::AutoSeededRandomPool rng;

@@ -9,7 +9,7 @@
 using namespace StormByte::Network::Data::Compressor;
 
 namespace {
-	ExpectedCompressorBuffer CompressHelper(std::span<const std::byte> inputData, int blockSize = 9) noexcept {
+	ExpectedCompressorFutureBuffer CompressHelper(std::span<const std::byte> inputData, int blockSize = 9) noexcept {
 		try {
 			unsigned int compressedSize = static_cast<unsigned int>(std::ceil(inputData.size_bytes() * 1.01 + 600));
 			std::vector<uint8_t> compressedData(compressedSize);
@@ -32,7 +32,7 @@ namespace {
 		}
 	}
 
-	ExpectedCompressorBuffer DecompressHelper(std::span<const std::byte> compressedData, size_t originalSize) noexcept {
+	ExpectedCompressorFutureBuffer DecompressHelper(std::span<const std::byte> compressedData, size_t originalSize) noexcept {
 		try {
 			std::vector<uint8_t> decompressedData(originalSize);
 			unsigned int decompressedSize = static_cast<unsigned int>(originalSize);
@@ -57,21 +57,23 @@ namespace {
 }
 
 // Public Compress Methods
-ExpectedCompressorBuffer BZip2::Compress(const std::string& input) noexcept {
+ExpectedCompressorFutureBuffer BZip2::Compress(const std::string& input) noexcept {
 	std::span<const std::byte> dataSpan(reinterpret_cast<const std::byte*>(input.data()), input.size());
 	return CompressHelper(dataSpan);
 }
 
-ExpectedCompressorBuffer BZip2::Compress(const StormByte::Buffers::Simple& input) noexcept {
+ExpectedCompressorFutureBuffer BZip2::Compress(const StormByte::Buffers::Simple& input) noexcept {
 	return CompressHelper(input.Data());
 }
 
+
+
 // Public Decompress Methods
-ExpectedCompressorBuffer BZip2::Decompress(const std::string& input, size_t originalSize) noexcept {
+ExpectedCompressorFutureBuffer BZip2::Decompress(const std::string& input, size_t originalSize) noexcept {
 	std::span<const std::byte> dataSpan(reinterpret_cast<const std::byte*>(input.data()), input.size());
 	return DecompressHelper(dataSpan, originalSize);
 }
 
-ExpectedCompressorBuffer BZip2::Decompress(const StormByte::Buffers::Simple& input, size_t originalSize) noexcept {
+ExpectedCompressorFutureBuffer BZip2::Decompress(const StormByte::Buffers::Simple& input, size_t originalSize) noexcept {
 	return DecompressHelper(input.Data(), originalSize);
 }

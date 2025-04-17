@@ -27,7 +27,7 @@ namespace StormByte::Network::Hash {
 		 * @return The encryptor function for the algorithm
 		 */
 		template<typename T, Algorithm::Name algorithm>
-		constexpr std::function<Data::Hash::ExpectedHashString(T&, const std::string&)> Hasher() {
+		constexpr std::function<Data::Hash::ExpectedHashFutureString(T&, const std::string&)> Hasher() {
 			if constexpr (algorithm == Algorithm::Name::SHA256) {
 				return &Data::Hash::SHA256::Hash;
 			} else {

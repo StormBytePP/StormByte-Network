@@ -71,7 +71,7 @@ ExpectedKeyPair RSA::GenerateKeyPair(const int& keyStrength) noexcept {
 	}
 }
 
-ExpectedCryptoBuffer RSA::Encrypt(const std::string& message, const std::string& publicKey) noexcept {
+ExpectedCryptoFutureBuffer RSA::Encrypt(const std::string& message, const std::string& publicKey) noexcept {
 	try {
 		CryptoPP::AutoSeededRandomPool rng;
 		CryptoPP::RSA::PublicKey key = DeserializePublicKey(publicKey);
@@ -97,7 +97,7 @@ ExpectedCryptoBuffer RSA::Encrypt(const std::string& message, const std::string&
 	}
 }
 
-ExpectedCryptoString RSA::Decrypt(const StormByte::Buffers::Simple& encryptedBuffer, const std::string& privateKey) noexcept {
+ExpectedCryptoFutureString RSA::Decrypt(const StormByte::Buffers::Simple& encryptedBuffer, const std::string& privateKey) noexcept {
 	try {
 		CryptoPP::AutoSeededRandomPool rng;
 		CryptoPP::RSA::PrivateKey key = DeserializePrivateKey(privateKey);

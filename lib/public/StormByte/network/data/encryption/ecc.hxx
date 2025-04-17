@@ -18,15 +18,15 @@ namespace StormByte::Network::Data::Encryption::ECC {
 	 * @brief Encrypts a message using the ECC public key.
 	 * @param message The message to encrypt.
 	 * @param publicKey The ECC public key to use for encryption.
-	 * @return ExpectedCryptoBuffer containing the encrypted Buffer or an error.
+	 * @return ExpectedCryptoFutureBuffer containing the encrypted Buffer or an error.
 	 */
-	STORMBYTE_NETWORK_PUBLIC ExpectedCryptoBuffer 	Encrypt(const std::string& message, const std::string& publicKey) noexcept;
+	STORMBYTE_NETWORK_PUBLIC ExpectedCryptoFutureBuffer 	Encrypt(const std::string& message, const std::string& publicKey) noexcept;
 
 	/**
 	 * @brief Decrypts a message using the ECC private key.
 	 * @param encryptedBuffer The buffer containing the encrypted data.
 	 * @param privateKey The ECC private key to use for decryption.
-	 * @return ExpectedCryptoString containing the decrypted message or an error.
+	 * @return ExpectedCryptoFutureString containing the decrypted message or an error.
 	 */
-	STORMBYTE_NETWORK_PUBLIC ExpectedCryptoString 	Decrypt(const StormByte::Buffers::Simple& encryptedBuffer, const std::string& privateKey) noexcept;
+	STORMBYTE_NETWORK_PUBLIC ExpectedCryptoFutureString 	Decrypt(const StormByte::Buffers::Simple& encryptedBuffer, const std::string& privateKey) noexcept;
 }

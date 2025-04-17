@@ -40,7 +40,7 @@ namespace StormByte::Network::Encryption {
 		 * @return The encryptor function for the algorithm
 		 */
 		template<typename T, Algorithm::Name algorithm>
-		constexpr std::function<Data::Encryption::ExpectedCryptoString(T&, const std::string&)> Encryptor() {
+		constexpr std::function<Data::Encryption::ExpectedCryptoFutureString(T&, const std::string&)> Encryptor() {
 			if constexpr (algorithm == Algorithm::Name::AES) {
 				return &Data::Encryption::AES::Encrypt;
 			} else if constexpr (algorithm == Algorithm::Name::RSA) {
@@ -62,7 +62,7 @@ namespace StormByte::Network::Encryption {
 		 * @return The decryptor function for the algorithm
 		 */
 		template<typename T, Algorithm::Name algorithm>
-		constexpr std::function<Data::Encryption::ExpectedCryptoString(T&, const std::string&)> Decryptor() {
+		constexpr std::function<Data::Encryption::ExpectedCryptoFutureString(T&, const std::string&)> Decryptor() {
 			if constexpr (algorithm == Algorithm::Name::AES) {
 				return &Data::Encryption::AES::Decrypt;
 			} else if constexpr (algorithm == Algorithm::Name::RSA) {

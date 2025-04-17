@@ -14,7 +14,7 @@ namespace {
 	 * @param dataSpan The input data as std::span<const std::byte>.
 	 * @return Expected<std::string, CryptoException> containing the hash or an error.
 	 */
-	ExpectedHashString ComputeSHA256(std::span<const std::byte> dataSpan) noexcept {
+	ExpectedHashFutureString ComputeSHA256(std::span<const std::byte> dataSpan) noexcept {
 		try {
 			// Convert std::span<std::byte> to std::vector<uint8_t>
 			std::vector<uint8_t> data;
@@ -37,7 +37,7 @@ namespace {
 	}
 }
 
-ExpectedHashString SHA256::Hash(const std::string& input) noexcept {
+ExpectedHashFutureString SHA256::Hash(const std::string& input) noexcept {
 	// Create a std::span<std::byte> from the input string
 	std::span<const std::byte> dataSpan(reinterpret_cast<const std::byte*>(input.data()), input.size());
 
@@ -45,7 +45,7 @@ ExpectedHashString SHA256::Hash(const std::string& input) noexcept {
 	return ComputeSHA256(dataSpan);
 }
 
-ExpectedHashString SHA256::Hash(const StormByte::Buffers::Simple& buffer) noexcept {
+ExpectedHashFutureString SHA256::Hash(const StormByte::Buffers::Simple& buffer) noexcept {
 	// Use Buffer's Data() method to get std::span<std::byte>
 	auto dataSpan = buffer.Data();
 

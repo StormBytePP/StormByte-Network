@@ -92,7 +92,7 @@ ExpectedKeyPair ECC::GenerateKeyPair(const int& curve_id) noexcept {
 	}
 }
 
-ExpectedCryptoBuffer ECC::Encrypt(const std::string& message, const std::string& publicKey) noexcept {
+ExpectedCryptoFutureBuffer ECC::Encrypt(const std::string& message, const std::string& publicKey) noexcept {
 	try {
 		CryptoPP::AutoSeededRandomPool rng;
 
@@ -123,7 +123,7 @@ ExpectedCryptoBuffer ECC::Encrypt(const std::string& message, const std::string&
 	}
 }	
 
-ExpectedCryptoString ECC::Decrypt(const StormByte::Buffers::Simple& encryptedBuffer, const std::string& privateKey) noexcept {
+ExpectedCryptoFutureString ECC::Decrypt(const StormByte::Buffers::Simple& encryptedBuffer, const std::string& privateKey) noexcept {
 	try {
 		CryptoPP::AutoSeededRandomPool rng;
 

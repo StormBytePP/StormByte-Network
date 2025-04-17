@@ -12,12 +12,12 @@ namespace StormByte::Network::Data::Hash::SHA256 {
 	 * @param input The input string to hash.
 	 * @return Expected<std::string, CryptoException> containing the hash or an error.
 	 */
-	STORMBYTE_NETWORK_PUBLIC ExpectedHashString Hash(const std::string& input) noexcept;
+	STORMBYTE_NETWORK_PUBLIC ExpectedHashFutureString Hash(const std::string& input) noexcept;
 
 	/**
 	 * @brief Hashes the input data using SHA-256.
 	 * @param buffer The input buffer to hash.
 	 * @return Expected<std::string, CryptoException> containing the hash or an error.
 	 */
-	STORMBYTE_NETWORK_PUBLIC ExpectedHashString Hash(const Buffers::Simple& buffer) noexcept;
+	STORMBYTE_NETWORK_PUBLIC ExpectedHashFutureString Hash(const Buffers::Simple& buffer) noexcept;
 }

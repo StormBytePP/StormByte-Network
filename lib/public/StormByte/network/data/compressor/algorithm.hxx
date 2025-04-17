@@ -27,7 +27,7 @@ namespace StormByte::Network::Compressor {
 		 * @return The encryptor function for the algorithm
 		 */
 		template<typename T, Algorithm::Name algorithm>
-		constexpr std::function<Data::Compressor::ExpectedCompressorString(T&, const std::string&)> Compressor() {
+		constexpr std::function<Data::Compressor::ExpectedCompressorFutureString(T&, const std::string&)> Compressor() {
 			if constexpr (algorithm == Algorithm::Name::Gzip) {
 				return &Data::Compressor::Gzip::Compress;
 			} else {
@@ -42,7 +42,7 @@ namespace StormByte::Network::Compressor {
 		 * @return The decryptor function for the algorithm
 		 */
 		template<typename T, Algorithm::Name algorithm>
-		constexpr std::function<Data::Compressor::ExpectedCompressorString(T&, const std::string&)> Decompressor() {
+		constexpr std::function<Data::Compressor::ExpectedCompressorFutureString(T&, const std::string&)> Decompressor() {
 			if constexpr (algorithm == Algorithm::Name::Gzip) {
 				return &Data::Compressor::Gzip::Decompress;
 			} else {

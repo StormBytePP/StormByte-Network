@@ -10,7 +10,7 @@
 using namespace StormByte::Network::Data::Compressor;
 
 namespace {
-	ExpectedCompressorBuffer CompressHelper(std::span<const std::byte> inputData) noexcept {
+	ExpectedCompressorFutureBuffer CompressHelper(std::span<const std::byte> inputData) noexcept {
 		try {
 			std::string compressedString;
 
@@ -38,7 +38,7 @@ namespace {
 		}
 	}
 
-	ExpectedCompressorBuffer DecompressHelper(std::span<const std::byte> compressedData) noexcept {
+	ExpectedCompressorFutureBuffer DecompressHelper(std::span<const std::byte> compressedData) noexcept {
 		try {
 			std::string decompressedString;
 
@@ -67,21 +67,21 @@ namespace {
 }
 
 // Public Compress Methods
-ExpectedCompressorBuffer Gzip::Compress(const std::string& input) noexcept {
+ExpectedCompressorFutureBuffer Gzip::Compress(const std::string& input) noexcept {
 	std::span<const std::byte> dataSpan(reinterpret_cast<const std::byte*>(input.data()), input.size());
 	return CompressHelper(dataSpan);
 }
 
-ExpectedCompressorBuffer Gzip::Compress(const StormByte::Buffers::Simple& input) noexcept {
+ExpectedCompressorFutureBuffer Gzip::Compress(const StormByte::Buffers::Simple& input) noexcept {
 	return CompressHelper(input.Data());
 }
 
 // Public Decompress Methods
-ExpectedCompressorBuffer Gzip::Decompress(const std::string& input) noexcept {
+ExpectedCompressorFutureBuffer Gzip::Decompress(const std::string& input) noexcept {
 	std::span<const std::byte> dataSpan(reinterpret_cast<const std::byte*>(input.data()), input.size());
 	return DecompressHelper(dataSpan);
 }
 
-ExpectedCompressorBuffer Gzip::Decompress(const StormByte::Buffers::Simple& input) noexcept {
+ExpectedCompressorFutureBuffer Gzip::Decompress(const StormByte::Buffers::Simple& input) noexcept {
 	return DecompressHelper(input.Data());
 }
