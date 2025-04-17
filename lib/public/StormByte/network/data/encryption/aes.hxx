@@ -45,4 +45,22 @@ namespace StormByte::Network::Data::Encryption::AES {
 	 * @return The generated password.
 	 */
 	STORMBYTE_NETWORK_PUBLIC ExpectedCryptoFutureString RandomPassword(const size_t& passwordSize = 16) noexcept;
+
+	/**
+	 * @brief Encrypts data asynchronously using the Consumer/Producer model.
+	 * 
+	 * @param consumer The Consumer buffer containing the input data.
+	 * @param password The password to use for encryption.
+	 * @return A Consumer buffer containing the encrypted data.
+	 */
+	STORMBYTE_NETWORK_PUBLIC StormByte::Buffers::Consumer Encrypt(const Buffers::Consumer consumer, const std::string& password) noexcept;
+
+	/**
+	 * @brief Decrypts data asynchronously using the Consumer/Producer model.
+	 * 
+	 * @param consumer The Consumer buffer containing the encrypted data.
+	 * @param password The password to use for decryption.
+	 * @return A Consumer buffer containing the decrypted data.
+	 */
+	STORMBYTE_NETWORK_PUBLIC StormByte::Buffers::Consumer Decrypt(const Buffers::Consumer consumer, const std::string& password) noexcept;
 }
