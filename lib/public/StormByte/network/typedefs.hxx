@@ -1,5 +1,7 @@
 #pragma once
 
+#include <StormByte/buffers/consumer.hxx>
+#include <StormByte/buffers/producer.hxx>
 #include <StormByte/buffers/simple.hxx>
 #include <StormByte/expected.hxx>
 #include <StormByte/network/connection/handler.hxx>
@@ -23,4 +25,6 @@ namespace StormByte::Network {
 	using ExpectedReadResult = StormByte::Expected<Connection::Read::Result, ConnectionClosed>;											///< The expected read result type.
 	using ExpectedHandlerType = StormByte::Expected<Connection::Handler::Type, ConnectionError>;										///< The expected handler type.
 	using FutureBufferProcessor = std::function<StormByte::Expected<FutureBuffer, ConnectionError>(Socket::Client&, FutureBuffer&)>;	///< The future data function type.
+	using SharedConsumerBuffer = std::shared_ptr<Buffers::Consumer>;																	///< The shared consumer buffer type.
+	using SharedProducerBuffer = std::shared_ptr<Buffers::Producer>;																	///< The shared producer buffer type.
 }
