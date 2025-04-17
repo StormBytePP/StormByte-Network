@@ -1,6 +1,8 @@
 #include <StormByte/network/data/encryption/ecc.hxx>
 #include <StormByte/test_handlers.h>
 
+#include <thread>
+
 using namespace StormByte::Network::Data::Encryption;
 
 int TestECCEncryptDecrypt() {
@@ -164,6 +166,111 @@ int TestECCEncryptionProducesDifferentContent() {
 	RETURN_TEST(fn_name, 0);
 }
 
+int TestECCEncryptDecryptInOneStep() {
+    const std::string fn_name = "TestECCEncryptDecryptInOneStep";
+    const std::string input_data = "This is the data to encrypt and decrypt in one step.";
+
+    // Generate a key pair
+    auto keypair_result = ECC::GenerateKeyPair();
+    ASSERT_TRUE(fn_name, keypair_result.has_value());
+    auto [private_key, public_key] = keypair_result.value();
+
+    // Create a producer buffer and write the input data
+    StormByte::Buffers::Producer producer;
+    producer << input_data;
+    producer << StormByte::Buffers::Status::EoF; // Mark the producer as EOF
+
+    // Create a consumer buffer from the producer
+    StormByte::Buffers::Consumer consumer(producer.Consumer());
+
+    // Encrypt the data asynchronously
+    auto encrypted_consumer = ECC::Encrypt(consumer, public_key);
+
+    // Decrypt the data asynchronously using the encrypted consumer
+    auto decrypted_consumer = ECC::Decrypt(encrypted_consumer, private_key);
+
+    // Wait for the decryption process to complete
+    while (!decrypted_consumer.IsEoF()) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    }
+
+    // Read the decrypted data from the decrypted_consumer
+    std::string decrypted_data;
+    while (true) {
+        size_t available_bytes = decrypted_consumer.AvailableBytes();
+        if (available_bytes == 0) {
+            if (decrypted_consumer.IsEoF()) {
+                break; // End of decrypted data
+            } else {
+                ASSERT_FALSE(fn_name, true); // Unexpected error
+            }
+        }
+
+        auto read_result = decrypted_consumer.Read(available_bytes);
+        if (!read_result.has_value()) {
+            ASSERT_FALSE(fn_name, true); // Unexpected error
+        }
+
+        const auto& chunk = read_result.value();
+        decrypted_data.append(reinterpret_cast<const char*>(chunk.data()), chunk.size());
+    }
+
+    // Ensure the decrypted data matches the original input data
+    ASSERT_EQUAL(fn_name, input_data, decrypted_data);
+
+    RETURN_TEST(fn_name, 0);
+}
+
+int TestECCEncryptUsingConsumerProducer() {
+    const std::string fn_name = "TestECCEncryptUsingConsumerProducer";
+    const std::string input_data = "This is some data to encrypt using the Consumer/Producer model.";
+
+    // Generate a key pair
+    auto keypair_result = ECC::GenerateKeyPair();
+    ASSERT_TRUE(fn_name, keypair_result.has_value());
+    auto [private_key, public_key] = keypair_result.value();
+
+    // Create a producer buffer and write the input data
+    StormByte::Buffers::Producer producer;
+    producer << input_data;
+    producer << StormByte::Buffers::Status::EoF; // Mark the producer as EOF
+
+    // Create a consumer buffer from the producer
+    StormByte::Buffers::Consumer consumer(producer.Consumer());
+
+    // Encrypt the data asynchronously
+    auto encrypted_consumer = ECC::Encrypt(consumer, public_key);
+
+    // Wait for the encryption process to complete
+    while (!encrypted_consumer.IsEoF()) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    }
+
+    // Read the encrypted data from the encrypted_consumer
+    std::vector<std::byte> encrypted_data;
+    while (true) {
+        size_t available_bytes = encrypted_consumer.AvailableBytes();
+        if (available_bytes == 0) {
+            if (encrypted_consumer.IsEoF()) {
+                break; // End of encrypted data
+            } else {
+                ASSERT_FALSE(fn_name, true); // Unexpected error
+            }
+        }
+
+        auto read_result = encrypted_consumer.Read(available_bytes);
+        if (!read_result.has_value()) {
+            ASSERT_FALSE(fn_name, true); // Unexpected error
+        }
+
+        const auto& chunk = read_result.value();
+        encrypted_data.insert(encrypted_data.end(), chunk.begin(), chunk.end());
+    }
+    ASSERT_FALSE(fn_name, encrypted_data.empty()); // Ensure encrypted data is not empty
+
+    RETURN_TEST(fn_name, 0);
+}
+
 int main() {
 	int result = 0;
 
@@ -172,6 +279,8 @@ int main() {
 	result += TestECCDecryptWithMismatchedKey();
 	result += TestECCWithCorruptedKeys();
 	result += TestECCEncryptionProducesDifferentContent();
+	result += TestECCEncryptDecryptInOneStep();
+	result += TestECCEncryptUsingConsumerProducer();
 
 	if (result == 0) {
 		std::cout << "All tests passed!" << std::endl;

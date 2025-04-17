@@ -8,6 +8,7 @@
 #include <osrng.h>
 #include <oids.h>
 #include <string>
+#include <thread>
 
 using namespace StormByte::Network::Data::Encryption;
 
@@ -147,4 +148,116 @@ ExpectedCryptoFutureString ECC::Decrypt(const StormByte::Buffers::Simple& encryp
 	} catch (const std::exception& e) {
 		return StormByte::Unexpected<CryptoException>(std::string("ECC decryption failed: ") + e.what());
 	}
+}
+
+StormByte::Buffers::Consumer ECC::Encrypt(const Buffers::Consumer consumer, const std::string& publicKey) noexcept {
+    SharedProducerBuffer producer = std::make_shared<StormByte::Buffers::Producer>();
+
+    std::thread([consumer, producer, publicKey]() {
+        try {
+            CryptoPP::AutoSeededRandomPool rng;
+
+            // Deserialize, initialize, and validate the public key
+            ECIES::PublicKey key = DeserializePublicKey(publicKey);
+            if (!key.Validate(rng, 3)) {
+                *producer << StormByte::Buffers::Status::Error;
+                return;
+            }
+
+            // Initialize the encryptor
+            ECIES::Encryptor encryptor(key);
+
+            constexpr size_t chunkSize = 4096;
+            std::string encryptedChunk;
+
+            while (true) {
+                size_t availableBytes = consumer.AvailableBytes();
+                if (availableBytes == 0) {
+                    if (consumer.IsEoF()) {
+                        *producer << StormByte::Buffers::Status::EoF;
+                        break;
+                    } else {
+                        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+                        continue;
+                    }
+                }
+
+                size_t bytesToRead = std::min(availableBytes, chunkSize);
+                auto readResult = consumer.Read(bytesToRead);
+                if (!readResult.has_value()) {
+                    *producer << StormByte::Buffers::Status::Error;
+                    break;
+                }
+
+                const auto& inputData = readResult.value();
+                encryptedChunk.clear();
+
+                CryptoPP::StringSource ss(reinterpret_cast<const CryptoPP::byte*>(inputData.data()), inputData.size(), true,
+                                          new CryptoPP::PK_EncryptorFilter(rng, encryptor,
+                                                                           new CryptoPP::StringSink(encryptedChunk)));
+
+                *producer << StormByte::Buffers::Simple(encryptedChunk.data(), encryptedChunk.size());
+            }
+        } catch (...) {
+            *producer << StormByte::Buffers::Status::Error;
+        }
+    }).detach();
+
+    return producer->Consumer();
+}
+
+StormByte::Buffers::Consumer ECC::Decrypt(const Buffers::Consumer consumer, const std::string& privateKey) noexcept {
+    SharedProducerBuffer producer = std::make_shared<StormByte::Buffers::Producer>();
+
+    std::thread([consumer, producer, privateKey]() {
+        try {
+            CryptoPP::AutoSeededRandomPool rng;
+
+            // Deserialize, initialize, and validate the private key
+            ECIES::PrivateKey key = DeserializePrivateKey(privateKey);
+            if (!key.Validate(rng, 3)) {
+                *producer << StormByte::Buffers::Status::Error;
+                return;
+            }
+
+            // Initialize the decryptor
+            ECIES::Decryptor decryptor(key);
+
+            constexpr size_t chunkSize = 4096;
+            std::string decryptedChunk;
+
+            while (true) {
+                size_t availableBytes = consumer.AvailableBytes();
+                if (availableBytes == 0) {
+                    if (consumer.IsEoF()) {
+                        *producer << StormByte::Buffers::Status::EoF;
+                        break;
+                    } else {
+                        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+                        continue;
+                    }
+                }
+
+                size_t bytesToRead = std::min(availableBytes, chunkSize);
+                auto readResult = consumer.Read(bytesToRead);
+                if (!readResult.has_value()) {
+                    *producer << StormByte::Buffers::Status::Error;
+                    break;
+                }
+
+                const auto& encryptedData = readResult.value();
+                decryptedChunk.clear();
+
+                CryptoPP::StringSource ss(reinterpret_cast<const CryptoPP::byte*>(encryptedData.data()), encryptedData.size(), true,
+                                          new CryptoPP::PK_DecryptorFilter(rng, decryptor,
+                                                                           new CryptoPP::StringSink(decryptedChunk)));
+
+                *producer << StormByte::Buffers::Simple(decryptedChunk.data(), decryptedChunk.size());
+            }
+        } catch (...) {
+            *producer << StormByte::Buffers::Status::Error;
+        }
+    }).detach();
+
+    return producer->Consumer();
 }
