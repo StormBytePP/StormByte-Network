@@ -6,5 +6,5 @@ using namespace StormByte::Network::Data;
 
 const std::span<const std::byte> Packet::Data() const noexcept {
 	PrepareBuffer();
-	return m_buffer.Data();
+	return m_buffer.Span();
 }

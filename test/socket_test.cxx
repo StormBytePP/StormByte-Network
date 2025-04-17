@@ -41,14 +41,14 @@ class HelloWorldPacket : public Network::Data::Packet {
  */
 class ReceivedPacket : public Network::Data::Packet {
 	public:
-		ReceivedPacket(const StormByte::Buffer& buff) : Packet() {
+		ReceivedPacket(const StormByte::Buffers::Simple& buff) : Packet() {
 			m_buffer = buff;
 		}
 
 		void PrepareBuffer() const noexcept override {}
 
 	private:
-		StormByte::Buffer m_data;
+		StormByte::Buffers::Simple m_data;
 };
 
 int TestServerClientCommunication() {
@@ -77,7 +77,7 @@ int TestServerClientCommunication() {
 		ASSERT_TRUE(fn_name, receive_result);
 	
 		auto future_buffer = std::move(receive_result.value());
-		StormByte::Buffer buffer = future_buffer.get();
+		StormByte::Buffers::Simple buffer = future_buffer.get();
 		ASSERT_FALSE(fn_name, buffer.Empty());
 	
 		auto packet = ReceivedPacket(buffer);
@@ -113,7 +113,7 @@ int TestServerClientCommunication() {
 		ASSERT_TRUE(fn_name, receive_result);
 	
 		auto future_buffer = std::move(receive_result.value());
-		StormByte::Buffer buffer = future_buffer.get();
+		StormByte::Buffers::Simple buffer = future_buffer.get();
 		ASSERT_FALSE(fn_name, buffer.Empty());
 	
 		std::string expected = "Hello World!";
@@ -162,7 +162,7 @@ int TestLargeDataTransmission() {
 		ASSERT_TRUE(fn_name, receive_result);
 
 		auto future_buffer = std::move(receive_result.value());
-		StormByte::Buffer buffer = future_buffer.get();
+		StormByte::Buffers::Simple buffer = future_buffer.get();
 		ASSERT_FALSE(fn_name, buffer.Empty());
 
 		if (large_data.size() != buffer.Data().size()) {
@@ -197,7 +197,7 @@ int TestLargeDataTransmission() {
 		ASSERT_TRUE(fn_name, client.Connect(host, port));
 
 		// Create and send data
-		StormByte::Buffer large_buffer;
+		StormByte::Buffers::Simple large_buffer;
 		large_buffer << large_data;
 		ReceivedPacket packet(large_buffer);
 
@@ -212,7 +212,7 @@ int TestLargeDataTransmission() {
 		ASSERT_TRUE(fn_name, receive_result);
 
 		auto future_buffer = std::move(receive_result.value());
-		StormByte::Buffer buffer = future_buffer.get();
+		StormByte::Buffers::Simple buffer = future_buffer.get();
 		ASSERT_FALSE(fn_name, buffer.Empty());
 
 		// Validate echoed data
@@ -270,7 +270,7 @@ int TestPartialReceive() {
 		ASSERT_TRUE(fn_name, receive_result_1);
 
 		auto future_buffer_1 = std::move(receive_result_1.value());
-		StormByte::Buffer buffer_1 = future_buffer_1.get();
+		StormByte::Buffers::Simple buffer_1 = future_buffer_1.get();
 		ASSERT_FALSE(fn_name, buffer_1.Empty());
 
 		const std::string expected_part_1 = "Hello";
@@ -281,7 +281,7 @@ int TestPartialReceive() {
 		ASSERT_TRUE(fn_name, receive_result_2);
 
 		auto future_buffer_2 = std::move(receive_result_2.value());
-		StormByte::Buffer buffer_2 = future_buffer_2.get();
+		StormByte::Buffers::Simple buffer_2 = future_buffer_2.get();
 		ASSERT_FALSE(fn_name, buffer_2.Empty());
 
 		const std::string expected_part_2 = " World!";
@@ -307,7 +307,7 @@ int TestPartialReceive() {
 		// Create and send "Hello" and " World!" separately
 		const std::string part_1 = "Hello";
 		const std::string part_2 = " World!";
-		StormByte::Buffer buffer_1, buffer_2;
+		StormByte::Buffers::Simple buffer_1, buffer_2;
 		buffer_1 << part_1;
 		buffer_2 << part_2;
 
@@ -437,7 +437,7 @@ int TestClientDisconnectMidSend() {
 			ASSERT_EQUAL(fn_name, receive_result.error()->what(), std::string("Connection closed by peer"));
 		} else {
 			auto future_buffer = std::move(receive_result.value());
-			StormByte::Buffer buffer = future_buffer.get();
+			StormByte::Buffers::Simple buffer = future_buffer.get();
 			ASSERT_TRUE(fn_name, !buffer.Empty()); // Data should be incomplete due to client disconnect
 		}		
 
@@ -458,7 +458,7 @@ int TestClientDisconnectMidSend() {
 		ASSERT_TRUE(fn_name, client.Connect(host, port));
 
 		const std::string partial_data = "Partial Data...";
-		StormByte::Buffer buffer;
+		StormByte::Buffers::Simple buffer;
 		buffer << partial_data;
 
 		// Send partial data
@@ -582,14 +582,14 @@ int TestDataFragmentation() {
 
 		// Receive fragmented data
 		const std::string expected_data = "Hello Fragmented World!";
-		StormByte::Buffer received_buffer;
+		StormByte::Buffers::Simple received_buffer;
 
 		while (received_buffer.Size() < expected_data.size()) {
 			auto receive_result = client.Receive(5); // Receive chunks of 5 bytes
 			ASSERT_TRUE(fn_name, receive_result);
 
 			auto future_buffer = std::move(receive_result.value());
-			StormByte::Buffer chunk_buffer = future_buffer.get();
+			StormByte::Buffers::Simple chunk_buffer = future_buffer.get();
 			received_buffer << chunk_buffer;
 		}
 
@@ -613,7 +613,7 @@ int TestDataFragmentation() {
 		const std::string fragmented_data = "Hello Fragmented World!";
 		for (std::size_t i = 0; i < fragmented_data.size(); i += 5) {
 			std::string fragment = fragmented_data.substr(i, 5);
-			StormByte::Buffer buffer;
+			StormByte::Buffers::Simple buffer;
 			buffer << fragment;
 
 			ReceivedPacket packet(buffer);

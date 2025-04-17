@@ -1,5 +1,4 @@
 #include <StormByte/network/data/encryption/aes.hxx>
-#include <StormByte/buffer.hxx>
 #include <StormByte/test_handlers.h>
 #include <iostream>
 #include <string>
@@ -16,7 +15,7 @@ int TestAESEncryptDecryptConsistency() {
 	ASSERT_TRUE(fn_name, encrypt_result.has_value());
 
 	auto encrypted_future = std::move(encrypt_result.value());
-	StormByte::Buffer encrypted_buffer = encrypted_future.get();
+	StormByte::Buffers::Simple encrypted_buffer = encrypted_future.get();
 	ASSERT_FALSE(fn_name, encrypted_buffer.Empty());
 
 	// Decrypt the data
@@ -24,7 +23,7 @@ int TestAESEncryptDecryptConsistency() {
 	ASSERT_TRUE(fn_name, decrypt_result.has_value());
 
 	auto decrypted_future = std::move(decrypt_result.value());
-	StormByte::Buffer decrypted_buffer = decrypted_future.get();
+	StormByte::Buffers::Simple decrypted_buffer = decrypted_future.get();
 	ASSERT_FALSE(fn_name, decrypted_buffer.Empty());
 
 	// Validate decrypted data matches the original data
@@ -45,7 +44,7 @@ int TestAESWrongDecryptionPassword() {
 	ASSERT_TRUE(fn_name, encrypt_result.has_value());
 
 	auto encrypted_future = std::move(encrypt_result.value());
-	StormByte::Buffer encrypted_buffer = encrypted_future.get();
+	StormByte::Buffers::Simple encrypted_buffer = encrypted_future.get();
 	ASSERT_FALSE(fn_name, encrypted_buffer.Empty());
 
 	// Attempt to decrypt with a wrong password
@@ -65,14 +64,14 @@ int TestAESDecryptionWithCorruptedData() {
 	ASSERT_TRUE(fn_name, encrypt_result.has_value());
 
 	auto encrypted_future = std::move(encrypt_result.value());
-	StormByte::Buffer encrypted_buffer = encrypted_future.get();
+	StormByte::Buffers::Simple encrypted_buffer = encrypted_future.get();
 	ASSERT_FALSE(fn_name, encrypted_buffer.Empty());
 
 	// Corrupt the encrypted data (flip a bit in the buffer)
 	auto corrupted_buffer = encrypted_buffer;
-	auto corrupted_span = corrupted_buffer.Data();
+	auto corrupted_span = corrupted_buffer.Span();
 	if (!corrupted_span.empty()) {
-		corrupted_buffer.Data()[0] = std::byte(static_cast<uint8_t>(~std::to_integer<uint8_t>(corrupted_span[0]))); // Flip the first byte
+		corrupted_span[0] = std::byte(static_cast<uint8_t>(~std::to_integer<uint8_t>(corrupted_span[0]))); // Flip the first byte
 	}
 
 	// Attempt to decrypt the corrupted data
@@ -92,7 +91,7 @@ int TestAESEncryptionProducesDifferentContent() {
 	ASSERT_TRUE(fn_name, encrypt_result.has_value());
 
 	auto encrypted_future = std::move(encrypt_result.value());
-	StormByte::Buffer encrypted_buffer = encrypted_future.get();
+	StormByte::Buffers::Simple encrypted_buffer = encrypted_future.get();
 	ASSERT_FALSE(fn_name, encrypted_buffer.Empty());
 
 	// Verify encrypted content is different from original
