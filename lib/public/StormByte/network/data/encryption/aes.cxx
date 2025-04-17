@@ -109,15 +109,6 @@ ExpectedCryptoBuffer AES::Encrypt(const StormByte::Buffers::Simple& input, const
 	return EncryptHelper(input.Data(), password);
 }
 
-ExpectedCryptoBuffer AES::Encrypt(FutureBuffer& bufferFuture, const std::string& password) noexcept {
-	try {
-		StormByte::Buffers::Simple buffer = bufferFuture.get();
-		return EncryptHelper(buffer.Data(), password);
-	} catch (const std::exception& e) {
-		return StormByte::Unexpected<StormByte::Network::CryptoException>(e.what());
-	}
-}
-
 // Decrypt Function Overloads
 ExpectedCryptoBuffer AES::Decrypt(const std::string& input, const std::string& password) noexcept {
 	std::span<const std::byte> dataSpan(reinterpret_cast<const std::byte*>(input.data()), input.size());
@@ -126,15 +117,6 @@ ExpectedCryptoBuffer AES::Decrypt(const std::string& input, const std::string& p
 
 ExpectedCryptoBuffer AES::Decrypt(const StormByte::Buffers::Simple& input, const std::string& password) noexcept {
 	return DecryptHelper(input.Data(), password);
-}
-
-ExpectedCryptoBuffer AES::Decrypt(FutureBuffer& bufferFuture, const std::string& password) noexcept {
-	try {
-		StormByte::Buffers::Simple buffer = bufferFuture.get();
-		return DecryptHelper(buffer.Data(), password);
-	} catch (const std::exception& e) {
-		return StormByte::Unexpected<StormByte::Network::CryptoException>(e.what());
-	}
 }
 
 // RandomPassword Function

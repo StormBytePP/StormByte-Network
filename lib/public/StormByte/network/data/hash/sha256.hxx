@@ -20,11 +20,4 @@ namespace StormByte::Network::Data::Hash::SHA256 {
 	 * @return Expected<std::string, CryptoException> containing the hash or an error.
 	 */
 	STORMBYTE_NETWORK_PUBLIC ExpectedHashString Hash(const Buffers::Simple& buffer) noexcept;
-
-	/**
-	 * @brief Hashes the input data using SHA-256.
-	 * @param promisedBuffer The future buffer to hash.
-	 * @return Expected<std::string, CryptoException> containing the hash or an error.
-	 */
-	STORMBYTE_NETWORK_PUBLIC ExpectedHashString Hash(FutureBuffer& promisedBuffer) noexcept;
 }

@@ -66,16 +66,6 @@ ExpectedCompressorBuffer BZip2::Compress(const StormByte::Buffers::Simple& input
 	return CompressHelper(input.Data());
 }
 
-ExpectedCompressorBuffer BZip2::Compress(FutureBuffer& bufferFuture) noexcept {
-	try {
-		StormByte::Buffers::Simple buffer = bufferFuture.get();
-		return CompressHelper(buffer.Data());
-	}
-	catch (const std::exception& e) {
-		return StormByte::Unexpected<StormByte::Network::CryptoException>(e.what());
-	}
-}
-
 // Public Decompress Methods
 ExpectedCompressorBuffer BZip2::Decompress(const std::string& input, size_t originalSize) noexcept {
 	std::span<const std::byte> dataSpan(reinterpret_cast<const std::byte*>(input.data()), input.size());
@@ -84,14 +74,4 @@ ExpectedCompressorBuffer BZip2::Decompress(const std::string& input, size_t orig
 
 ExpectedCompressorBuffer BZip2::Decompress(const StormByte::Buffers::Simple& input, size_t originalSize) noexcept {
 	return DecompressHelper(input.Data(), originalSize);
-}
-
-ExpectedCompressorBuffer BZip2::Decompress(FutureBuffer& bufferFuture, size_t originalSize) noexcept {
-	try {
-		StormByte::Buffers::Simple buffer = bufferFuture.get();
-		return DecompressHelper(buffer.Data(), originalSize);
-	}
-	catch (const std::exception& e) {
-		return StormByte::Unexpected<StormByte::Network::CryptoException>(e.what());
-	}
 }

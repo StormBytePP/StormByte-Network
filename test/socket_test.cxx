@@ -3,7 +3,6 @@
 #include <StormByte/network/socket/client.hxx>
 #include <StormByte/test_handlers.h>
 
-#include <iostream>
 #include <thread>
 #include <format>
 

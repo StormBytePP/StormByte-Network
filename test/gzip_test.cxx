@@ -1,8 +1,5 @@
 #include <StormByte/network/data/compressor/gzip.hxx>
 #include <StormByte/test_handlers.h>
-#include <iostream>
-#include <string>
-#include <vector>
 
 using namespace StormByte::Network::Data::Compressor::Gzip;
 
@@ -24,11 +21,8 @@ int TestGzipCompressConsistencyAcrossFormats() {
 	auto compressed_from_buffer_future = std::move(compress_buffer_result.value());
 	StormByte::Buffers::Simple compressed_from_buffer = compressed_from_buffer_future.get();
 
-	// Compress a FutureBuffer
-	std::promise<StormByte::Buffers::Simple> promise;
-	promise.set_value(input_buffer);
-	auto future_buffer = promise.get_future();
-	auto compress_future_result = Compress(future_buffer);
+	// Compress a Simple buffer
+	auto compress_future_result = Compress(input_buffer);
 	ASSERT_TRUE(fn_name, compress_future_result.has_value());
 	auto compressed_from_future_future = std::move(compress_future_result.value());
 	StormByte::Buffers::Simple compressed_from_future = compressed_from_future_future.get();

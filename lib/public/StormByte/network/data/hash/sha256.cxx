@@ -52,16 +52,3 @@ ExpectedHashString SHA256::Hash(const StormByte::Buffers::Simple& buffer) noexce
 	// Use the common helper function to compute the hash
 	return ComputeSHA256(dataSpan);
 }
-
-ExpectedHashString SHA256::Hash(StormByte::Network::FutureBuffer& promisedBuffer) noexcept {
-	try {
-		// Retrieve Buffer from FutureBuffer
-		StormByte::Buffers::Simple buffer = promisedBuffer.get(); // Use `std::future::get()` here
-		auto dataSpan = buffer.Data();
-
-		// Use the common helper function to compute the hash
-		return ComputeSHA256(dataSpan);
-	} catch (const std::exception& e) {
-		return StormByte::Unexpected<CryptoException>("Failed to retrieve PromisedBuffer: {}", e.what());
-	}
-}
