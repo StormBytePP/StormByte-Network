@@ -1,6 +1,8 @@
 #include <StormByte/network/data/compressor/gzip.hxx>
 #include <StormByte/test_handlers.h>
 
+#include <thread>
+
 using namespace StormByte::Network::Data::Compressor::Gzip;
 
 int TestGzipCompressConsistencyAcrossFormats() {
@@ -112,6 +114,101 @@ int TestGzipCompressionProducesDifferentContent() {
 	RETURN_TEST(fn_name, 0);
 }
 
+int TestGzipCompressUsingConsumerProducer() {
+    const std::string fn_name = "TestGzipCompressUsingConsumerProducer";
+    const std::string input_data = "This is some data to compress using the Consumer/Producer model.";
+
+    // Create a producer buffer and write the input data
+    StormByte::Buffers::Producer producer;
+    producer << input_data;
+    producer << StormByte::Buffers::Status::EoF; // Mark the producer as EOF
+
+    // Create a consumer buffer from the producer
+    StormByte::Buffers::Consumer consumer(producer.Consumer());
+
+    // Compress the data asynchronously
+    auto compressed_consumer = Compress(consumer);
+
+    // Wait for the compression process to complete
+    while (!compressed_consumer.IsEoF()) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    }
+
+    // Read the compressed data from the compressed_consumer
+    std::vector<std::byte> compressed_data;
+    while (true) {
+        size_t available_bytes = compressed_consumer.AvailableBytes();
+        if (available_bytes == 0) {
+            if (compressed_consumer.IsEoF()) {
+                break; // End of compressed data
+            } else {
+                ASSERT_FALSE(fn_name, true); // Unexpected error
+            }
+        }
+
+        auto read_result = compressed_consumer.Read(available_bytes);
+        if (!read_result.has_value()) {
+            ASSERT_FALSE(fn_name, true); // Unexpected error
+        }
+
+        const auto& chunk = read_result.value();
+        compressed_data.insert(compressed_data.end(), chunk.begin(), chunk.end());
+    }
+    ASSERT_FALSE(fn_name, compressed_data.empty()); // Ensure compressed data is not empty
+
+    RETURN_TEST(fn_name, 0);
+}
+
+int TestGzipDecompressUsingConsumerProducer() {
+    const std::string fn_name = "TestGzipDecompressUsingConsumerProducer";
+    const std::string input_data = "This is some data to compress and decompress using the Consumer/Producer model.";
+
+    // Create a producer buffer and write the input data
+    StormByte::Buffers::Producer producer;
+    producer << input_data;
+    producer << StormByte::Buffers::Status::EoF; // Mark the producer as EOF
+
+    // Create a consumer buffer from the producer
+    StormByte::Buffers::Consumer consumer(producer.Consumer());
+
+    // Compress the data asynchronously
+    auto compressed_consumer = Compress(consumer);
+
+    // Decompress the data asynchronously
+    auto decompressed_consumer = Decompress(compressed_consumer);
+
+    // Wait for the decompression process to complete
+    while (!decompressed_consumer.IsEoF()) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    }
+
+    // Read the decompressed data from the decompressed_consumer
+    std::string decompressed_data;
+    while (true) {
+        size_t available_bytes = decompressed_consumer.AvailableBytes();
+        if (available_bytes == 0) {
+            if (decompressed_consumer.IsEoF()) {
+                break; // End of decompressed data
+            } else {
+                ASSERT_FALSE(fn_name, true); // Unexpected error
+            }
+        }
+
+        auto read_result = decompressed_consumer.Read(available_bytes);
+        if (!read_result.has_value()) {
+            ASSERT_FALSE(fn_name, true); // Unexpected error
+        }
+
+        const auto& chunk = read_result.value();
+        decompressed_data.append(reinterpret_cast<const char*>(chunk.data()), chunk.size());
+    }
+
+    // Ensure the decompressed data matches the original input data
+    ASSERT_EQUAL(fn_name, input_data, decompressed_data);
+
+    RETURN_TEST(fn_name, 0);
+}
+
 int main() {
 	int result = 0;
 
@@ -119,6 +216,8 @@ int main() {
 	result += TestGzipDecompressConsistencyAcrossFormats();
 	result += TestGzipCompressionDecompressionIntegrity();
 	result += TestGzipCompressionProducesDifferentContent();
+	result += TestGzipCompressUsingConsumerProducer();
+	result += TestGzipDecompressUsingConsumerProducer();
 
 	if (result == 0) {
 		std::cout << "All tests passed!" << std::endl;

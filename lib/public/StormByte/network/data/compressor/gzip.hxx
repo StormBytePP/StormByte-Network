@@ -46,4 +46,20 @@ namespace StormByte::Network::Data::Compressor::Gzip {
      * @note The decompression is performed asynchronously, and the result is returned as a future.
      */
     STORMBYTE_NETWORK_PUBLIC ExpectedCompressorFutureBuffer Decompress(const StormByte::Buffers::Simple& input) noexcept;
+
+    /**
+     * @brief Compresses data asynchronously using the Consumer/Producer model.
+     * 
+     * @param consumer The Consumer buffer containing the input data.
+     * @return A Consumer buffer containing the compressed data.
+     */
+    STORMBYTE_NETWORK_PUBLIC StormByte::Buffers::Consumer Compress(const Buffers::Consumer consumer) noexcept;
+
+    /**
+     * @brief Decompresses data asynchronously using the Consumer/Producer model.
+     * 
+     * @param consumer The Consumer buffer containing the compressed data.
+     * @return A Consumer buffer containing the decompressed data.
+     */
+    STORMBYTE_NETWORK_PUBLIC StormByte::Buffers::Consumer Decompress(const Buffers::Consumer consumer) noexcept;
 }
