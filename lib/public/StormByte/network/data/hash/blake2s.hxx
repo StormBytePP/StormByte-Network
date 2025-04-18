@@ -20,4 +20,12 @@ namespace StormByte::Network::Data::Hash::Blake2s {
      * @return Expected<std::string, CryptoException> containing the hash or an error.
      */
     STORMBYTE_NETWORK_PUBLIC ExpectedHashFutureString Hash(const Buffers::Simple& buffer) noexcept;
+
+    /**
+     * @brief Hashes data asynchronously using the Consumer/Producer model.
+     * 
+     * @param consumer The Consumer buffer containing the input data.
+     * @return A Consumer buffer containing the hash result.
+     */
+    STORMBYTE_NETWORK_PUBLIC StormByte::Buffers::Consumer Hash(const Buffers::Consumer consumer) noexcept;
 }
