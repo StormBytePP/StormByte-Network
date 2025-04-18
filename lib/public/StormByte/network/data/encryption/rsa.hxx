@@ -37,7 +37,7 @@ namespace StormByte::Network::Data::Encryption::RSA {
      * @param publicKey The RSA public key to use for encryption.
      * @return A Consumer buffer containing the encrypted data.
      */
-    STORMBYTE_NETWORK_PUBLIC StormByte::Buffers::Consumer Encrypt(const Buffers::Consumer consumer, const std::string& publicKey) noexcept;
+    STORMBYTE_NETWORK_PUBLIC StormByte::Buffers::Consumer 				Encrypt(const Buffers::Consumer consumer, const std::string& publicKey) noexcept;
 
     /**
      * @brief Decrypts data asynchronously using the Consumer/Producer model.
@@ -46,5 +46,5 @@ namespace StormByte::Network::Data::Encryption::RSA {
      * @param privateKey The RSA private key to use for decryption.
      * @return A Consumer buffer containing the decrypted data.
      */
-    STORMBYTE_NETWORK_PUBLIC StormByte::Buffers::Consumer Decrypt(const Buffers::Consumer consumer, const std::string& privateKey) noexcept;
+    STORMBYTE_NETWORK_PUBLIC StormByte::Buffers::Consumer 				Decrypt(const Buffers::Consumer consumer, const std::string& privateKey) noexcept;
 }
