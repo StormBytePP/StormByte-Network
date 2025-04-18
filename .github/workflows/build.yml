@@ -17,24 +17,8 @@ jobs:
       matrix:
         compiler: [gcc, clang]
         stdlib: [libstdc++, libc++]
-        system-cryptopp: [ON, OFF]
-        system-bzip2: [ON, OFF]
-        exclude:
-          # Exclude incompatible combinations
-          - compiler: gcc
-            stdlib: libc++
-          - stdlib: libc++
-            system-cryptopp: ON
-          - stdlib: libc++
-            system-bzip2: ON
-        include:
-          # Force libc++ to always use system-cryptopp OFF and system-bzip2 OFF
-          - compiler: clang
-            stdlib: libc++
-            system-cryptopp: OFF
-            system-bzip2: OFF
 
-    name: ${{ matrix.compiler }}-${{ matrix.stdlib }}-system-cryptopp(${{ matrix.system-cryptopp }})-system-bzip2(${{ matrix.system-bzip2 }})
+    name: ${{ matrix.compiler }}-${{ matrix.stdlib }}
 
     steps:
     - name: Checkout repository and submodules
@@ -86,10 +70,7 @@ jobs:
           -G "Ninja" \
           -DWITH_SYSTEM_STORMBYTE=OFF \
           -DENABLE_TEST=ON \
-          -DGITHUB_WORKFLOW=ON \
-          -DWITH_SYSTEM_CRYPTOPP=${{ matrix.system-cryptopp }} \
-          -DWITH_SYSTEM_BZIP2=${{ matrix.system-bzip2 }} \
-          -DENABLE_LIB_ONLY=ON # For Bzip2 to enable only library build
+          -DGITHUB_WORKFLOW=ON
 
     - name: Build
       run: cmake --build ${{ github.workspace }}/build --config ${{ env.BUILD_TYPE }}
@@ -125,17 +106,13 @@ jobs:
             -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }} `
             -DWITH_SYSTEM_STORMBYTE=OFF `
             -DENABLE_TEST=ON `
-            -DGITHUB_WORKFLOW=ON `
-            -DWITH_SYSTEM_CRYPTOPP=OFF `
-            -DWITH_SYSTEM_BZIP2=OFF `
-            -DENABLE_LIB_ONLY=ON # For Bzip2 to enable only library build
+            -DGITHUB_WORKFLOW=ON
 
       - name: Build
         run: cmake --build ${{ github.workspace }}\build --config ${{ env.BUILD_TYPE }}
 
       - name: Copy DLLs
         run: |
-          Copy-Item -Path "${{ github.workspace }}\build\thirdparty\Bzip2\src\bz2.dll" -Destination "${{ github.workspace }}\build\test\bz2-1.dll" -Force # Somehow bz2-1.dll is needed
           Copy-Item -Path "${{ github.workspace }}\build\thirdparty\StormByte\base\lib\StormByte.dll" -Destination "${{ github.workspace }}\build\test" -Force
           Copy-Item -Path "${{ github.workspace }}\build\lib\StormByte-Network.dll" -Destination "${{ github.workspace }}\build\test" -Force
 

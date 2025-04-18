@@ -9,7 +9,6 @@ file(GLOB_RECURSE STORMBYTE_CONFIG_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_LI
 add_library(StormByte-Network SHARED ${STORMBYTE_CONFIG_SOURCES})
 add_library(StormByte::Network ALIAS StormByte-Network)
 target_link_libraries(StormByte-Network PUBLIC StormByte)
-target_link_libraries(StormByte-Network PRIVATE cryptopp)
 set_target_properties(StormByte-Network PROPERTIES
 	LINKER_LANGUAGE CXX
 	SOVERSION		${CMAKE_PROJECT_VERSION}
@@ -18,12 +17,6 @@ set_target_properties(StormByte-Network PROPERTIES
 # Link against the Winsock library (for Windows)
 if(WIN32)
 	target_link_libraries(StormByte-Network PRIVATE ws2_32.dll iphlpapi.dll)
-endif()
-# Link against the BZip2 library
-if (WITH_SYSTEM_BZIP2)
-	target_link_libraries(StormByte-Network PRIVATE ${BZIP2_LIBRARY_RELEASE})
-else()
-	target_link_libraries(StormByte-Network PRIVATE bz2)
 endif()
 
 # Compile options
