@@ -16,6 +16,10 @@ if(ENABLE_TEST AND NOT STORMBYTE_AS_DEPENDENCY)
 	target_link_libraries(Bzip2Tests StormByte::Network)
 	add_test(NAME Bzip2Tests COMMAND Bzip2Tests)
 
+	add_executable(DSATests dsa_test.cxx)
+	target_link_libraries(DSATests StormByte::Network)
+	add_test(NAME DSATests COMMAND DSATests)
+
 	add_executable(ECCTests ecc_test.cxx)
 	target_link_libraries(ECCTests StormByte::Network)
 	add_test(NAME ECCTests COMMAND ECCTests)
