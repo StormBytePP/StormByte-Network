@@ -1,6 +1,8 @@
 #include <StormByte/network/data/hash/sha512.hxx>
 #include <StormByte/test_handlers.h>
 
+#include <thread>
+
 using namespace StormByte::Network::Data::Hash::SHA512;
 
 int TestSHA512HashConsistencyAcrossFormats() {
@@ -81,6 +83,58 @@ int TestSHA512ProducesDifferentContent() {
     RETURN_TEST(fn_name, 0);
 }
 
+int TestSHA512HashUsingConsumerProducer() {
+    const std::string fn_name = "TestSHA512HashUsingConsumerProducer";
+    const std::string input_data = "HashThisString";
+
+    // Expected SHA-512 hash value (from TestSHA512HashCorrectness)
+    const std::string expected_hash = 
+        "6D69A62B60C16398A2482B03FB56FB041E5014E3D8E1480833EB8427C3F45910"
+        "B5B1ED812EC8C04087C92F47B50016C1495F358DD34E98723795E6E852B92875";
+
+    // Create a producer buffer and write the input data
+    StormByte::Buffers::Producer producer;
+    producer << input_data;
+    producer << StormByte::Buffers::Status::EoF; // Mark the producer as EOF
+
+    // Create a consumer buffer from the producer
+    StormByte::Buffers::Consumer consumer(producer.Consumer());
+
+    // Hash the data asynchronously
+    auto hash_consumer = Hash(consumer);
+
+    // Wait for the hashing process to complete
+    while (!hash_consumer.IsEoF()) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    }
+
+    // Read the hash result from the hash_consumer
+    std::string hash_result;
+    while (true) {
+        size_t available_bytes = hash_consumer.AvailableBytes();
+        if (available_bytes == 0) {
+            if (hash_consumer.IsEoF()) {
+                break; // End of hash result
+            } else {
+                ASSERT_FALSE(fn_name, true); // Unexpected error
+            }
+        }
+
+        auto read_result = hash_consumer.Read(available_bytes);
+        if (!read_result.has_value()) {
+            ASSERT_FALSE(fn_name, true); // Unexpected error
+        }
+
+        const auto& chunk = read_result.value();
+        hash_result.append(reinterpret_cast<const char*>(chunk.data()), chunk.size());
+    }
+
+    // Ensure the hash result matches the expected hash
+    ASSERT_EQUAL(fn_name, expected_hash, hash_result);
+
+    RETURN_TEST(fn_name, 0);
+}
+
 int main() {
     int result = 0;
 
@@ -88,6 +142,7 @@ int main() {
     result += TestSHA512HashCorrectness();
     result += TestSHA512CollisionResistance();
     result += TestSHA512ProducesDifferentContent();
+    result += TestSHA512HashUsingConsumerProducer();
 
     if (result == 0) {
         std::cout << "All tests passed!" << std::endl;
