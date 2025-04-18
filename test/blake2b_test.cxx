@@ -1,6 +1,8 @@
 #include <StormByte/network/data/hash/blake2b.hxx>
 #include <StormByte/test_handlers.h>
 
+#include <thread>
+
 using namespace StormByte::Network::Data::Hash::Blake2b;
 
 int TestBlake2bHashCorrectness() {
@@ -59,12 +61,65 @@ int TestBlake2bProducesDifferentContent() {
     RETURN_TEST(fn_name, 0);
 }
 
+int TestBlake2bHashUsingConsumerProducer() {
+    const std::string fn_name = "TestBlake2bHashUsingConsumerProducer";
+    const std::string input_data = "HashThisString";
+
+    // Expected Blake2b hash value (from TestBlake2bHashCorrectness)
+    const std::string expected_hash = 
+        "66CCD3A78741E16F894F2FB20045A8678D12B73D9CBA95D3473B1029781D6587"
+        "648E839960BDA14F0FF075C0EC9E7ED1AA13197BEED8B027EEA32800453CC7F8";
+
+    // Create a producer buffer and write the input data
+    StormByte::Buffers::Producer producer;
+    producer << input_data;
+    producer << StormByte::Buffers::Status::EoF; // Mark the producer as EOF
+
+    // Create a consumer buffer from the producer
+    StormByte::Buffers::Consumer consumer(producer.Consumer());
+
+    // Hash the data asynchronously
+    auto hash_consumer = Hash(consumer);
+
+    // Wait for the hashing process to complete
+    while (!hash_consumer.IsEoF()) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    }
+
+    // Read the hash result from the hash_consumer
+    std::string hash_result;
+    while (true) {
+        size_t available_bytes = hash_consumer.AvailableBytes();
+        if (available_bytes == 0) {
+            if (hash_consumer.IsEoF()) {
+                break; // End of hash result
+            } else {
+                ASSERT_FALSE(fn_name, true); // Unexpected error
+            }
+        }
+
+        auto read_result = hash_consumer.Read(available_bytes);
+        if (!read_result.has_value()) {
+            ASSERT_FALSE(fn_name, true); // Unexpected error
+        }
+
+        const auto& chunk = read_result.value();
+        hash_result.append(reinterpret_cast<const char*>(chunk.data()), chunk.size());
+    }
+
+    // Ensure the hash result matches the expected hash
+    ASSERT_EQUAL(fn_name, expected_hash, hash_result);
+
+    RETURN_TEST(fn_name, 0);
+}
+
 int main() {
     int result = 0;
 
     result += TestBlake2bHashCorrectness();
     result += TestBlake2bCollisionResistance();
     result += TestBlake2bProducesDifferentContent();
+    result += TestBlake2bHashUsingConsumerProducer();
 
     if (result == 0) {
         std::cout << "All tests passed!" << std::endl;
