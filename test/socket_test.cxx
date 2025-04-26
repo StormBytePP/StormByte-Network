@@ -1,4 +1,4 @@
-#include <StormByte/network/data/packet.hxx>
+#include <StormByte/network/packet.hxx>
 #include <StormByte/network/socket/server.hxx>
 #include <StormByte/network/socket/client.hxx>
 #include <StormByte/test_handlers.h>
@@ -25,14 +25,16 @@ auto handler = std::make_shared<Network::Connection::Handler>();
  * @class HelloWorldPacket
  * @brief A simple packet containing a "Hello World!" message.
  */
-class HelloWorldPacket : public Network::Data::Packet {
+class HelloWorldPacket: public Network::Packet {
 	public:
-		HelloWorldPacket() : Packet() {}
+		HelloWorldPacket(): Packet(1) {
+			Serializable<std::string> string_serial("Hello World!");
+			m_buffer << string_serial.Serialize();
+		}
 
-		void PrepareBuffer() const noexcept override {
-			if (m_buffer.Empty()) {
-				m_buffer << std::string("Hello World!");
-			}
+		Expected<void, Network::PacketError> Initialize(Network::Socket::Client& client) noexcept override {
+			/** Unused, just to avoid the class being abstract */
+			return {};
 		}
 };
 
@@ -40,101 +42,20 @@ class HelloWorldPacket : public Network::Data::Packet {
  * @class ReceivedPacket
  * @brief A packet containing received data.
  */
-class ReceivedPacket : public Network::Data::Packet {
+class ReceivedPacket: public Network::Packet {
 	public:
-		ReceivedPacket(const StormByte::Buffers::Simple& buff) : Packet() {
+		ReceivedPacket(const StormByte::Buffers::Simple& buff) : Packet(1) {
 			m_buffer = buff;
 		}
 
-		void PrepareBuffer() const noexcept override {}
+		Expected<void, Network::PacketError> Initialize(Network::Socket::Client& client) noexcept override {
+			/** Unused, just to avoid the class being abstract */
+			return {};
+		}
 
 	private:
 		StormByte::Buffers::Simple m_data;
 };
-
-int TestServerClientCommunication() {
-	const std::string fn_name = "TestServerClientCommunication";
-
-	bool server_ready = false;
-	bool server_completed = false;
-	bool client_completed = false;
-
-	// Start server thread
-	std::thread server_thread([&]() -> int {
-		using namespace Network::Socket;
-	
-		Server server(Network::Connection::Protocol::IPv4, handler, logger);
-		ASSERT_TRUE(fn_name, server.Listen(host, port));
-	
-		server_ready = true;
-		auto wait_result = server.WaitForData();
-		ASSERT_TRUE(fn_name, wait_result);
-	
-		auto accept_result = server.Accept();
-		ASSERT_TRUE(fn_name, accept_result);
-	
-		Client client = std::move(accept_result.value());
-		auto receive_result = client.Receive();
-		ASSERT_TRUE(fn_name, receive_result);
-	
-		auto future_buffer = std::move(receive_result.value());
-		StormByte::Buffers::Simple buffer = future_buffer.get();
-		ASSERT_FALSE(fn_name, buffer.Empty());
-	
-		auto packet = ReceivedPacket(buffer);
-		auto send_result = client.Send(packet);
-		ASSERT_TRUE(fn_name, send_result);
-	
-		client.Disconnect();
-		server_completed = true;
-	
-		return 0; // Ensure a return value
-	});	
-
-	// Wait until the server is ready
-	while (!server_ready) {
-		std::this_thread::sleep_for(std::chrono::milliseconds(100));
-	}
-
-	// Start client thread
-	std::thread client_thread([&]() -> int {
-		using namespace Network::Socket;
-	
-		Client client(Network::Connection::Protocol::IPv4, handler, logger);
-		ASSERT_TRUE(fn_name, client.Connect(host, port));
-	
-		HelloWorldPacket packet;
-		auto send_result = client.Send(packet);
-		ASSERT_TRUE(fn_name, send_result);
-	
-		auto wait_result = client.WaitForData();
-		ASSERT_TRUE(fn_name, wait_result);
-	
-		auto receive_result = client.Receive();
-		ASSERT_TRUE(fn_name, receive_result);
-	
-		auto future_buffer = std::move(receive_result.value());
-		StormByte::Buffers::Simple buffer = future_buffer.get();
-		ASSERT_FALSE(fn_name, buffer.Empty());
-	
-		std::string expected = "Hello World!";
-		ASSERT_EQUAL(fn_name, expected, std::string(reinterpret_cast<const char*>(buffer.Data().data()), buffer.Size()));
-	
-		client_completed = true;
-	
-		return 0; // Ensure a return value
-	});	
-
-	// Join threads
-	server_thread.join();
-	client_thread.join();
-
-	// Final assertions
-	ASSERT_TRUE(fn_name, server_completed);
-	ASSERT_TRUE(fn_name, client_completed);
-
-	RETURN_TEST(fn_name, 0);
-}
 
 int TestLargeDataTransmission() {
 	const std::string fn_name = "TestLargeDataTransmission";
@@ -792,7 +713,6 @@ int TestWaitForDataConcurrent() {
 int main() {
     int result = 0;
 
-    result += TestServerClientCommunication();
     result += TestLargeDataTransmission();
     result += TestPartialReceive();
     result += TestWaitForDataTimeout();

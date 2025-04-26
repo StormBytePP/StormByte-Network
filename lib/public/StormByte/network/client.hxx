@@ -4,6 +4,7 @@
 #include <StormByte/network/connection/handler.hxx>
 #include <StormByte/network/connection/status.hxx>
 #include <StormByte/network/exception.hxx>
+#include <StormByte/network/packet.hxx>
 #include <StormByte/network/socket/client.hxx>
 
 /**
@@ -16,13 +17,15 @@ namespace StormByte::Network {
 	 * @brief The class representing a client.
 	 */
 	class STORMBYTE_NETWORK_PUBLIC Client {
+		friend class Packet;
 		public:
 			/**
 			 * @brief The constructor of the Client class.
 			 * @param address The address of the server.
 			 * @param handler The handler of the server.
+			 * @param pf The function to create a packet instance from opcode
 			 */
-			Client(std::shared_ptr<const Connection::Handler> handler, std::shared_ptr<Logger> logger) noexcept;
+			Client(std::shared_ptr<const Connection::Handler> handler, std::shared_ptr<Logger> logger, const PacketInstanceFunction& pf) noexcept;
 
 			/**
 			 * @brief The copy constructor of the Client class.
@@ -70,9 +73,25 @@ namespace StormByte::Network {
 			void 															Disconnect() noexcept;
 
 		protected:
+			std::shared_ptr<Logger> m_logger;								///< The logger of the client.
+
+			/**
+			 * @brief The function to send data to the server.
+			 * @param packet The packet to send.
+			 * @return The expected void or error.
+			 */
+			StormByte::Expected<void, ConnectionError>						Send(const Packet& packet) noexcept;
+
+			/**
+			 * @brief The function to receive data from the server.
+			 * @return The expected buffer or error.
+			 */
+			ExpectedPacket													Receive() noexcept;
+
+		private:
 			std::unique_ptr<Socket::Client> m_socket;						///< The socket of the client.
 			Connection::Status m_status;									///< The status of the client.
 			std::shared_ptr<const Connection::Handler> m_handler;			///< The handler of the client.
-			std::shared_ptr<Logger> m_logger;								///< The logger of the client.
+			PacketInstanceFunction m_packet_instance_function;				///< The function to create a packet instance from opcode.
 	};
 }

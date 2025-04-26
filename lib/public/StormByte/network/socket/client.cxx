@@ -65,7 +65,7 @@ ExpectedVoid Socket::Client::Connect(const std::string& hostname, const unsigned
 	return {};
 }
 
-ExpectedVoid Socket::Client::Send(std::span<const std::byte> data) noexcept {
+ExpectedVoid Socket::Client::Send(Buffers::ConstByteSpan data) noexcept {
 	if (m_status != Connection::Status::Connected) {
 		return StormByte::Unexpected<ConnectionError>("Failed to send: Client is not connected");
 	}
@@ -139,11 +139,6 @@ ExpectedVoid Socket::Client::Send(std::span<const std::byte> data) noexcept {
 	return {};
 }
 
-ExpectedVoid Socket::Client::Send(const Data::Packet& packet) noexcept {
-	std::span<const std::byte> data = packet.Data();
-	return Send(data);
-}
-
 bool Socket::Client::HasShutdownRequest() noexcept {
 	char buffer[1]; // Inspect only one byte
 #ifdef LINUX
@@ -209,6 +204,17 @@ ExpectedFutureBuffer Socket::Client::Receive(const std::size_t& max_size) noexce
 		m_logger << Logger::Level::Error << "Failed to initiate receive operation: " << e.what() << std::endl;
 		return StormByte::Unexpected<ConnectionError>("Receive failed: {}", e.what());
 	}
+}
+
+ExpectedVoid Socket::Client::Send(const Packet& packet) noexcept {
+	m_logger << Logger::Level::LowLevel << "Sending packet with opcode: " << packet.Opcode() << std::endl;
+
+	if (m_status != Connection::Status::Connected) {
+		m_logger << Logger::Level::Error << "Failed to send packet: Client is not connected" << std::endl;
+		return StormByte::Unexpected<ConnectionError>("Failed to send packet: Client is not connected");
+	}
+
+	return Send(packet.Data());
 }
 
 void Socket::Client::Read(PromisedBuffer& promise, std::size_t max_size) noexcept {

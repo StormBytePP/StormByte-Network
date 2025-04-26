@@ -1,6 +1,7 @@
 #include <StormByte/network/client.hxx>
+#include <StormByte/network/exception.hxx>
+#include <StormByte/network/packet.hxx>
 #include <StormByte/network/server.hxx>
-#include <StormByte/network/data/packet.hxx>
 #include <StormByte/test_handlers.h>
 
 #include <thread>
@@ -13,72 +14,96 @@ constexpr const unsigned short port = 7070;
 auto logger = std::make_shared<Logger>(std::cout, Logger::Level::Info);
 auto handler = std::make_shared<Network::Connection::Handler>();
 
-/**
- * @class TestPacket
- * @brief A custom packet class for sending and receiving test messages.
- */
-class TestPacket : public Network::Data::Packet {
+enum class OpCodes: unsigned short {
+	TestMessage = 1,
+};
+
+class TestMessagePacket: public Network::Packet {
 	public:
-		explicit TestPacket(const std::string& message) : m_message(message) {}
-
-		explicit TestPacket(const Buffers::Simple& buffer) {
-			m_message = std::string(reinterpret_cast<const char*>(buffer.Data().data()), buffer.Size());
+		TestMessagePacket() noexcept:
+		Packet(static_cast<unsigned short>(OpCodes::TestMessage)) {}
+		TestMessagePacket(const std::string& msg) noexcept:
+		Packet(static_cast<unsigned short>(OpCodes::TestMessage)), m_msg(msg) {
+			Serializable<std::string> string_serial(m_msg);
+			m_buffer << string_serial.Serialize();
 		}
 
-		const std::string& GetMessage() const noexcept {
-			return m_message;
-		}
+		~TestMessagePacket() noexcept override = default;
 
-	protected:
-		void PrepareBuffer() const noexcept override {
-			if (m_buffer.Empty()) {
-				m_buffer << m_message;
-			}
+		const std::string& Message() const noexcept {
+			return m_msg;
 		}
 
 	private:
-		std::string m_message; ///< The message contained in the packet.
+		std::string m_msg;
+
+		Expected<void, Network::PacketError> Initialize(Network::Socket::Client& client) noexcept override {
+			// Opcode is already read in the constructor
+
+			// Read the size of the message
+			Buffers::Simple buffer;
+			auto expected_size_buffer = client.Receive(sizeof(std::size_t));
+			if (!expected_size_buffer) {
+				return StormByte::Unexpected<Network::PacketError>("Failed to read message size");
+			}
+			auto expected_size_serial = Serializable<std::size_t>::Deserialize(expected_size_buffer.value().get());
+			if (!expected_size_serial) {
+				return StormByte::Unexpected<Network::PacketError>("Failed to deserialize message size");
+			}
+			buffer << expected_size_serial.value();
+			auto str_buffer = client.Receive(expected_size_serial.value());
+			if (!str_buffer) {
+				return StormByte::Unexpected<Network::PacketError>("Failed to read message");
+			}
+			buffer << str_buffer.value().get();
+			auto string_serial = Serializable<std::string>::Deserialize(buffer);
+			if (!string_serial) {
+				return StormByte::Unexpected<Network::PacketError>("Failed to deserialize message");
+			}
+			m_msg = string_serial.value();
+			Serializable<std::string> string_serializable(m_msg);
+			m_buffer << string_serializable.Serialize();
+			return {};
+		}
 };
 
-/**
- * @class TestClient
- * @brief A client class with test-specific behavior.
- */
-class TestClient : public Network::Client {
+auto packet_instance_function = [](const unsigned short& opcode) -> std::shared_ptr<Network::Packet> {
+	switch (static_cast<OpCodes>(opcode)) {
+		case OpCodes::TestMessage:
+			return std::make_shared<TestMessagePacket>();
+		default:
+			return nullptr;
+	}
+};
+
+class TestClient: public StormByte::Network::Client {
 	public:
 		TestClient(std::shared_ptr<const Network::Connection::Handler> handler, std::shared_ptr<Logger> logger) noexcept
-			: Network::Client(handler, logger) {}
+		:Client(handler, logger, packet_instance_function) {}
 
 		bool SendTestMessage(const std::string& message) {
-			if (!m_socket) {
-				return false; // Socket is not initialized
-			}
-
-			TestPacket packet(message);
-			return m_socket->Send(packet).has_value();
+			TestMessagePacket packet(message);
+			auto result = Send(packet);
+			return result.has_value();
 		}
 
 		std::string ReceiveTestMessage() {
-			if (!m_socket) {
-				return {}; // Socket is not initialized
+			auto expected_packet = Receive();
+			if (!expected_packet.has_value()) {
+				return expected_packet.error()->what();
 			}
-
-			auto receive_result = m_socket->Receive();
-			if (!receive_result.has_value()) {
-				return {};
+			std::shared_ptr<Network::Packet> packet = expected_packet.value();
+			if (!packet) {
+				return expected_packet.error()->what();
 			}
-
-			auto future_buffer = std::move(receive_result.value());
-			Buffers::Simple buffer = future_buffer.get();
-			TestPacket packet(buffer);
-			return packet.GetMessage();
+			std::shared_ptr<TestMessagePacket> test_message_packet = std::dynamic_pointer_cast<TestMessagePacket>(packet);
+			if (!test_message_packet) {
+				return expected_packet.error()->what();
+			}
+			return test_message_packet->Message();
 		}
 };
 
-/**
- * @class TestServer
- * @brief A server class with test-specific behavior.
- */
 class TestServer : public Network::Server {
 	public:
 		TestServer(Network::Connection::Protocol protocol, std::shared_ptr<Network::Connection::Handler> handler, std::shared_ptr<Logger> logger) noexcept

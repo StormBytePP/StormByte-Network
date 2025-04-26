@@ -15,7 +15,8 @@
  * @namespace Network
  * @brief The namespace containing all the network related classes.
  */
-namespace StormByte::Network {		
+namespace StormByte::Network {
+	class Packet;																														///< The packet class (forward declaration).
 	namespace Socket { class Client; }																									///< The client socket class (forward declaration).
 	using FutureBuffer = std::future<Buffers::Simple>;																					///< The future data type.
 	using PromisedBuffer = std::promise<Buffers::Simple>;																				///< The promised data type.
@@ -27,4 +28,6 @@ namespace StormByte::Network {
 	using FutureBufferProcessor = std::function<StormByte::Expected<FutureBuffer, ConnectionError>(Socket::Client&, FutureBuffer&)>;	///< The future data function type.
 	using SharedConsumerBuffer = std::shared_ptr<Buffers::Consumer>;																	///< The shared consumer buffer type.
 	using SharedProducerBuffer = std::shared_ptr<Buffers::Producer>;																	///< The shared producer buffer type.
+	using ExpectedPacket = StormByte::Expected<std::shared_ptr<Packet>, PacketError>;													///< The expected packet type.
+	using PacketInstanceFunction = std::function<std::shared_ptr<Packet>(const unsigned short&)>;										///< The packet instance function type.
 }

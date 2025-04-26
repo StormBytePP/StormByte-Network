@@ -44,7 +44,11 @@ namespace StormByte::Network {
 			using Exception::Exception;
 	};
 
-	class STORMBYTE_NETWORK_PUBLIC CryptoException final: public Exception {
+	/**
+	 * @class PacketError
+	 * @brief The class representing an error in the packet.
+	 */
+	class STORMBYTE_NETWORK_PUBLIC PacketError final: public Exception {
 		public:
 			/**
 			 * Constructor

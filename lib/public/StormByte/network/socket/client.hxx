@@ -2,7 +2,7 @@
 
 #include <StormByte/buffers/simple.hxx>
 #include <StormByte/network/connection/rw.hxx>
-#include <StormByte/network/data/packet.hxx>
+#include <StormByte/network/packet.hxx>
 #include <StormByte/network/socket/socket.hxx>
 #include <StormByte/network/typedefs.hxx>
 
@@ -83,14 +83,14 @@ namespace StormByte::Network::Socket {
 		 * @param packet The packet to send.
 		 * @return The expected result of the operation.
 		 */
-		ExpectedVoid 													Send(const Data::Packet& packet) noexcept;
+		ExpectedVoid 													Send(const Packet& packet) noexcept;
 
 		/**
 		 * @brief Function to send data to the socket using a std::span of bytes.
 		 * @param data A view of the data to send.
 		 * @return The expected result of the operation.
 		 */
-		ExpectedVoid 													Send(std::span<const std::byte> data) noexcept;
+		ExpectedVoid 													Send(Buffers::ConstByteSpan data) noexcept;
 
 		/**
 		 * @brief Function to check if a shutdown request has been made.
