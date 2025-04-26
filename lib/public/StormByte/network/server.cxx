@@ -118,7 +118,7 @@ void Server::AcceptClients() noexcept {
 }
 
 void Server::StartClientCommunication(Socket::Client& client) noexcept {
-	if (!ClientAuthentication(client)) {
+	if (!Handshake(client)) {
 		m_logger << Logger::Level::LowLevel << "Client failed authentication, disconnecting..." << std::endl;
 		RemoveClientAsync(client);
 		return;
@@ -127,7 +127,7 @@ void Server::StartClientCommunication(Socket::Client& client) noexcept {
 	HandleClientMessages(client);
 }
 
-bool Server::ClientAuthentication(Socket::Client&) noexcept {
+bool Server::Handshake(Socket::Client&) noexcept {
 	// The default function returns true
 	return true;
 }

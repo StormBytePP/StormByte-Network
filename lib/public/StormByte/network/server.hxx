@@ -105,10 +105,10 @@ namespace StormByte::Network {
 			void 																			DisconnectClient(Socket::Client& client) noexcept;
 
 			/**
-			 * @brief The function to authenticate a client
-			 * @param client The client to authenticate.
+			 * @brief The function to setup client communication (authentication, etc).
+			 * @param client The client to handshake with.
 			 */
-			virtual bool 																	ClientAuthentication(Socket::Client& client) noexcept;
+			virtual bool 																	Handshake(Socket::Client& client) noexcept;
 
 			/**
 			 * @brief The function to process a client message and returns a reply.
