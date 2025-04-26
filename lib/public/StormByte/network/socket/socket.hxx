@@ -97,7 +97,7 @@ namespace StormByte::Network::Socket {
 			std::shared_ptr<const Connection::Handler> m_conn_handler;			///< The handler of the socket.
 			std::unique_ptr<Connection::Info> m_conn_info;						///< The socket address.
 			unsigned long m_mtu;												///< The maximum transmission unit.
-			std::shared_ptr<Logger> m_logger;								///< The logger.
+			std::shared_ptr<Logger> m_logger;									///< The logger.
 
 			/**
 			 * @brief The constructor of the Socket class.

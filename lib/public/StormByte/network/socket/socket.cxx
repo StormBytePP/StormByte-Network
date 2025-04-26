@@ -83,7 +83,8 @@ StormByte::Network::ExpectedReadResult Socket::WaitForData(const long long& usec
 	// Store the starting time
 	auto start_time = std::chrono::steady_clock::now();
 
-	while (true) {
+	while (Connection::IsConnected(m_status)) {
+		m_logger << Logger::Level::LowLevel << "Waiting for data on socket..." << std::endl;
 		FD_ZERO(&read_fds);
 		FD_SET(*m_handle, &read_fds);
 
@@ -96,6 +97,10 @@ StormByte::Network::ExpectedReadResult Socket::WaitForData(const long long& usec
 #endif
 
 		if (select_result > 0) {
+			// Connection can be closed in this step and select will notify us
+			if (m_status != Connection::Status::Connected) {
+				return Connection::Read::Result::Closed; // Connection closed
+			}
 			// Check if our requested socket has data
 			if (FD_ISSET(*m_handle, &read_fds)) {
 				return Connection::Read::Result::Success; // Success, data available on our FD

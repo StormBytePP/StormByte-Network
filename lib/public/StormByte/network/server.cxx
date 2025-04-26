@@ -34,7 +34,8 @@ void Server::Stop() noexcept {
 	m_socket.Disconnect();
 
 	// Stop accepting new clients first
-	m_accept_thread.join();
+	if (m_accept_thread.joinable())
+		m_accept_thread.join();
 
 	// Disconnect all clients
 	DisconnectAllClients();
@@ -110,6 +111,9 @@ void Server::AcceptClients() noexcept {
 			}
 
 			case Connection::Read::Result::Timeout:
+			case Connection::Read::Result::Closed:
+				m_logger << Logger::Level::LowLevel << "Socket closed or timeout occurred" << std::endl;
+				return;
 			default:
 				continue;
 		}

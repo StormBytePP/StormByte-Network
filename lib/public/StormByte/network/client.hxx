@@ -69,7 +69,7 @@ namespace StormByte::Network {
 			 */
 			void 															Disconnect() noexcept;
 
-		private:
+		protected:
 			std::unique_ptr<Socket::Client> m_socket;						///< The socket of the client.
 			Connection::Status m_status;									///< The status of the client.
 			std::shared_ptr<const Connection::Handler> m_handler;			///< The handler of the client.
