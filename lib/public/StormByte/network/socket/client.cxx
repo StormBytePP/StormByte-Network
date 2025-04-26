@@ -299,3 +299,50 @@ ExpectedVoid Socket::Client::Write(std::span<const std::byte> data, const std::s
 	m_logger << Logger::Level::LowLevel << "Write of size " << humanreadable_bytes << bytes_to_write << nohumanreadable << " bytes completed successfully" << std::endl;
 	return {};
 }
+
+bool Socket::Client::Ping() noexcept {
+	if (m_status != Connection::Status::Connected) {
+		return false;
+	}
+	bool ping_success = false;
+	char buffer[1]; // Inspect only one byte
+#ifdef LINUX
+	ssize_t result = ::recv(*m_handle, buffer, sizeof(buffer), MSG_PEEK | MSG_DONTWAIT);
+#else
+	int result = ::recv(*m_handle, buffer, sizeof(buffer), MSG_PEEK);
+	if (result == SOCKET_ERROR) {
+		if (m_conn_handler->LastErrorCode() == WSAEWOULDBLOCK) {
+			// No data available; not a shutdown
+			ping_success = true;
+		}
+	}
+#endif
+	if (result > 0) {
+		// Data is available; connection is still alive
+		ping_success = true;
+	}
+	else if (result == 0) {
+		// Connection closed by peer
+		ping_success = false;
+	} else {
+#ifdef LINUX
+		if (m_conn_handler->LastErrorCode() == EAGAIN || m_conn_handler->LastErrorCode() == EWOULDBLOCK) {
+			// No data available; connection is still alive
+			ping_success = true;
+		} else {
+			// Treat other errors as a connection closed
+			ping_success = false;
+		}
+#endif
+	}
+
+	// Data is available; not a shutdown
+	if (ping_success) {
+		m_logger << Logger::Level::LowLevel << "Ping successful" << std::endl;
+	} else {
+		m_logger << Logger::Level::LowLevel << "Ping failed" << std::endl;
+		m_status = Connection::Status::Disconnected;
+	}
+
+	return ping_success;
+}

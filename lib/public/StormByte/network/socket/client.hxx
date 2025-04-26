@@ -98,6 +98,12 @@ namespace StormByte::Network::Socket {
 		 */
 		bool 															HasShutdownRequest() noexcept;
 
+		/**
+		 * @brief Pings a connected client, updates the connection status, and returns the result.
+		 * @return True if the ping was successful, false otherwise.
+		 */
+		bool 															Ping() noexcept;
+
 	private:
 		/**
 		 * @brief Function to read data from the socket (non-blocking version).

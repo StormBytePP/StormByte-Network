@@ -635,22 +635,94 @@ int TestDataFragmentation() {
 	RETURN_TEST(fn_name, 0);
 }
 
+int TestClientPing() {
+    const std::string fn_name = "TestClientPing";
+
+    bool server_ready = false;
+    bool server_completed = false;
+    bool client_completed = false;
+
+    // Start server thread
+    std::thread server_thread([&]() -> int {
+        using namespace Network::Socket;
+
+        Server server(Network::Connection::Protocol::IPv4, handler, logger);
+        ASSERT_TRUE(fn_name, server.Listen(host, port));
+
+        server_ready = true;
+
+        // Wait for client connection
+        auto accept_result = server.Accept();
+        ASSERT_TRUE(fn_name, accept_result);
+
+        Client client = std::move(accept_result.value());
+
+        // Simulate some delay before disconnecting the client
+        std::this_thread::sleep_for(std::chrono::seconds(2));
+        client.Disconnect();
+
+        server_completed = true;
+        return 0;
+    });
+
+    // Wait until the server is ready
+    while (!server_ready) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    }
+
+    // Start client thread
+    std::thread client_thread([&]() -> int {
+        using namespace Network::Socket;
+
+        Client client(Network::Connection::Protocol::IPv4, handler, logger);
+
+        // Case 1: Ping a not-connected socket
+        ASSERT_FALSE(fn_name, client.Ping());
+
+        // Connect to the server
+        ASSERT_TRUE(fn_name, client.Connect(host, port));
+
+        // Case 2: Ping a connected socket
+        ASSERT_TRUE(fn_name, client.Ping());
+
+        // Wait for the server to disconnect the client
+        std::this_thread::sleep_for(std::chrono::seconds(3));
+
+        // Case 3: Ping a connected socket that was later disconnected
+        ASSERT_FALSE(fn_name, client.Ping());
+
+        client_completed = true;
+        return 0;
+    });
+
+    // Join threads
+    server_thread.join();
+    client_thread.join();
+
+    // Final assertions
+    ASSERT_TRUE(fn_name, server_completed);
+    ASSERT_TRUE(fn_name, client_completed);
+
+    RETURN_TEST(fn_name, 0);
+}
+
 int main() {
-	int result = 0;
+    int result = 0;
 
-	result += TestServerClientCommunication();
-	result += TestLargeDataTransmission();
-	result += TestPartialReceive();
-	result += TestWaitForDataTimeout();
-	result += TestClientDisconnectMidSend();
-	result += TestSimultaneousConnections();
-	result += TestInvalidHostname();
-	result += TestDataFragmentation();
+    result += TestServerClientCommunication();
+    result += TestLargeDataTransmission();
+    result += TestPartialReceive();
+    result += TestWaitForDataTimeout();
+    result += TestClientDisconnectMidSend();
+    result += TestSimultaneousConnections();
+    result += TestInvalidHostname();
+    result += TestDataFragmentation();
+    result += TestClientPing(); // Add the new test here
 
-	if (result == 0) {
-		std::cout << "All tests passed!" << std::endl;
-	} else {
-		std::cout << result << " tests failed." << std::endl;
-	}
-	return result;
+    if (result == 0) {
+        std::cout << "All tests passed!" << std::endl;
+    } else {
+        std::cout << result << " tests failed." << std::endl;
+    }
+    return result;
 }
