@@ -5,6 +5,8 @@
 
 #include <thread>
 #include <format>
+#include <atomic>
+#include <vector>
 
 using namespace StormByte;
 
@@ -706,6 +708,87 @@ int TestClientPing() {
     RETURN_TEST(fn_name, 0);
 }
 
+/**
+ * @brief Test case for `WaitForData` with concurrent threads.
+ */
+int TestWaitForDataConcurrent() {
+    const std::string fn_name = "TestWaitForDataConcurrent";
+
+    bool server_ready = false;
+    bool server_completed = false;
+    std::atomic<int> threads_completed(0);
+    constexpr int thread_count = 5;
+
+    // Start server thread
+    std::thread server_thread([&]() -> int {
+        using namespace Network::Socket;
+
+        Server server(Network::Connection::Protocol::IPv4, handler, logger);
+        ASSERT_TRUE(fn_name, server.Listen(host, port));
+
+        server_ready = true;
+
+        // Accept a client connection
+        auto accept_result = server.Accept();
+        ASSERT_TRUE(fn_name, accept_result);
+
+        Client client = std::move(accept_result.value());
+
+        // Simulate data availability after a delay
+        std::this_thread::sleep_for(std::chrono::milliseconds(500));
+        HelloWorldPacket packet;
+        auto send_result = client.Send(packet);
+        ASSERT_TRUE(fn_name, send_result);
+
+        server_completed = true;
+        return 0;
+    });
+
+    // Wait until the server is ready
+    while (!server_ready) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    }
+
+    // Start client thread
+    std::thread client_thread([&]() -> int {
+        using namespace Network::Socket;
+
+        Client client(Network::Connection::Protocol::IPv4, handler, logger);
+        ASSERT_TRUE(fn_name, client.Connect(host, port));
+
+        // Start multiple threads to call WaitForData concurrently
+        std::vector<std::thread> wait_threads;
+        for (int i = 0; i < thread_count; ++i) {
+            wait_threads.emplace_back([&]() -> int {
+                auto wait_result = client.WaitForData(2000000); // 2 seconds timeout
+                ASSERT_TRUE(fn_name, wait_result.has_value());
+                if (wait_result.value() == Network::Connection::Read::Result::Success) {
+                    threads_completed++;
+                }
+                return 0; // Explicitly return a value
+            });
+        }
+
+        // Join all threads
+        for (auto& thread : wait_threads) {
+            thread.join();
+        }
+
+        client.Disconnect();
+        return 0;
+    });
+
+    // Join threads
+    server_thread.join();
+    client_thread.join();
+
+    // Final assertions
+    ASSERT_TRUE(fn_name, server_completed);
+    ASSERT_EQUAL(fn_name, thread_count, threads_completed.load());
+
+    RETURN_TEST(fn_name, 0);
+}
+
 int main() {
     int result = 0;
 
@@ -717,7 +800,8 @@ int main() {
     result += TestSimultaneousConnections();
     result += TestInvalidHostname();
     result += TestDataFragmentation();
-    result += TestClientPing(); // Add the new test here
+    result += TestClientPing();
+    result += TestWaitForDataConcurrent();
 
     if (result == 0) {
         std::cout << "All tests passed!" << std::endl;
