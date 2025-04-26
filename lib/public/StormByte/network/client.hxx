@@ -22,7 +22,7 @@ namespace StormByte::Network {
 			 * @param address The address of the server.
 			 * @param handler The handler of the server.
 			 */
-			Client(std::shared_ptr<const Connection::Handler> handler);
+			Client(std::shared_ptr<const Connection::Handler> handler, std::shared_ptr<Logger> logger) noexcept;
 
 			/**
 			 * @brief The copy constructor of the Client class.
@@ -73,5 +73,6 @@ namespace StormByte::Network {
 			std::unique_ptr<Socket::Client> m_socket;						///< The socket of the client.
 			Connection::Status m_status;									///< The status of the client.
 			std::shared_ptr<const Connection::Handler> m_handler;			///< The handler of the client.
+			std::shared_ptr<Logger> m_logger;								///< The logger of the client.
 	};
 }
