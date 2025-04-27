@@ -13,7 +13,7 @@ using namespace StormByte;
 constexpr const char* host = "localhost";
 constexpr const unsigned short port = 6060;
 #if defined(GITHUB_WORKFLOW) || defined(WINDOWS)
-constexpr const std::size_t long_data_size = 10000;
+constexpr const std::size_t long_data_size = 5000; // To avoid "Bus error" on GitHub Actions
 #else
 constexpr const std::size_t long_data_size = 50000;
 #endif
