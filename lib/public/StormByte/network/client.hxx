@@ -67,21 +67,20 @@ namespace StormByte::Network {
 			 */
 			void 															Disconnect() noexcept;
 
-		protected:
 			/**
 			 * @brief The function to send data to the server.
 			 * @param packet The packet to send.
 			 * @return The expected void or error.
 			 */
-			StormByte::Expected<void, ConnectionError>						Send(const Packet& packet) noexcept;
+			ExpectedPacket													Send(const Packet& packet) noexcept;
+
+		private:
+			PacketInstanceFunction m_packet_instance_function;				///< The function to create a packet instance from opcode.
 
 			/**
 			 * @brief The function to receive data from the server.
 			 * @return The expected buffer or error.
 			 */
 			ExpectedPacket													Receive() noexcept;
-
-		private:
-			PacketInstanceFunction m_packet_instance_function;				///< The function to create a packet instance from opcode.
 	};
 }

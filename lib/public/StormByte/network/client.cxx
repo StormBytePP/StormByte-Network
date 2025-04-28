@@ -34,15 +34,15 @@ void Client::Disconnect() noexcept {
 	m_status = Connection::Status::Disconnected;
 }
 
-ExpectedVoid Client::Send(const Packet& packet) noexcept {
+ExpectedPacket Client::Send(const Packet& packet) noexcept {
 	if (!Connection::IsConnected(m_status))
-		return StormByte::Unexpected<ConnectionError>("Client is not connected");
+		return StormByte::Unexpected<PacketError>("Client is not connected");
 
 	auto expected_write = static_cast<Socket::Client*>(m_socket)->Send(packet);
 	if (!expected_write)
-		return StormByte::Unexpected(expected_write.error());
+		return StormByte::Unexpected<PacketError>(expected_write.error()->what());
 
-	return {};
+	return Receive();
 }
 
 ExpectedPacket Client::Receive() noexcept {

@@ -82,26 +82,13 @@ class TestClient: public StormByte::Network::Client {
 		TestClient(const Network::Connection::Protocol& protocol, std::shared_ptr<Network::Connection::Handler> handler, std::shared_ptr<Logger> logger) noexcept
 		:Client(protocol, handler, logger, packet_instance_function) {}
 
-		bool SendTestMessage(const std::string& message) {
+		std::string SendTestMessage(const std::string& message) {
 			TestMessagePacket packet(message);
 			auto result = Send(packet);
-			return result.has_value();
-		}
-
-		std::string ReceiveTestMessage() {
-			auto expected_packet = Receive();
-			if (!expected_packet.has_value()) {
-				return expected_packet.error()->what();
+			if (!result) {
+				return result.error()->what();
 			}
-			std::shared_ptr<Network::Packet> packet = expected_packet.value();
-			if (!packet) {
-				return expected_packet.error()->what();
-			}
-			std::shared_ptr<TestMessagePacket> test_message_packet = std::dynamic_pointer_cast<TestMessagePacket>(packet);
-			if (!test_message_packet) {
-				return expected_packet.error()->what();
-			}
-			return test_message_packet->Message();
+			return std::dynamic_pointer_cast<TestMessagePacket>(result.value())->Message();
 		}
 };
 
@@ -156,11 +143,7 @@ int TestClientServerCommunication() {
 
 		// Send a test message
 		const std::string test_message = "Hello, Server!";
-		ASSERT_TRUE(fn_name, client.SendTestMessage(test_message));
-
-		// Receive the echoed message
-		std::string received_message = client.ReceiveTestMessage();
-		ASSERT_EQUAL(fn_name, test_message, received_message);
+		ASSERT_EQUAL(fn_name, test_message, client.SendTestMessage(test_message));
 
 		client.Disconnect();
 		client_completed = true;
