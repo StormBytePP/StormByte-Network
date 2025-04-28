@@ -59,6 +59,7 @@ void Socket::Disconnect() noexcept {
 	closesocket(*m_handle);
 	#endif
 	m_handle.reset();
+	m_handle = nullptr;
 
 	m_status = Connection::Status::Disconnected;
 	m_logger << Logger::Level::LowLevel << "Disconnected socket" << std::endl;
