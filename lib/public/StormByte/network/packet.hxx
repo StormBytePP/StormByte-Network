@@ -71,7 +71,7 @@ namespace StormByte::Network {
 		protected:
 			Buffer::Simple m_buffer;									///< The data buffer of the packet.
 
-			STORMBYTE_NETWORK_PUBLIC Packet(const unsigned short& opcode) noexcept;
+			Packet(const unsigned short& opcode) noexcept;
 
 			/**
 			 * @brief The function to initialize the packet

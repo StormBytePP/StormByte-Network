@@ -152,7 +152,7 @@ int TestClientServerCommunication() {
 	// Start client thread
 	std::thread client_thread([&]() -> int {
 		TestClient client(Network::Connection::Protocol::IPv4, handler, logger);
-		ASSERT_TRUE(fn_name, client.Connect(host, port, Network::Connection::Protocol::IPv4).has_value());
+		ASSERT_TRUE(fn_name, client.Connect(host, port).has_value());
 
 		// Send a test message
 		const std::string test_message = "Hello, Server!";

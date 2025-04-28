@@ -60,7 +60,7 @@ namespace StormByte::Network {
 			 * @param protocol The protocol of the server.
 			 * @return The expected void or error.
 			 */
-			StormByte::Expected<void, ConnectionError>						Connect(const std::string& hostname, const unsigned short& port, const Connection::Protocol& protocol) noexcept;
+			StormByte::Expected<void, ConnectionError>						Connect(const std::string& hostname, const unsigned short& port) noexcept;
 
 			/**
 			 * @brief The function to disconnect the server.
