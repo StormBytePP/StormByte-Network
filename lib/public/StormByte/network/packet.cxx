@@ -1,5 +1,6 @@
 #include <StormByte/network/packet.hxx>
 #include <StormByte/network/socket/client.hxx>
+#include <StormByte/serializable.hxx>
 
 using namespace StormByte::Network;
 

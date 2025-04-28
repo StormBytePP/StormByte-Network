@@ -1,6 +1,7 @@
 #include <StormByte/network/packet.hxx>
 #include <StormByte/network/socket/server.hxx>
 #include <StormByte/network/socket/client.hxx>
+#include <StormByte/serializable.hxx>
 #include <StormByte/test_handlers.h>
 
 #include <thread>

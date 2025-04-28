@@ -1,6 +1,5 @@
 #pragma once
 
-#include <StormByte/serializable.hxx>
 #include <StormByte/network/typedefs.hxx>
 
 #include <memory>
@@ -10,8 +9,6 @@
  * @brief The namespace containing all the network related classes.
  */
 namespace StormByte::Network {
-	namespace Socket { class Client; } ///< Forward declaration of the Socket::Client class.
-
 	/**
 	 * @class Packet
 	 * @brief The class representing a packet.

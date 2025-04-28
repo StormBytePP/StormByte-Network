@@ -2,6 +2,7 @@
 #include <StormByte/network/exception.hxx>
 #include <StormByte/network/packet.hxx>
 #include <StormByte/network/server.hxx>
+#include <StormByte/serializable.hxx>
 #include <StormByte/test_handlers.h>
 
 #include <thread>
