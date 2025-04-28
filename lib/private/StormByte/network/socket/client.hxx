@@ -16,7 +16,7 @@ namespace StormByte::Network::Socket {
 	 * @class Client
 	 * @brief The class representing a client socket.
 	 */
-	class STORMBYTE_NETWORK_PUBLIC Client final: public Socket {
+	class STORMBYTE_NETWORK_PRIVATE Client final: public Socket {
 	public:
 		/**
 		 * @brief The constructor of the Client class.

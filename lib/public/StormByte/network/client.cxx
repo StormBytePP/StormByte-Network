@@ -47,7 +47,15 @@ ExpectedPacket Client::Receive() noexcept {
 	if (!Connection::IsConnected(m_status))
 		return StormByte::Unexpected<PacketError>("Client is not connected");
 
-	auto expected_packet = Packet::Read(m_packet_instance_function, *m_socket);
+	auto expected_packet = Packet::Read(
+		m_packet_instance_function,
+		[this](const size_t& size) -> ExpectedBuffer {
+			auto expected_buffer = m_socket->Receive(size);
+			if (!expected_buffer)
+				return StormByte::Unexpected<ConnectionError>(expected_buffer.error()->what());
+			return expected_buffer.value().get();
+		}
+	);
 	if (!expected_packet)
 		return StormByte::Unexpected<PacketError>(expected_packet.error());
 

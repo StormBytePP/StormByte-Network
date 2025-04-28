@@ -20,7 +20,7 @@ namespace StormByte::Network::Socket {
 	 * @class Socket
 	 * @brief The class representing a non blocking socket.
 	 */
-	class STORMBYTE_NETWORK_PUBLIC Socket {
+	class STORMBYTE_NETWORK_PRIVATE Socket {
 		friend class Server;
 		public:
 			/**

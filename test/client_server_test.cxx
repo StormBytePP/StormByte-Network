@@ -38,25 +38,25 @@ class TestMessagePacket: public Network::Packet {
 	private:
 		std::string m_msg;
 
-		Expected<void, Network::PacketError> Initialize(Network::Socket::Client& client) noexcept override {
+		Expected<void, Network::PacketError> Initialize(Network::PacketReaderFunction reader) noexcept override {
 			// Opcode is already read in the constructor
 
 			// Read the size of the message
 			Buffers::Simple buffer;
-			auto expected_size_buffer = client.Receive(sizeof(std::size_t));
+			auto expected_size_buffer = reader(sizeof(std::size_t));
 			if (!expected_size_buffer) {
 				return StormByte::Unexpected<Network::PacketError>("Failed to read message size");
 			}
-			auto expected_size_serial = Serializable<std::size_t>::Deserialize(expected_size_buffer.value().get());
+			auto expected_size_serial = Serializable<std::size_t>::Deserialize(expected_size_buffer.value());
 			if (!expected_size_serial) {
 				return StormByte::Unexpected<Network::PacketError>("Failed to deserialize message size");
 			}
 			buffer << expected_size_serial.value();
-			auto str_buffer = client.Receive(expected_size_serial.value());
+			auto str_buffer = reader(expected_size_serial.value());
 			if (!str_buffer) {
 				return StormByte::Unexpected<Network::PacketError>("Failed to read message");
 			}
-			buffer << str_buffer.value().get();
+			buffer << str_buffer.value();
 			auto string_serial = Serializable<std::string>::Deserialize(buffer);
 			if (!string_serial) {
 				return StormByte::Unexpected<Network::PacketError>("Failed to deserialize message");

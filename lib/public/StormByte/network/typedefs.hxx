@@ -20,6 +20,7 @@ namespace StormByte::Network {
 	namespace Socket { class Client; }																									///< The client socket class (forward declaration).
 	using FutureBuffer = std::future<Buffers::Simple>;																					///< The future data type.
 	using PromisedBuffer = std::promise<Buffers::Simple>;																				///< The promised data type.
+	using ExpectedBuffer = StormByte::Expected<Buffers::Simple, ConnectionError>;														///< The expected buffer type.
 	using ExpectedFutureBuffer = StormByte::Expected<FutureBuffer, ConnectionError>;													///< The expected future type.
 	using ExpectedVoid = StormByte::Expected<void, ConnectionError>;																	///< The expected void type.
 	using ExpectedClient = StormByte::Expected<Socket::Client, ConnectionError>;														///< The expected client type.
@@ -30,4 +31,5 @@ namespace StormByte::Network {
 	using SharedProducerBuffer = std::shared_ptr<Buffers::Producer>;																	///< The shared producer buffer type.
 	using ExpectedPacket = StormByte::Expected<std::shared_ptr<Packet>, PacketError>;													///< The expected packet type.
 	using PacketInstanceFunction = std::function<std::shared_ptr<Packet>(const unsigned short&)>;										///< The packet instance function type.
+	using PacketReaderFunction = std::function<ExpectedBuffer(const size_t&)>;															///< The packet reader function type.
 }

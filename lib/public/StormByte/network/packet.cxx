@@ -1,5 +1,4 @@
 #include <StormByte/network/packet.hxx>
-#include <StormByte/network/socket/client.hxx>
 #include <StormByte/serializable.hxx>
 
 using namespace StormByte::Network;
@@ -18,12 +17,12 @@ const unsigned short& Packet::Opcode() const noexcept {
 	return m_opcode;
 }
 
-ExpectedPacket Packet::Read(const PacketInstanceFunction& pif, Socket::Client& client) noexcept {
-	auto opcode_buffer = client.Receive(sizeof(unsigned short));
+ExpectedPacket Packet::Read(const PacketInstanceFunction& pif, PacketReaderFunction reader) noexcept {
+	auto opcode_buffer = reader(sizeof(unsigned short));
 	if (!opcode_buffer) {
 		return StormByte::Unexpected<PacketError>("Failed to read opcode");
 	}
-	auto opcode_serial = Serializable<unsigned short>::Deserialize(opcode_buffer.value().get());
+	auto opcode_serial = Serializable<unsigned short>::Deserialize(opcode_buffer.value());
 	if (!opcode_serial) {
 		return StormByte::Unexpected<PacketError>("Failed to deserialize opcode");
 	}
@@ -32,7 +31,7 @@ ExpectedPacket Packet::Read(const PacketInstanceFunction& pif, Socket::Client& c
 	if (!packet) {
 		return StormByte::Unexpected<PacketError>("Unknown opcode {}", opcode);
 	}
-	auto initialize_result = packet->Initialize(client);
+	auto initialize_result = packet->Initialize(reader);
 	if (!initialize_result) {
 		return StormByte::Unexpected(initialize_result.error());
 	}

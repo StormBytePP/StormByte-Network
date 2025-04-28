@@ -66,7 +66,7 @@ namespace StormByte::Network {
 			 * @param client The client socket.
 			 * @return The size of the packet.
 			 */
-			static ExpectedPacket										Read(const PacketInstanceFunction& pif, Socket::Client& client) noexcept;
+			static ExpectedPacket										Read(const PacketInstanceFunction& pif, PacketReaderFunction reader) noexcept;
 
 		protected:
 			Buffers::Simple m_buffer;									///< The data buffer of the packet.
@@ -77,7 +77,7 @@ namespace StormByte::Network {
 			 * @brief The function to initialize the packet
 			 * @return The expected result
 			 */
-			virtual Expected<void, PacketError>							Initialize(Socket::Client& client) noexcept = 0;
+			virtual Expected<void, PacketError>							Initialize(PacketReaderFunction reader) noexcept = 0;
 
 		private:
 			const unsigned short m_opcode;								///< The opcode of the packet.
