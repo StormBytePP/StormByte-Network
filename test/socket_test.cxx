@@ -29,8 +29,7 @@ class HelloWorldPacket: public Network::Packet {
 	public:
 		HelloWorldPacket(): Packet(1) {
 			Serializable<std::string> string_serial("Hello World!");
-			Buffers::Simple serial = string_serial.Serialize();
-			m_buffer << serial;
+			m_buffer = string_serial.Serialize();
 		}
 
 		Expected<void, Network::PacketError> Initialize(Network::Socket::Client& client) noexcept override {
@@ -46,7 +45,7 @@ class HelloWorldPacket: public Network::Packet {
 class ReceivedPacket: public Network::Packet {
 	public:
 		ReceivedPacket(const StormByte::Buffers::Simple& buff) : Packet(1) {
-			m_buffer << buff;
+			m_buffer = buff;
 		}
 
 		Expected<void, Network::PacketError> Initialize(Network::Socket::Client& client) noexcept override {

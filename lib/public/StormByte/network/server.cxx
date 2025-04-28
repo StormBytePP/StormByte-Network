@@ -68,7 +68,9 @@ void Server::RemoveClientAsync(Socket::Client& client) noexcept {
 
 void Server::DisconnectClient(Socket::Client& client) noexcept {
 	std::lock_guard<std::mutex> lock(m_msg_threads_mutex);
-	auto& client_handler = client.Handle();
+
+	// It is important to copy the client handle here as when disconnect it will be freed so it will be safe to use for the map
+	const auto client_handler = client.Handle();
 	auto& client_thread = m_msg_threads.at(client_handler);
 
 	// Disconnect client
