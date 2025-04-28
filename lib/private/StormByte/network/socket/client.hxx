@@ -1,6 +1,6 @@
 #pragma once
 
-#include <StormByte/buffers/simple.hxx>
+#include <StormByte/buffer/simple.hxx>
 #include <StormByte/network/connection/rw.hxx>
 #include <StormByte/network/packet.hxx>
 #include <StormByte/network/socket/socket.hxx>
@@ -90,7 +90,7 @@ namespace StormByte::Network::Socket {
 		 * @param data A view of the data to send.
 		 * @return The expected result of the operation.
 		 */
-		ExpectedVoid 													Send(Buffers::ConstByteSpan data) noexcept;
+		ExpectedVoid 													Send(Buffer::ConstByteSpan data) noexcept;
 
 		/**
 		 * @brief Function to check if a shutdown request has been made.
@@ -111,7 +111,7 @@ namespace StormByte::Network::Socket {
 		 * @param size The requested size of data.
 		 * @return The result of the operation.
 		 */
-		Connection::Read::Result 										ReadNonBlocking(Buffers::Simple& buffer) noexcept;
+		Connection::Read::Result 										ReadNonBlocking(Buffer::Simple& buffer) noexcept;
 
 		/**
 		 * @brief Function to read data from the socket asynchronously.

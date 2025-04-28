@@ -52,7 +52,7 @@ namespace StormByte::Network {
 			 * @brief The function to get the opcode of the packet.
 			 * @return The opcode of the packet.
 			 */
-			const Buffers::ConstByteSpan								Data() const noexcept;
+			const Buffer::ConstByteSpan								Data() const noexcept;
 
 			/**
 			 * @brief The function to get the opcode of the packet.
@@ -69,7 +69,7 @@ namespace StormByte::Network {
 			static ExpectedPacket										Read(const PacketInstanceFunction& pif, PacketReaderFunction reader) noexcept;
 
 		protected:
-			Buffers::Simple m_buffer;									///< The data buffer of the packet.
+			Buffer::Simple m_buffer;									///< The data buffer of the packet.
 
 			STORMBYTE_NETWORK_PUBLIC Packet(const unsigned short& opcode) noexcept;
 

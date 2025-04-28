@@ -9,7 +9,7 @@ m_opcode(opcode) {
 	m_buffer << opcode_serial.Serialize();
 }
 
-const StormByte::Buffers::ConstByteSpan Packet::Data() const noexcept {
+const StormByte::Buffer::ConstByteSpan Packet::Data() const noexcept {
 	return m_buffer.Span();
 }
 

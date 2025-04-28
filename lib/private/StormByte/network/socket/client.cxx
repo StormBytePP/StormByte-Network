@@ -65,7 +65,7 @@ ExpectedVoid Socket::Client::Connect(const std::string& hostname, const unsigned
 	return {};
 }
 
-ExpectedVoid Socket::Client::Send(Buffers::ConstByteSpan data) noexcept {
+ExpectedVoid Socket::Client::Send(Buffer::ConstByteSpan data) noexcept {
 	if (m_status != Connection::Status::Connected) {
 		return StormByte::Unexpected<ConnectionError>("Failed to send: Client is not connected");
 	}
@@ -220,7 +220,7 @@ ExpectedVoid Socket::Client::Send(const Packet& packet) noexcept {
 void Socket::Client::Read(PromisedBuffer& promise, std::size_t max_size) noexcept {
 	m_logger << Logger::Level::LowLevel << "Starting to read data with max_size: " << humanreadable_bytes << max_size << nohumanreadable << std::endl;
 
-	Buffers::Simple buffer;
+	Buffer::Simple buffer;
 	char internal_buffer[BUFFER_SIZE];
 	std::size_t total_bytes_read = 0;
 

@@ -42,7 +42,7 @@ class TestMessagePacket: public Network::Packet {
 			// Opcode is already read in the constructor
 
 			// Read the size of the message
-			Buffers::Simple buffer;
+			Buffer::Simple buffer;
 			auto expected_size_buffer = reader(sizeof(std::size_t));
 			if (!expected_size_buffer) {
 				return StormByte::Unexpected<Network::PacketError>("Failed to read message size");
