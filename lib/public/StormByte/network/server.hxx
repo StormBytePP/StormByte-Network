@@ -1,12 +1,8 @@
 #pragma once
 
-#include <StormByte/network/exception.hxx>
-#include <StormByte/network/socket/server.hxx>
-#include <StormByte/network/socket/client.hxx>
+#include <StormByte/network/endpoint.hxx>
 #include <StormByte/network/typedefs.hxx>
-#include <StormByte/logger.hxx>
 
-#include <atomic>
 #include <mutex>
 #include <thread>
 #include <unordered_map>
@@ -17,7 +13,7 @@ namespace StormByte::Network {
 	 * @class Server
 	 * @brief A server class.
 	 */
-	class STORMBYTE_NETWORK_PUBLIC Server {
+	class STORMBYTE_NETWORK_PUBLIC Server: public EndPoint {
 		public:
 			/**
 			 * @brief Constructor.
@@ -41,7 +37,7 @@ namespace StormByte::Network {
 			/**
 			 * @brief Destructor.
 			 */
-			virtual ~Server() noexcept;
+			virtual ~Server() noexcept override;
 
 			/**
 			 * @brief Copy assignment operator (deleted).
@@ -71,11 +67,6 @@ namespace StormByte::Network {
 			virtual void 																	Stop() noexcept;
 
 		protected:
-			Connection::Protocol m_protocol;												///< The protocol to use.
-			Socket::Server m_socket;														///< The server socket.
-			std::shared_ptr<Connection::Handler> m_conn_handler;							///< The handler to use.
-			std::shared_ptr<Logger> m_logger;												///< The logger.
-			std::atomic<Connection::Status> m_status;										///< The connection status of the server.
 			std::vector<FutureBufferProcessor> m_input_pipeline;							///< The input pipeline, will be processed before the client message is processed.
 			std::vector<FutureBufferProcessor> m_output_pipeline;							///< The output pipeline, will be processed before the client reply is sent.
 

@@ -15,7 +15,7 @@ namespace StormByte::Network {
 	 * Explicitelly instantiate this class to get packets identified by their opcode
 	 * The buffer should contain the opcode and the data.
 	 */
-	class Packet {
+	class STORMBYTE_NETWORK_PUBLIC Packet {
 		public:
 			/**
 			 * @brief The copy constructor of the Packet class.

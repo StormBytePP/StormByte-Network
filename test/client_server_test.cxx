@@ -79,8 +79,8 @@ auto packet_instance_function = [](const unsigned short& opcode) -> std::shared_
 
 class TestClient: public StormByte::Network::Client {
 	public:
-		TestClient(std::shared_ptr<const Network::Connection::Handler> handler, std::shared_ptr<Logger> logger) noexcept
-		:Client(handler, logger, packet_instance_function) {}
+		TestClient(const Network::Connection::Protocol& protocol, std::shared_ptr<Network::Connection::Handler> handler, std::shared_ptr<Logger> logger) noexcept
+		:Client(protocol, handler, logger, packet_instance_function) {}
 
 		bool SendTestMessage(const std::string& message) {
 			TestMessagePacket packet(message);
@@ -151,7 +151,7 @@ int TestClientServerCommunication() {
 
 	// Start client thread
 	std::thread client_thread([&]() -> int {
-		TestClient client(handler, logger);
+		TestClient client(Network::Connection::Protocol::IPv4, handler, logger);
 		ASSERT_TRUE(fn_name, client.Connect(host, port, Network::Connection::Protocol::IPv4).has_value());
 
 		// Send a test message

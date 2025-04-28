@@ -5,7 +5,9 @@
 #include <StormByte/buffers/simple.hxx>
 #include <StormByte/expected.hxx>
 #include <StormByte/network/connection/handler.hxx>
+#include <StormByte/network/connection/protocol.hxx>
 #include <StormByte/network/connection/rw.hxx>
+#include <StormByte/network/connection/status.hxx>
 #include <StormByte/network/exception.hxx>
 
 #include <functional>
@@ -17,7 +19,10 @@
  */
 namespace StormByte::Network {
 	class Packet;																														///< The packet class (forward declaration).
-	namespace Socket { class Client; }																									///< The client socket class (forward declaration).
+	namespace Socket {	
+		class Socket;																													///< The socket class (forward declaration).																							
+		class Client;																													///< The client socket class (forward declaration).
+	}																																	///< The client socket class (forward declaration).
 	using FutureBuffer = std::future<Buffers::Simple>;																					///< The future data type.
 	using PromisedBuffer = std::promise<Buffers::Simple>;																				///< The promised data type.
 	using ExpectedBuffer = StormByte::Expected<Buffers::Simple, ConnectionError>;														///< The expected buffer type.

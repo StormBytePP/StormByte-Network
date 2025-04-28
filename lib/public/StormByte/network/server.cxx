@@ -1,9 +1,13 @@
 #include <StormByte/network/server.hxx>
+#include <StormByte/network/socket/client.hxx>
+#include <StormByte/network/socket/server.hxx>
 
 using namespace StormByte::Network;
 
 Server::Server(Connection::Protocol protocol, std::shared_ptr<Connection::Handler> handler, std::shared_ptr<Logger> logger) noexcept:
-m_socket(protocol, handler, logger), m_conn_handler(handler), m_logger(logger), m_status(Connection::Status::Disconnected) {}
+EndPoint(protocol, handler, logger) {
+	m_socket = new Socket::Server(protocol, handler, logger);
+}
 
 Server::~Server() noexcept {
 	Stop();
@@ -15,7 +19,7 @@ ExpectedVoid Server::Start(const std::string& host, const unsigned short& port) 
 
 	m_status.store(Connection::Status::Connecting);
 
-	auto expected_listen = m_socket.Listen(host, port);
+	auto expected_listen = static_cast<Socket::Server*>(m_socket)->Listen(host, port);
 	if (!expected_listen) {
 		m_status = Connection::Status::Disconnected;
 		return StormByte::Unexpected(expected_listen.error());
@@ -31,7 +35,7 @@ void Server::Stop() noexcept {
 	m_status.store(Connection::Status::Disconnecting);
 
 	// Disconnect our socket so all operations pending on it will fail
-	m_socket.Disconnect();
+	m_socket->Disconnect();
 
 	// Stop accepting new clients first
 	if (m_accept_thread.joinable())
@@ -93,7 +97,7 @@ void Server::AcceptClients() noexcept {
 	constexpr const auto TIMEOUT = 2000000; // 2 seconds
 	m_logger << Logger::Level::LowLevel << "Starting accept clients thread" << std::endl;
 	while (Connection::IsConnected(m_status)) {
-		auto expected_wait = m_socket.WaitForData(TIMEOUT);
+		auto expected_wait = static_cast<Socket::Server*>(m_socket)->WaitForData(TIMEOUT);
 		if (!expected_wait) {
 			m_logger << Logger::Level::Error << expected_wait.error()->what() << std::endl;
 			return;
@@ -101,7 +105,7 @@ void Server::AcceptClients() noexcept {
 
 		switch(expected_wait.value()) {
 			case Connection::Read::Result::Success: {
-				auto expected_client = m_socket.Accept();
+				auto expected_client = static_cast<Socket::Server*>(m_socket)->Accept();
 				if (!expected_client) {
 					m_logger << Logger::Level::Error << expected_client.error()->what() << std::endl;
 					return;

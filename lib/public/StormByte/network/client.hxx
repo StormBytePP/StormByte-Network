@@ -1,11 +1,7 @@
 #pragma once
 
-#include <StormByte/expected.hxx>
-#include <StormByte/network/connection/handler.hxx>
-#include <StormByte/network/connection/status.hxx>
-#include <StormByte/network/exception.hxx>
+#include <StormByte/network/endpoint.hxx>
 #include <StormByte/network/packet.hxx>
-#include <StormByte/network/socket/client.hxx>
 
 /**
  * @namespace Network
@@ -16,8 +12,7 @@ namespace StormByte::Network {
 	 * @class Client
 	 * @brief The class representing a client.
 	 */
-	class STORMBYTE_NETWORK_PUBLIC Client {
-		friend class Packet;
+	class STORMBYTE_NETWORK_PUBLIC Client: public EndPoint {
 		public:
 			/**
 			 * @brief The constructor of the Client class.
@@ -25,7 +20,7 @@ namespace StormByte::Network {
 			 * @param handler The handler of the server.
 			 * @param pf The function to create a packet instance from opcode
 			 */
-			Client(std::shared_ptr<const Connection::Handler> handler, std::shared_ptr<Logger> logger, const PacketInstanceFunction& pf) noexcept;
+			Client(const Connection::Protocol& protocol, std::shared_ptr<Connection::Handler> handler, std::shared_ptr<Logger> logger, const PacketInstanceFunction& pf) noexcept;
 
 			/**
 			 * @brief The copy constructor of the Client class.
@@ -42,7 +37,7 @@ namespace StormByte::Network {
 			/**
 			 * @brief The destructor of the Client class.
 			 */
-			~Client() noexcept;
+			virtual ~Client() noexcept override;
 
 			/**
 			 * @brief The assignment operator of the Client class.
@@ -73,8 +68,6 @@ namespace StormByte::Network {
 			void 															Disconnect() noexcept;
 
 		protected:
-			std::shared_ptr<Logger> m_logger;								///< The logger of the client.
-
 			/**
 			 * @brief The function to send data to the server.
 			 * @param packet The packet to send.
@@ -89,9 +82,6 @@ namespace StormByte::Network {
 			ExpectedPacket													Receive() noexcept;
 
 		private:
-			std::unique_ptr<Socket::Client> m_socket;						///< The socket of the client.
-			Connection::Status m_status;									///< The status of the client.
-			std::shared_ptr<const Connection::Handler> m_handler;			///< The handler of the client.
 			PacketInstanceFunction m_packet_instance_function;				///< The function to create a packet instance from opcode.
 	};
 }
