@@ -105,7 +105,7 @@ namespace StormByte::Network {
 			 * @param pif The packet instance function to create a packet.
 			 * @return An expected packet or error.
 			 */
-			ExpectedPacket 														Receive(Socket::Client& client, const PacketInstanceFunction& pif) noexcept;
+			ExpectedPacket 														Receive(Socket::Client& client) noexcept;
 
 			/**
 			 * @brief Sends a packet to the client.

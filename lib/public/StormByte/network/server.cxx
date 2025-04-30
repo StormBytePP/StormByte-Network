@@ -165,7 +165,7 @@ void Server::HandleClientMessages(Socket::Client& client) noexcept {
 					goto end;
 				}
 				else {
-					auto expected_packet = Receive(client, m_handler->PacketInstanceFunction());
+					auto expected_packet = Receive(client);
 					if (!expected_packet) {
 						m_logger << Logger::Level::Error << expected_packet.error()->what() << std::endl;
 						RemoveClientAsync(client);

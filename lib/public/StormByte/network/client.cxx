@@ -30,7 +30,7 @@ ExpectedVoid Client::Connect(const std::string& hostname, const unsigned short& 
 }
 
 ExpectedPacket Client::Receive() noexcept {
-	return EndPoint::Receive(static_cast<Socket::Client&>(*m_socket), m_handler->PacketInstanceFunction());
+	return EndPoint::Receive(static_cast<Socket::Client&>(*m_socket));
 }
 
 ExpectedVoid Client::Send(const Packet& packet) noexcept {

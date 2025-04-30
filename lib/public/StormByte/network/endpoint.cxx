@@ -35,12 +35,12 @@ ExpectedVoid EndPoint::Authenticate(Socket::Client&) noexcept {
 	return {};
 }
 
-ExpectedPacket EndPoint::Receive(Socket::Client& client, const PacketInstanceFunction& pif) noexcept {
+ExpectedPacket EndPoint::Receive(Socket::Client& client) noexcept {
 	if (!Connection::IsConnected(m_status))
 		return StormByte::Unexpected<PacketError>("Client is not connected");
 
 	auto expected_packet = Packet::Read(
-		pif,
+		m_handler->PacketInstanceFunction(),
 		[this, &client](const size_t& size) -> ExpectedBuffer {
 			auto expected_buffer = client.Receive(size);
 			if (!expected_buffer)
