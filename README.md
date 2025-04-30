@@ -42,32 +42,27 @@ The `Network` module of StormByte provides an intuitive API to manage networking
 In order to ease the client/server communication, user can create their own Packets to be sent/received from client to server (and viceversa). In order to do so, users need to inherit from `StormByte::Network::Packet` class and focus only on 2 methods:
 
 * Constructors:
-	* A no parameter constructor to be able to empty initialize it (and use internally the `Initialize` method below)
-	* The second constructor can take whatever argument is needed and must initialize the internal `m_buffer`
-* Override protected `Initialize` function member to be able to construct the Packet via its `reader` function.
+	* A no parameter constructor to be able to empty initialize it
+	* The second constructor can take whatever argument is needed and must initialize the derived instance
+* Override `Serialize` and `Deserialize` function members to be able to construct and output the Packet.
 
 This way, instead of sending raw messages over network you send/receive Packets instances, for example, a Packet which represents
 a std::string could be implemented as follows:
 
 ```cpp
-using namespace StormByte;
+#include <StormByte/network/packet.hxx>
 
 enum class OpCodes: unsigned short {
-	TestMessage = 1
+	TestMessage = 1,
 };
 
-class TestMessagePacket: public Network::Packet {
+class TestMessagePacket: public StormByte::Network::Packet {
 	public:
-		/* Default constructor */
 		TestMessagePacket() noexcept:
 		Packet(static_cast<unsigned short>(OpCodes::TestMessage)) {}
 
-		/* Constructor with a message */
 		TestMessagePacket(const std::string& msg) noexcept:
-		Packet(static_cast<unsigned short>(OpCodes::TestMessage)), m_msg(msg) {
-			Serializable<std::string> string_serial(m_msg);
-			m_buffer << string_serial.Serialize();
-		}
+		Packet(static_cast<unsigned short>(OpCodes::TestMessage)), m_msg(msg) {}
 
 		~TestMessagePacket() noexcept override = default;
 
@@ -78,7 +73,7 @@ class TestMessagePacket: public Network::Packet {
 	private:
 		std::string m_msg;
 
-		Expected<void, Network::PacketError> Initialize(Network::PacketReaderFunction reader) noexcept override {
+		Expected<void, Network::PacketError> Deserialize(StormByte::Network::PacketReaderFunction reader) noexcept override {
 			// Opcode is already read in the constructor
 
 			// Read the size of the message
@@ -102,9 +97,16 @@ class TestMessagePacket: public Network::Packet {
 				return StormByte::Unexpected<Network::PacketError>("Failed to deserialize message");
 			}
 			m_msg = string_serial.value();
-			Serializable<std::string> string_serializable(m_msg);
-			m_buffer << string_serializable.Serialize();
+
 			return {};
+		}
+
+		Buffer::Consumer Serialize() const noexcept override {
+			Buffer::Producer buffer(Packet::Serialize());
+			Serializable<std::string> string_serial(m_msg);
+			buffer << string_serial.Serialize();
+			buffer << Buffer::Status::ReadOnly;
+			return buffer.Consumer();
 		}
 };
 ```
@@ -115,45 +117,24 @@ The `Server` class can be extended to define custom behavior for handling client
 
 ```cpp
 #include <StormByte/network/server.hxx>
-#include <StormByte/network/typedefs.hxx>
-#include <StormByte/logger.hxx>
 
-class EchoServer : public StormByte::Network::Server {
+class TestServer : public StormByte::Network::Server {
 	public:
-		EchoServer(StormByte::Network::Connection::Protocol protocol,
-				std::shared_ptr<StormByte::Network::Connection::Handler> handler,
-				std::shared_ptr<StormByte::Logger> logger) noexcept
-			: Server(protocol, handler, logger) {}
+		TestServer(StormByte::Network::Connection::Protocol protocol, std::shared_ptr<StormByte::Network::Connection::Handler> handler, std::shared_ptr<Logger> logger) noexcept
+		: StormByte::Network::Server(protocol, handler, logger) {}
 
 	private:
-		StormByte::Network::ExpectedFutureBuffer ProcessClientMessage(
+		StormByte::Expected<void, StormByte::Network::PacketError> ProcessClientPacket(
 			StormByte::Network::Socket::Client& client,
-			StormByte::Network::FutureBuffer& message) noexcept override {
+			const StormByte::Network::Packet& packet) noexcept override {
 			// Echo the received message back to the client
-			return StormByte::Network::ExpectedFutureBuffer(std::move(message));
+			auto expected_send = Send(client, packet);
+			if (!expected_send) {
+				return StormByte::Unexpected<StormByte::Network::PacketError>(expected_send.error()->what());
+			}
+			return {};
 		}
 };
-
-int main() {
-	auto logger = std::make_shared<StormByte::Logger>(std::cout, StormByte::Logger::Level::Info);
-	auto handler = std::make_shared<StormByte::Network::Connection::Handler>();
-
-	EchoServer server(StormByte::Network::Connection::Protocol::IPv4, handler, logger);
-	if (!server.Start("localhost", 7070)) {
-		std::cerr << "Failed to start the server" << std::endl;
-		return 1;
-	}
-
-	std::cout << "Server is running..." << std::endl;
-
-	// Run the server for 10 seconds
-	std::this_thread::sleep_for(std::chrono::seconds(10));
-
-	server.Stop();
-	std::cout << "Server stopped." << std::endl;
-
-	return 0;
-}
 ```
 
 ##### Creating a Custom Client
@@ -161,41 +142,97 @@ The Client class can be extended to define custom behavior for sending and recei
 
 ```cpp
 #include <StormByte/network/client.hxx>
-#include <StormByte/network/typedefs.hxx>
-#include <StormByte/logger.hxx>
 
-class TestClient : public StormByte::Network::Client {
+class TestClient: public StormByte::Network::Client {
 	public:
-		TestClient(StormByte::Network::Connection::Protocol protocol,
-				std::shared_ptr<StormByte::Network::Connection::Handler> handler,
-				std::shared_ptr<StormByte::Logger> logger) noexcept
-			: Client(protocol, handler, logger, nullptr) {}
+		TestClient(const StormByte::Network::Connection::Protocol& protocol, std::shared_ptr<StormByte::Network::Connection::Handler> handler, std::shared_ptr<Logger> logger) noexcept
+		:Client(protocol, handler, logger) {}
 
-		void SendTestMessage(const std::string& message) {
-			StormByte::Network::Packet packet(1); // Example opcode
-			packet << message;
+		Network::ExpectedVoid SendTestMessage(const std::string& message) {
+			TestMessagePacket packet(message);
+			return Send(packet);
+		}
 
-			auto result = Send(packet);
-			if (!result) {
-				std::cerr << "Failed to send message: " << result.error()->what() << std::endl;
-			} else {
-				std::cout << "Message sent successfully!" << std::endl;
+		StormByte::Expected<std::string, StormByte::Network::PacketError> ReceiveTestMessage() {
+			auto expected_packet = Receive();
+			if (!expected_packet) {
+				return StormByte::Unexpected(expected_packet.error());
 			}
+			auto test_message_packet = std::dynamic_pointer_cast<TestMessagePacket>(expected_packet.value());
+			if (!test_message_packet) {
+				return StormByte::Unexpected<StormByte::Network::PacketError>("Failed to cast packet");
+			}
+			return test_message_packet->Message();
 		}
 };
+```
+
+##### Usage Example
+Providing the previous class definitions, a simple Client/Server communication where the server just echoes the same packet back to the client can be implemented as follows:
+
+```cpp
+#include <iostream>
+#include <thread>
 
 int main() {
-	auto logger = std::make_shared<StormByte::Logger>(std::cout, StormByte::Logger::Level::Info);
-	auto handler = std::make_shared<StormByte::Network::Connection::Handler>();
+	bool server_ready = false;
+	bool server_completed = false;
+	bool client_completed = false;
 
-	TestClient client(StormByte::Network::Connection::Protocol::IPv4, handler, logger);
-	if (!client.Connect("localhost", 7070)) {
-		std::cerr << "Failed to connect to the server" << std::endl;
-		return 1;
+	// Start server thread
+	std::thread server_thread([&]() -> int {
+		TestServer server(Network::Connection::Protocol::IPv4, handler, logger);
+		if (!server.Connect(host, port).has_value())
+			return 1;
+
+		server_ready = true;
+
+		// Wait for the server to process clients
+		std::this_thread::sleep_for(std::chrono::seconds(5));
+
+		server.Disconnect();
+		server_completed = true;
+		return 0;
+	});
+
+	// Wait until the server is ready
+	while (!server_ready) {
+		std::this_thread::sleep_for(std::chrono::milliseconds(100));
 	}
 
-	client.SendTestMessage("Hello, Server!");
-	client.Disconnect();
+	// Start client thread
+	std::thread client_thread([&]() -> int {
+		TestClient client(Network::Connection::Protocol::IPv4, handler, logger);
+		if (!client.Connect(host, port).has_value())
+			return 1;
+
+		// Send a test message
+		const std::string test_message = "Hello, Server!";
+		auto expected_send = client.SendTestMessage(test_message);
+		if (!expected_send) {
+			std::cerr << "Send packet failed: " << expected_send.error()->what() << std::endl;
+			return 1;
+		}
+
+		auto expected_receive = client.ReceiveTestMessage();
+		if (!expected_receive) {
+			std::cerr << "Receive packet failed: " << expected_receive.error()->what() << std::endl;
+			return 1;
+		}
+
+		if (test_message == expected_receive.value())
+			std::cout << "Message sent and echoed back successfully!" << std::endl;
+		else
+			std::err << "Received message do not match to sent message!" << std::endl;
+
+		client.Disconnect();
+		client_completed = true;
+		return 0;
+	});
+
+	// Join threads
+	server_thread.join();
+	client_thread.join();
 
 	return 0;
 }
