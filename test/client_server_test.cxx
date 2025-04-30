@@ -38,7 +38,7 @@ class TestMessagePacket: public Network::Packet {
 	private:
 		std::string m_msg;
 
-		Expected<void, Network::PacketError> Initialize(Network::PacketReaderFunction reader) noexcept override {
+		Expected<void, Network::PacketError> Deserialize(Network::PacketReaderFunction reader) noexcept override {
 			// Opcode is already read in the constructor
 
 			// Read the size of the message
@@ -66,6 +66,12 @@ class TestMessagePacket: public Network::Packet {
 			m_buffer << string_serializable.Serialize();
 			return {};
 		}
+
+		void Serialize() const noexcept override {
+			Packet::Serialize();
+			Serializable<std::string> string_serial(m_msg);
+			m_buffer << string_serial.Serialize();
+		}
 };
 
 auto packet_instance_function = [](const unsigned short& opcode) -> std::shared_ptr<Network::Packet> {
@@ -82,13 +88,21 @@ class TestClient: public StormByte::Network::Client {
 		TestClient(const Network::Connection::Protocol& protocol, std::shared_ptr<Network::Connection::Handler> handler, std::shared_ptr<Logger> logger) noexcept
 		:Client(protocol, handler, logger, packet_instance_function) {}
 
-		std::string SendTestMessage(const std::string& message) {
+		Network::ExpectedVoid SendTestMessage(const std::string& message) {
 			TestMessagePacket packet(message);
-			auto result = Send(packet);
-			if (!result) {
-				return result.error()->what();
+			return Send(packet);
+		}
+
+		StormByte::Expected<std::string, Network::PacketError> ReceiveTestMessage() {
+			auto expected_packet = Receive();
+			if (!expected_packet) {
+				return StormByte::Unexpected(expected_packet.error());
 			}
-			return std::dynamic_pointer_cast<TestMessagePacket>(result.value())->Message();
+			auto test_message_packet = std::dynamic_pointer_cast<TestMessagePacket>(expected_packet.value());
+			if (!test_message_packet) {
+				return StormByte::Unexpected<Network::PacketError>("Failed to cast packet");
+			}
+			return test_message_packet->Message();
 		}
 };
 
@@ -119,14 +133,14 @@ int TestClientServerCommunication() {
 	// Start server thread
 	std::thread server_thread([&]() -> int {
 		TestServer server(Network::Connection::Protocol::IPv4, handler, logger);
-		ASSERT_TRUE(fn_name, server.Start(host, port).has_value());
+		ASSERT_TRUE(fn_name, server.Connect(host, port).has_value());
 
 		server_ready = true;
 
 		// Wait for the server to process clients
 		std::this_thread::sleep_for(std::chrono::seconds(5));
 
-		server.Stop();
+		server.Disconnect();
 		server_completed = true;
 		return 0;
 	});
@@ -143,7 +157,11 @@ int TestClientServerCommunication() {
 
 		// Send a test message
 		const std::string test_message = "Hello, Server!";
-		ASSERT_EQUAL(fn_name, test_message, client.SendTestMessage(test_message));
+		auto expected_send = client.SendTestMessage(test_message);
+		ASSERT_TRUE(fn_name, expected_send.has_value());
+		auto expected_receive = client.ReceiveTestMessage();
+		ASSERT_TRUE(fn_name, expected_receive.has_value());
+		ASSERT_EQUAL(fn_name, test_message, expected_receive.value());
 
 		client.Disconnect();
 		client_completed = true;

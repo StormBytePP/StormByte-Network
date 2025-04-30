@@ -37,7 +37,7 @@ namespace StormByte::Network {
 			/**
 			 * @brief The destructor of the Client class.
 			 */
-			virtual ~Client() noexcept override;
+			virtual ~Client() noexcept override								= default;
 
 			/**
 			 * @brief The assignment operator of the Client class.
@@ -60,27 +60,22 @@ namespace StormByte::Network {
 			 * @param protocol The protocol of the server.
 			 * @return The expected void or error.
 			 */
-			StormByte::Expected<void, ConnectionError>						Connect(const std::string& hostname, const unsigned short& port) noexcept;
-
-			/**
-			 * @brief The function to disconnect the server.
-			 */
-			void 															Disconnect() noexcept;
-
-			/**
-			 * @brief The function to send data to the server.
-			 * @param packet The packet to send.
-			 * @return The expected void or error.
-			 */
-			ExpectedPacket													Send(const Packet& packet) noexcept;
-
-		private:
-			PacketInstanceFunction m_packet_instance_function;				///< The function to create a packet instance from opcode.
+			virtual ExpectedVoid											Connect(const std::string& hostname, const unsigned short& port) noexcept override;
 
 			/**
 			 * @brief The function to receive data from the server.
 			 * @return The expected buffer or error.
 			 */
 			ExpectedPacket													Receive() noexcept;
+
+			/**
+			 * @brief The function to send data to the server.
+			 * @param packet The packet to send.
+			 * @return The expected void or error.
+			 */
+			ExpectedVoid													Send(const Packet& packet) noexcept;
+
+		private:
+			PacketInstanceFunction m_packet_instance_function;				///< The function to create a packet instance from opcode.
 	};
 }

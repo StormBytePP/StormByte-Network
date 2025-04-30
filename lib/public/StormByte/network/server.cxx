@@ -5,33 +5,38 @@
 using namespace StormByte::Network;
 
 Server::Server(Connection::Protocol protocol, std::shared_ptr<Connection::Handler> handler, std::shared_ptr<Logger> logger) noexcept:
-EndPoint(protocol, handler, logger) {
-	m_socket = new Socket::Server(protocol, handler, logger);
-}
+EndPoint(protocol, handler, logger) {}
 
 Server::~Server() noexcept {
-	Stop();
+	Disconnect();
 }
 
-ExpectedVoid Server::Start(const std::string& host, const unsigned short& port) noexcept {
+ExpectedVoid Server::Connect(const std::string& host, const unsigned short& port) noexcept {
 	if (Connection::IsConnected(m_status))
 		return StormByte::Unexpected<ConnectionError>("Server is already connected");
 
-	m_status.store(Connection::Status::Connecting);
+	try {
+		m_socket = new Socket::Server(m_protocol, m_handler, m_logger);
+	}
+	catch (const std::bad_alloc& e) {
+		return StormByte::Unexpected<ConnectionError>("Can not create connection: {}", e.what());
+	}
 
+	m_status.store(Connection::Status::Connecting);
 	auto expected_listen = static_cast<Socket::Server*>(m_socket)->Listen(host, port);
 	if (!expected_listen) {
 		m_status = Connection::Status::Disconnected;
 		return StormByte::Unexpected(expected_listen.error());
 	}
-
 	m_status.store(Connection::Status::Connected);
 	m_accept_thread = std::thread(&Server::AcceptClients, this);
-
 	return {};
 }
 
-void Server::Stop() noexcept {
+void Server::Disconnect() noexcept {
+	if (!Connection::IsConnected(m_status.load()))
+		return;
+		
 	m_status.store(Connection::Status::Disconnecting);
 
 	// Disconnect our socket so all operations pending on it will fail
@@ -47,7 +52,7 @@ void Server::Stop() noexcept {
 	// Clear the client vector
 	m_clients.clear();
 
-	m_status.store(Connection::Status::Disconnected);
+	EndPoint::Disconnect();
 }
 
 Socket::Client& Server::AddClient(Socket::Client&& client) noexcept {
@@ -128,18 +133,14 @@ void Server::AcceptClients() noexcept {
 }
 
 void Server::StartClientCommunication(Socket::Client& client) noexcept {
-	if (!Handshake(client)) {
-		m_logger << Logger::Level::LowLevel << "Client failed authentication, disconnecting..." << std::endl;
+	auto handshake_expected = Handshake(client);
+	if (!handshake_expected) {
+		m_logger << Logger::Level::LowLevel << "Failed handshake with client: " << handshake_expected.error()->what() << std::endl;
 		RemoveClientAsync(client);
 		return;
 	}
 
 	HandleClientMessages(client);
-}
-
-bool Server::Handshake(Socket::Client&) noexcept {
-	// The default function returns true
-	return true;
 }
 
 void Server::HandleClientMessages(Socket::Client& client) noexcept {

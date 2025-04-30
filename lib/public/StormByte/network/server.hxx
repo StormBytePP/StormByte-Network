@@ -59,12 +59,12 @@ namespace StormByte::Network {
 			 * @param port The port to use.
 			 * @return True if the server started successfully, false otherwise.
 			 */
-			virtual StormByte::Expected<void, ConnectionError> 								Start(const std::string& host, const unsigned short& port) noexcept;
+			virtual ExpectedVoid 															Connect(const std::string& host, const unsigned short& port) noexcept override;
 
 			/**
 			 * @brief Stops a running server
 			 */
-			virtual void 																	Stop() noexcept;
+			virtual void 																	Disconnect() noexcept override;
 
 		protected:
 			std::vector<FutureBufferProcessor> m_input_pipeline;							///< The input pipeline, will be processed before the client message is processed.
@@ -94,12 +94,6 @@ namespace StormByte::Network {
 			 * @param client The client to disconnect.
 			 */
 			void 																			DisconnectClient(Socket::Client& client) noexcept;
-
-			/**
-			 * @brief The function to setup client communication (authentication, etc).
-			 * @param client The client to handshake with.
-			 */
-			virtual bool 																	Handshake(Socket::Client& client) noexcept;
 
 			/**
 			 * @brief The function to process a client message and returns a reply.

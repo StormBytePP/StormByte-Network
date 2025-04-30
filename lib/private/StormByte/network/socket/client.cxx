@@ -214,7 +214,7 @@ ExpectedVoid Socket::Client::Send(const Packet& packet) noexcept {
 		return StormByte::Unexpected<ConnectionError>("Failed to send packet: Client is not connected");
 	}
 
-	return Send(packet.Data());
+	return Send(packet.Span());
 }
 
 void Socket::Client::Read(PromisedBuffer& promise, std::size_t max_size) noexcept {
