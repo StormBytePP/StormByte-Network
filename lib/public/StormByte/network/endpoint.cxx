@@ -39,15 +39,36 @@ ExpectedPacket EndPoint::Receive(Socket::Client& client) noexcept {
 	if (!Connection::IsConnected(m_status))
 		return StormByte::Unexpected<PacketError>("Client is not connected");
 
+	return Receive(client, m_input_pipeline);
+}
+
+ExpectedPacket EndPoint::RawReceive(Socket::Client& client) noexcept {
+	if (!Connection::IsConnected(m_status))
+		return StormByte::Unexpected<PacketError>("Client is not connected");
+
+	Buffer::Pipeline empty_pipeline;
+	return Receive(client, empty_pipeline);
+}
+
+ExpectedVoid EndPoint::Send(Socket::Client& client, const Packet& packet) noexcept {
+	return Send(client, packet, m_output_pipeline);
+}
+
+ExpectedVoid EndPoint::RawSend(Socket::Client& client, const Packet& packet) noexcept {
+	Buffer::Pipeline empty_pipeline;
+	return Send(client, packet, empty_pipeline);
+}
+
+ExpectedPacket EndPoint::Receive(Socket::Client& client, Buffer::Pipeline& pipeline) noexcept {
 	auto expected_packet = Packet::Read(
 		m_handler->PacketInstanceFunction(),
-		[this, &client](const size_t& size) -> ExpectedBuffer {
+		[&client, &pipeline](const size_t& size) -> ExpectedBuffer {
 			auto expected_buffer = client.Receive(size);
 			if (!expected_buffer)
 				return StormByte::Unexpected<ConnectionError>(expected_buffer.error()->what());
 			Buffer::Producer pipeline_buffer(expected_buffer.value().get());
 			pipeline_buffer << Buffer::Status::ReadOnly;
-			auto pipeline_buffer_result = m_input_pipeline.Process(pipeline_buffer.Consumer());
+			auto pipeline_buffer_result = pipeline.Process(pipeline_buffer.Consumer());
 			if (!pipeline_buffer_result.IsReadable())
 				return StormByte::Unexpected<ConnectionError>("Error processing input pipeline");
 			auto expected_processed_buffer = pipeline_buffer_result.Read(size);
@@ -62,13 +83,10 @@ ExpectedPacket EndPoint::Receive(Socket::Client& client) noexcept {
 	return expected_packet;
 }
 
-ExpectedVoid EndPoint::Send(Socket::Client& client, const Packet& packet) noexcept {
-	if (!Connection::IsConnected(m_status))
-		return StormByte::Unexpected<ConnectionError>("Client is not connected");
-
+ExpectedVoid EndPoint::Send(Socket::Client& client, const Packet& packet, Buffer::Pipeline& pipeline) noexcept {
 	Buffer::Producer packet_buffer(packet.Serialize());
 	packet_buffer << Buffer::Status::ReadOnly;
-	Buffer::Consumer pipeline_buffer = m_output_pipeline.Process(packet_buffer.Consumer());
+	Buffer::Consumer pipeline_buffer = pipeline.Process(packet_buffer.Consumer());
 	auto expected_write = client.Send(pipeline_buffer);
 	if (!expected_write)
 		return StormByte::Unexpected<ConnectionError>(expected_write.error()->what());

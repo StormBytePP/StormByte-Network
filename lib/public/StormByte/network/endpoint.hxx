@@ -100,7 +100,7 @@ namespace StormByte::Network {
 			virtual ExpectedVoid 												Authenticate(Socket::Client& client) noexcept;
 
 			/**
-			 * @brief Receives packet from the client.
+			 * @brief Receives packet from the client processing pipeline before constructing packet.
 			 * @param client A reference to the client socket.
 			 * @param pif The packet instance function to create a packet.
 			 * @return An expected packet or error.
@@ -108,11 +108,44 @@ namespace StormByte::Network {
 			ExpectedPacket 														Receive(Socket::Client& client) noexcept;
 
 			/**
-			 * @brief Sends a packet to the client.
+			 * @brief Receives packet from the client without processing pipeline before constructing packet.
+			 * @param client A reference to the client socket.
+			 * @return An expected packet or error.
+			 */
+			ExpectedPacket 														RawReceive(Socket::Client& client) noexcept;
+
+			/**
+			 * @brief Sends a packet to the client processing pipeline before sending packet.
 			 * @param client A reference to the client socket.
 			 * @param packet The packet to send.
 			 * @return An expected void or error.
 			 */
 			ExpectedVoid 														Send(Socket::Client& client, const Packet& packet) noexcept;
+
+			/**
+			 * @brief Sends a packet to the client without processing pipeline before sending packet.
+			 * @param client A reference to the client socket.
+			 * @param packet The packet to send.
+			 * @return An expected void or error.
+			 */
+			ExpectedVoid 														RawSend(Socket::Client& client, const Packet& packet) noexcept;
+
+		private:
+			/**
+			 * @brief Receives packet from the client processing the specified pipeline before constructing packet.
+			 * @param client A reference to the client socket.
+			 * @param pipeline The pipeline to process the data.
+			 * @return An expected packet or error.
+			 */
+			ExpectedPacket 														Receive(Socket::Client& client, Buffer::Pipeline& pipeline) noexcept;
+
+			/**
+			 * @brief Sends a packet to the client processing the specified pipeline before sending packet.
+			 * @param client A reference to the client socket.
+			 * @param packet The packet to send.
+			 * @param pipeline The pipeline to process the data.
+			 * @return An expected void or error.
+			 */
+			ExpectedVoid 														Send(Socket::Client& client, const Packet& packet, Buffer::Pipeline& pipeline) noexcept;
 	};
 }
