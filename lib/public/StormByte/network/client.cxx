@@ -3,8 +3,8 @@
 
 using namespace StormByte::Network;
 
-Client::Client(const Connection::Protocol& protocol, std::shared_ptr<Connection::Handler> handler, std::shared_ptr<Logger> logger, const PacketInstanceFunction& pf) noexcept:
-EndPoint(protocol, handler, logger), m_packet_instance_function(pf) {}
+Client::Client(const Connection::Protocol& protocol, std::shared_ptr<Connection::Handler> handler, std::shared_ptr<Logger> logger) noexcept:
+EndPoint(protocol, handler, logger) {}
 
 ExpectedVoid Client::Connect(const std::string& hostname, const unsigned short& port) noexcept {
 	if (Connection::IsConnected(m_status))
@@ -30,7 +30,7 @@ ExpectedVoid Client::Connect(const std::string& hostname, const unsigned short& 
 }
 
 ExpectedPacket Client::Receive() noexcept {
-	return EndPoint::Receive(static_cast<Socket::Client&>(*m_socket), m_packet_instance_function);
+	return EndPoint::Receive(static_cast<Socket::Client&>(*m_socket), m_handler->PacketInstanceFunction());
 }
 
 ExpectedVoid Client::Send(const Packet& packet) noexcept {

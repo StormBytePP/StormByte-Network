@@ -139,7 +139,7 @@ StormByte::Network::ExpectedReadResult Socket::WaitForData(const long long& usec
 	return StormByte::Unexpected<ConnectionClosed>("Failed to wait for data: Unknown error occurred");
 }
 
-StormByte::Network::ExpectedHandlerType Socket::CreateSocket() noexcept {
+StormByte::Expected<StormByte::Network::Connection::Handler::Type, StormByte::Network::ConnectionError> Socket::CreateSocket() noexcept {
 	auto protocol = m_protocol == Connection::Protocol::IPv4 ? AF_INET : AF_INET6;
 	Connection::Handler::Type handle = ::socket(protocol, SOCK_STREAM, 0);
 	#ifdef WINDOWS

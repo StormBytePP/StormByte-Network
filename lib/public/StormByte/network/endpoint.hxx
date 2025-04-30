@@ -1,6 +1,7 @@
 #pragma once
 
 #include <StormByte/buffer/pipeline.hxx>
+#include <StormByte/network/connection/handler.hxx>
 #include <StormByte/network/packet.hxx>
 #include <StormByte/network/typedefs.hxx>
 #include <StormByte/logger.hxx>

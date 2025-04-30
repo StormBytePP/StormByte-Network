@@ -139,6 +139,40 @@ ExpectedVoid Socket::Client::Send(Buffer::ConstByteSpan data) noexcept {
 	return {};
 }
 
+ExpectedVoid Socket::Client::Send(const Packet& packet) noexcept {
+	m_logger << Logger::Level::LowLevel << "Sending packet with opcode: " << packet.Opcode() << std::endl;
+
+	return Send(packet.Serialize());
+}
+
+ExpectedVoid Socket::Client::Send(Buffer::Consumer data) noexcept {
+	if (m_status != Connection::Status::Connected) {
+		return StormByte::Unexpected<ConnectionError>("Failed to send: Client is not connected");
+	}
+
+	while (data.IsReadable() && !data.IsEoF()) {
+		if (data.AvailableBytes() == 0) {
+			m_logger << Logger::Level::LowLevel << "No data available to send. Waiting..." << std::endl;
+			std::this_thread::sleep_for(std::chrono::milliseconds(100));
+			continue;
+		}
+		auto send_bytes = data.AvailableBytes();
+		auto expected_data = data.Read(send_bytes);
+		if (!expected_data) {
+			return StormByte::Unexpected<ConnectionError>(expected_data.error()->what());
+		}
+		auto expected_send = Send(expected_data.value());
+		if (!expected_send) {
+			return StormByte::Unexpected<ConnectionError>(expected_send.error()->what());
+		}
+	}
+	if (!data.IsReadable()) {
+		return StormByte::Unexpected<ConnectionError>("Error while sending buffer");
+	}
+
+	return {};
+}
+
 bool Socket::Client::HasShutdownRequest() noexcept {
 	char buffer[1]; // Inspect only one byte
 #ifdef LINUX
@@ -204,17 +238,6 @@ ExpectedFutureBuffer Socket::Client::Receive(const std::size_t& max_size) noexce
 		m_logger << Logger::Level::Error << "Failed to initiate receive operation: " << e.what() << std::endl;
 		return StormByte::Unexpected<ConnectionError>("Receive failed: {}", e.what());
 	}
-}
-
-ExpectedVoid Socket::Client::Send(const Packet& packet) noexcept {
-	m_logger << Logger::Level::LowLevel << "Sending packet with opcode: " << packet.Opcode() << std::endl;
-
-	if (m_status != Connection::Status::Connected) {
-		m_logger << Logger::Level::Error << "Failed to send packet: Client is not connected" << std::endl;
-		return StormByte::Unexpected<ConnectionError>("Failed to send packet: Client is not connected");
-	}
-
-	return Send(packet.Span());
 }
 
 void Socket::Client::Read(PromisedBuffer& promise, std::size_t max_size) noexcept {

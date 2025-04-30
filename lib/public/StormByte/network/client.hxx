@@ -18,9 +18,8 @@ namespace StormByte::Network {
 			 * @brief The constructor of the Client class.
 			 * @param address The address of the server.
 			 * @param handler The handler of the server.
-			 * @param pf The function to create a packet instance from opcode
 			 */
-			Client(const Connection::Protocol& protocol, std::shared_ptr<Connection::Handler> handler, std::shared_ptr<Logger> logger, const PacketInstanceFunction& pf) noexcept;
+			Client(const Connection::Protocol& protocol, std::shared_ptr<Connection::Handler> handler, std::shared_ptr<Logger> logger) noexcept;
 
 			/**
 			 * @brief The copy constructor of the Client class.
@@ -74,8 +73,5 @@ namespace StormByte::Network {
 			 * @return The expected void or error.
 			 */
 			ExpectedVoid													Send(const Packet& packet) noexcept;
-
-		private:
-			PacketInstanceFunction m_packet_instance_function;				///< The function to create a packet instance from opcode.
 	};
 }

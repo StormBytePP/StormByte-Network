@@ -96,12 +96,16 @@ namespace StormByte::Network {
 			void 																			DisconnectClient(Socket::Client& client) noexcept;
 
 			/**
-			 * @brief The function to process a client message and returns a reply.
+			 * @brief The function to process a client packet and returns a reply.
+			 * 
+			 * This function is called when a client sends a packet to the server
+			 * so the derived class can process the packet and optionally send a reply.
+			 * If the function returns an unexpected it will be logged and the client will be disconnected.
 			 * @param client The client to process the message for.
 			 * @param message The message to process.
 			 * @return The expected result of the operation.
 			 */
-			virtual ExpectedFutureBuffer													ProcessClientMessage(Socket::Client& client, FutureBuffer& message) noexcept = 0;
+			virtual Expected<void, PacketError>												ProcessClientPacket(Socket::Client& client, const Packet& packet) noexcept = 0;
 
 		private:
 			std::thread m_accept_thread;													///< The thread for accepting clients.
@@ -131,29 +135,5 @@ namespace StormByte::Network {
 			 * @param client The client to handle messages for.
 			 */
 			void 																			HandleClientMessages(Socket::Client& client) noexcept;
-
-			/**
-			 * @brief The function to send a reply to client.
-			 * @param client The client to reply to.
-			 * @param message The reply.
-			 * @return The expected result of the operation.
-			 */
-			ExpectedVoid 																	SendClientReply(Socket::Client& client, FutureBuffer& message) noexcept;
-
-			/**
-			 * @brief The function to preprocess a message.
-			 * @param client The client to preprocess the message for.
-			 * @param message The message to preprocess.
-			 * @return The future of the preprocessed message.
-			 */
-			ExpectedFutureBuffer															ProcessInputMessagePipeline(Socket::Client& client, FutureBuffer& message) noexcept;
-
-			/**
-			 * @brief The function to preprocess a reply for example to encrypt it.
-			 * @param client The client to preprocess the reply for.
-			 * @param message The message to preprocess.
-			 * @return The future of the preprocessed reply.
-			 */
-			ExpectedFutureBuffer															ProcessOutputMessagePipeline(Socket::Client& client, FutureBuffer& message) noexcept;
 	};
 }

@@ -111,7 +111,7 @@ namespace StormByte::Network::Socket {
 			 * @brief The function to create a socket.
 			 * @return The expected result of the operation.
 			 */
-			ExpectedHandlerType													CreateSocket() noexcept;
+			Expected<Connection::Handler::Type, ConnectionError>				CreateSocket() noexcept;
 
 			/**
 			 * @brief Function to initialize the socket after connecting (or accepting a connection).

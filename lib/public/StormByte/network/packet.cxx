@@ -4,19 +4,7 @@
 using namespace StormByte::Network;
 
 Packet::Packet(const unsigned short& opcode) noexcept:
-m_opcode(opcode) {
-	auto opcode_serial = Serializable<unsigned short>(opcode);
-}
-
-StormByte::Buffer::Simple&& Packet::Buffer() noexcept {
-	Serialize();
-	return std::move(m_buffer);
-}
-
-const StormByte::Buffer::ConstByteSpan Packet::Span() const noexcept {
-	Serialize();
-	return m_buffer.Span();
-}
+m_opcode(opcode) {}
 
 const unsigned short& Packet::Opcode() const noexcept {
 	return m_opcode;
@@ -43,7 +31,9 @@ ExpectedPacket Packet::Read(const PacketInstanceFunction& pif, PacketReaderFunct
 	return packet;
 }
 
-void Packet::Serialize() const noexcept {
+StormByte::Buffer::Consumer Packet::Serialize() const noexcept {
+	Buffer::Producer buffer;
 	auto opcode_serial = Serializable<unsigned short>(m_opcode);
-	m_buffer = std::move(opcode_serial.Serialize());
+	buffer = opcode_serial.Serialize();
+	return buffer.Consumer();
 }

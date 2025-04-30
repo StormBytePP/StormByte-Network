@@ -52,18 +52,6 @@ namespace StormByte::Network {
 			Packet& operator=(Packet&& other) noexcept					= default;
 
 			/**
-			 * @brief Transfers ownership of the buffer to the caller.
-			 * @return An rvalue reference to the packet's buffer.
-			 */
-			Buffer::Simple&&											Buffer() noexcept;
-
-			/**
-			 * @brief Provides a memory view of the packet.
-			 * @return A constant byte span representing the packet's memory.
-			 */
-			const Buffer::ConstByteSpan									Span() const noexcept;
-
-			/**
 			 * @brief Retrieves the opcode of the packet.
 			 * @return A constant reference to the packet's opcode.
 			 */
@@ -77,9 +65,16 @@ namespace StormByte::Network {
 			 */
 			static ExpectedPacket										Read(const PacketInstanceFunction& pif, PacketReaderFunction reader) noexcept;
 
-		protected:
-			mutable Buffer::Simple m_buffer;							///< The data buffer of the packet.
+			/**
+			 * @brief Serializes the packet.
+			 * 
+			 * Override this function in derived classes to produce a `Buffer::Consumer` with custom data.
+			 * Ensure the base class `Serialize` function is called to include the opcode in the buffer and
+			 * that you set the Consumer buffer to ReadOnly when finished so readers can detect EoF.
+			 */
+			virtual Buffer::Consumer									Serialize() const noexcept;
 
+		protected:
 			/**
 			 * @brief Constructs a Packet with the specified opcode.
 			 * @param opcode The opcode of the packet.
@@ -92,14 +87,6 @@ namespace StormByte::Network {
 			 * @return An expected result or an error.
 			 */
 			virtual Expected<void, PacketError>							Deserialize(PacketReaderFunction reader) noexcept = 0;
-
-			/**
-			 * @brief Serializes the packet.
-			 * 
-			 * Override this function in derived classes to populate the buffer with custom data.
-			 * Ensure the base class `Serialize` function is called to include the opcode.
-			 */
-			virtual void 												Serialize() const noexcept;
 
 		private:
 			const unsigned short m_opcode;								///< The opcode of the packet.

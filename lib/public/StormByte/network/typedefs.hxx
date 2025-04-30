@@ -4,7 +4,6 @@
 #include <StormByte/buffer/producer.hxx>
 #include <StormByte/buffer/simple.hxx>
 #include <StormByte/expected.hxx>
-#include <StormByte/network/connection/handler.hxx>
 #include <StormByte/network/connection/protocol.hxx>
 #include <StormByte/network/connection/rw.hxx>
 #include <StormByte/network/connection/status.hxx>
@@ -18,6 +17,9 @@
  * @brief The namespace containing all the network related classes.
  */
 namespace StormByte::Network {
+	namespace Connection {
+		class Handler;																													///< The connection handler class (forward declaration).																												///< The connection info class (forward declaration).
+	}																																	///< The connection info class (forward declaration).
 	class Packet;																														///< The packet class (forward declaration).
 	namespace Socket {	
 		class Socket;																													///< The socket class (forward declaration).																							
@@ -29,8 +31,7 @@ namespace StormByte::Network {
 	using ExpectedFutureBuffer = StormByte::Expected<FutureBuffer, ConnectionError>;													///< The expected future type.
 	using ExpectedVoid = StormByte::Expected<void, ConnectionError>;																	///< The expected void type.
 	using ExpectedClient = StormByte::Expected<Socket::Client, ConnectionError>;														///< The expected client type.
-	using ExpectedReadResult = StormByte::Expected<Connection::Read::Result, ConnectionClosed>;											///< The expected read result type.
-	using ExpectedHandlerType = StormByte::Expected<Connection::Handler::Type, ConnectionError>;										///< The expected handler type.
+	using ExpectedReadResult = StormByte::Expected<Connection::Read::Result, ConnectionClosed>;											///< The expected read result type.										///< The expected handler type.
 	using FutureBufferProcessor = std::function<StormByte::Expected<FutureBuffer, ConnectionError>(Socket::Client&, FutureBuffer&)>;	///< The future data function type.
 	using SharedConsumerBuffer = std::shared_ptr<Buffer::Consumer>;																	///< The shared consumer buffer type.
 	using SharedProducerBuffer = std::shared_ptr<Buffer::Producer>;																	///< The shared producer buffer type.

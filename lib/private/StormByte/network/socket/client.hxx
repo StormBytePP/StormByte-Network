@@ -1,6 +1,6 @@
 #pragma once
 
-#include <StormByte/buffer/simple.hxx>
+#include <StormByte/buffer/consumer.hxx>
 #include <StormByte/network/connection/rw.hxx>
 #include <StormByte/network/packet.hxx>
 #include <StormByte/network/socket/socket.hxx>
@@ -91,6 +91,13 @@ namespace StormByte::Network::Socket {
 		 * @return The expected result of the operation.
 		 */
 		ExpectedVoid 													Send(Buffer::ConstByteSpan data) noexcept;
+
+		/**
+		 * @brief Function to send data to the socket using a Buffer::Consumer.
+		 * @param data A consumer of the data to send.
+		 * @return The expected result of the operation.
+		 */
+		ExpectedVoid 													Send(Buffer::Consumer data) noexcept;
 
 		/**
 		 * @brief Function to check if a shutdown request has been made.

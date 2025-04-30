@@ -165,28 +165,16 @@ void Server::HandleClientMessages(Socket::Client& client) noexcept {
 					goto end;
 				}
 				else {
-					auto expected_msg = client.Receive();
-					if (!expected_msg) {
-						m_logger << Logger::Level::Error << expected_msg.error()->what() << std::endl;
+					auto expected_packet = Receive(client, m_handler->PacketInstanceFunction());
+					if (!expected_packet) {
+						m_logger << Logger::Level::Error << expected_packet.error()->what() << std::endl;
 						RemoveClientAsync(client);
 						goto end;
 					}
 
-					auto expected_preprocessed_msg = ProcessInputMessagePipeline(client, expected_msg.value());
-					if (!expected_preprocessed_msg) {
-						m_logger << Logger::Level::Error << expected_preprocessed_msg.error()->what() << std::endl;
-						RemoveClientAsync(client);
-						goto end;
-					}
-					auto process_expected = ProcessClientMessage(client, expected_preprocessed_msg.value());
-					if (!process_expected) {
-						m_logger << Logger::Level::Error << process_expected.error()->what() << std::endl;
-						RemoveClientAsync(client);
-						goto end;
-					}
-					auto send_expected = SendClientReply(client, process_expected.value());
-					if (!send_expected) {
-						m_logger << Logger::Level::Error << send_expected.error()->what() << std::endl;
+					auto expected_processed_packet = ProcessClientPacket(client, *expected_packet.value());
+					if (!expected_processed_packet) {
+						m_logger << Logger::Level::Error << expected_processed_packet.error()->what() << std::endl;
 						RemoveClientAsync(client);
 						goto end;
 					}
@@ -201,48 +189,4 @@ void Server::HandleClientMessages(Socket::Client& client) noexcept {
 	
 	end:
 	m_logger << Logger::Level::LowLevel << "Stopping handle client messages thread" << std::endl;
-}
-
-ExpectedVoid Server::SendClientReply(Socket::Client& client, FutureBuffer& message) noexcept {
-	auto preprocessed_reply = ProcessOutputMessagePipeline(client, message);
-	if (!preprocessed_reply) {
-		m_logger << Logger::Level::Error << preprocessed_reply.error()->what() << std::endl;
-		return StormByte::Unexpected<ConnectionError>(preprocessed_reply.error()->what());
-	}
-	auto expected_send = client.Send(preprocessed_reply.value().get().Data());
-	if (!expected_send) {
-		m_logger << Logger::Level::Error << expected_send.error()->what() << std::endl;
-		return StormByte::Unexpected<ConnectionError>(expected_send.error()->what());
-	}
-	return {};
-}
-
-ExpectedFutureBuffer Server::ProcessInputMessagePipeline(Socket::Client& client, FutureBuffer& message) noexcept {
-	FutureBuffer processed_message = std::move(message);
-
-	for (auto& processor: m_input_pipeline) {
-		auto expected_processed = processor(client, processed_message);
-		if (!expected_processed) {
-			m_logger << Logger::Level::Error << expected_processed.error()->what() << std::endl;
-			return StormByte::Unexpected<ConnectionError>(expected_processed.error()->what());
-		}
-		processed_message = std::move(expected_processed.value());
-	}
-
-	return processed_message;
-}
-
-ExpectedFutureBuffer Server::ProcessOutputMessagePipeline(Socket::Client& client, FutureBuffer& message) noexcept {
-	FutureBuffer processed_message = std::move(message);
-
-	for (auto& processor: m_output_pipeline) {
-		auto expected_processed = processor(client, processed_message);
-		if (!expected_processed) {
-			m_logger << Logger::Level::Error << expected_processed.error()->what() << std::endl;
-			return StormByte::Unexpected<ConnectionError>(expected_processed.error()->what());
-		}
-		processed_message = std::move(expected_processed.value());
-	}
-
-	return processed_message;
 }

@@ -13,7 +13,6 @@ using namespace StormByte;
 constexpr const char* host = "localhost";
 constexpr const unsigned short port = 7070;
 auto logger = std::make_shared<Logger>(std::cout, Logger::Level::Info);
-auto handler = std::make_shared<Network::Connection::Handler>();
 
 enum class OpCodes: unsigned short {
 	TestMessage = 1,
@@ -23,11 +22,9 @@ class TestMessagePacket: public Network::Packet {
 	public:
 		TestMessagePacket() noexcept:
 		Packet(static_cast<unsigned short>(OpCodes::TestMessage)) {}
+
 		TestMessagePacket(const std::string& msg) noexcept:
-		Packet(static_cast<unsigned short>(OpCodes::TestMessage)), m_msg(msg) {
-			Serializable<std::string> string_serial(m_msg);
-			m_buffer << string_serial.Serialize();
-		}
+		Packet(static_cast<unsigned short>(OpCodes::TestMessage)), m_msg(msg) {}
 
 		~TestMessagePacket() noexcept override = default;
 
@@ -62,15 +59,16 @@ class TestMessagePacket: public Network::Packet {
 				return StormByte::Unexpected<Network::PacketError>("Failed to deserialize message");
 			}
 			m_msg = string_serial.value();
-			Serializable<std::string> string_serializable(m_msg);
-			m_buffer << string_serializable.Serialize();
+
 			return {};
 		}
 
-		void Serialize() const noexcept override {
-			Packet::Serialize();
+		Buffer::Consumer Serialize() const noexcept override {
+			Buffer::Producer buffer(Packet::Serialize());
 			Serializable<std::string> string_serial(m_msg);
-			m_buffer << string_serial.Serialize();
+			buffer << string_serial.Serialize();
+			buffer << Buffer::Status::ReadOnly;
+			return buffer.Consumer();
 		}
 };
 
@@ -83,10 +81,12 @@ auto packet_instance_function = [](const unsigned short& opcode) -> std::shared_
 	}
 };
 
+auto handler = std::make_shared<Network::Connection::Handler>(packet_instance_function);
+
 class TestClient: public StormByte::Network::Client {
 	public:
 		TestClient(const Network::Connection::Protocol& protocol, std::shared_ptr<Network::Connection::Handler> handler, std::shared_ptr<Logger> logger) noexcept
-		:Client(protocol, handler, logger, packet_instance_function) {}
+		:Client(protocol, handler, logger) {}
 
 		Network::ExpectedVoid SendTestMessage(const std::string& message) {
 			TestMessagePacket packet(message);
@@ -112,11 +112,15 @@ class TestServer : public Network::Server {
 			: Network::Server(protocol, handler, logger) {}
 
 	private:
-		StormByte::Network::ExpectedFutureBuffer ProcessClientMessage(
-			StormByte::Network::Socket::Client& client,
-			StormByte::Network::FutureBuffer& message) noexcept override {
+		StormByte::Expected<void, Network::PacketError> ProcessClientPacket(
+			Network::Socket::Client& client,
+			const Network::Packet& packet) noexcept override {
 			// Echo the received message back to the client
-			return StormByte::Network::ExpectedFutureBuffer(std::move(message));
+			auto expected_send = Send(client, packet);
+			if (!expected_send) {
+				return StormByte::Unexpected<Network::PacketError>(expected_send.error()->what());
+			}
+			return {};
 		}
 };
 
