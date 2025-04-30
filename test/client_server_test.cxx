@@ -106,10 +106,48 @@ class TestClient: public StormByte::Network::Client {
 		}
 };
 
+Buffer::Simple FlipBytes(const Buffer::Simple& buffer) {
+	Buffer::Data flipped_data;
+	for (const auto& byte : buffer.Span()) {
+		flipped_data.push_back(~byte);
+	}
+	return flipped_data;
+}
+
+void FlipBytes(Buffer::Consumer in, Buffer::Producer out) {
+	while(in.IsReadable() && !in.IsEoF()) {
+		if (in.AvailableBytes() == 0) {
+			std::this_thread::sleep_for(std::chrono::milliseconds(100));
+			continue;
+		}
+		auto expected_data = in.Read(in.AvailableBytes());
+		if (!expected_data) {
+			out << Buffer::Status::Error;
+			return;
+		}
+		auto flipped_data = FlipBytes(expected_data.value());
+		out << std::move(flipped_data);
+	}
+	out << Buffer::Status::ReadOnly;
+}
+
+class TestSimulatedEncryptedClient : public TestClient {
+	public:
+		TestSimulatedEncryptedClient(const Network::Connection::Protocol& protocol, std::shared_ptr<Network::Connection::Handler> handler, std::shared_ptr<Logger> logger) noexcept
+		: TestClient(protocol, handler, logger) {
+			m_input_pipeline.AddPipe([](Buffer::Consumer in, Buffer::Producer out) {
+				FlipBytes(in, out);
+			});
+			m_output_pipeline.AddPipe([](Buffer::Consumer in, Buffer::Producer out) {
+				FlipBytes(in, out);
+			});
+		}
+};
+
 class TestServer : public Network::Server {
 	public:
 		TestServer(Network::Connection::Protocol protocol, std::shared_ptr<Network::Connection::Handler> handler, std::shared_ptr<Logger> logger) noexcept
-			: Network::Server(protocol, handler, logger) {}
+		: Network::Server(protocol, handler, logger) {}
 
 	private:
 		StormByte::Expected<void, Network::PacketError> ProcessClientPacket(
@@ -121,6 +159,19 @@ class TestServer : public Network::Server {
 				return StormByte::Unexpected<Network::PacketError>(expected_send.error()->what());
 			}
 			return {};
+		}
+};
+
+class TestSimulatedEncryptedServer : public TestServer {
+	public:
+		TestSimulatedEncryptedServer(Network::Connection::Protocol protocol, std::shared_ptr<Network::Connection::Handler> handler, std::shared_ptr<Logger> logger) noexcept
+		: TestServer(protocol, handler, logger) {
+			m_input_pipeline.AddPipe([](Buffer::Consumer in, Buffer::Producer out) {
+				FlipBytes(in, out);
+			});
+			m_output_pipeline.AddPipe([](Buffer::Consumer in, Buffer::Producer out) {
+				FlipBytes(in, out);
+			});
 		}
 };
 
@@ -183,10 +234,70 @@ int TestClientServerCommunication() {
 	RETURN_TEST(fn_name, 0);
 }
 
+/**
+ * @brief Test case for client-server communication with encryption simulated.
+ */
+int TestClientServerSimulatedEncryptedCommunication() {
+	const std::string fn_name = "TestClientServerSimulatedEncryptedCommunication";
+
+	bool server_ready = false;
+	bool server_completed = false;
+	bool client_completed = false;
+
+	// Start server thread
+	std::thread server_thread([&]() -> int {
+		TestSimulatedEncryptedServer server(Network::Connection::Protocol::IPv4, handler, logger);
+		ASSERT_TRUE(fn_name, server.Connect(host, port).has_value());
+
+		server_ready = true;
+
+		// Wait for the server to process clients
+		std::this_thread::sleep_for(std::chrono::seconds(5));
+
+		server.Disconnect();
+		server_completed = true;
+		return 0;
+	});
+
+	// Wait until the server is ready
+	while (!server_ready) {
+		std::this_thread::sleep_for(std::chrono::milliseconds(100));
+	}
+
+	// Start client thread
+	std::thread client_thread([&]() -> int {
+		TestSimulatedEncryptedClient client(Network::Connection::Protocol::IPv4, handler, logger);
+		ASSERT_TRUE(fn_name, client.Connect(host, port).has_value());
+
+		// Send a test message
+		const std::string test_message = "Hello, Server!";
+		auto expected_send = client.SendTestMessage(test_message);
+		ASSERT_TRUE(fn_name, expected_send.has_value());
+		auto expected_receive = client.ReceiveTestMessage();
+		ASSERT_TRUE(fn_name, expected_receive.has_value());
+		ASSERT_EQUAL(fn_name, test_message, expected_receive.value());
+
+		client.Disconnect();
+		client_completed = true;
+		return 0;
+	});
+
+	// Join threads
+	server_thread.join();
+	client_thread.join();
+
+	// Final assertions
+	ASSERT_TRUE(fn_name, server_completed);
+	ASSERT_TRUE(fn_name, client_completed);
+
+	RETURN_TEST(fn_name, 0);
+}
+
 int main() {
 	int result = 0;
 
 	result += TestClientServerCommunication();
+	result += TestClientServerSimulatedEncryptedCommunication();
 
 	if (result == 0) {
 		std::cout << "All tests passed!" << std::endl;

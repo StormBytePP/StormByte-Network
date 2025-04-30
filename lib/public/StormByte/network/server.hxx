@@ -67,9 +67,6 @@ namespace StormByte::Network {
 			virtual void 																	Disconnect() noexcept override;
 
 		protected:
-			std::vector<FutureBufferProcessor> m_input_pipeline;							///< The input pipeline, will be processed before the client message is processed.
-			std::vector<FutureBufferProcessor> m_output_pipeline;							///< The output pipeline, will be processed before the client reply is sent.
-
 			/**
 			 * @brief The function to add a client to client's vector for store and ownership handling.
 			 * @param client The client to add.
