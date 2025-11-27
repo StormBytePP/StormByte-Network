@@ -17,7 +17,9 @@ jobs:
       matrix:
         compiler: [gcc, clang]
         stdlib: [libstdc++, libc++]
-
+        exclude:
+        - compiler: gcc
+          stdlib: libc++
     name: ${{ matrix.compiler }}-${{ matrix.stdlib }}
 
     steps:
@@ -26,54 +28,24 @@ jobs:
       with:
         submodules: true
 
-    - name: Set up ninja
-      uses: ./.github/actions/setup-ninja
+    - name: Install toolchain
+      id: install-toolchain
+      uses: stormbytepp/install-toolchain@v1
+      with:
+        compiler: ${{ matrix.compiler }}
 
-    - name: Update repository
-      run: sudo apt update
-
-    - name: Install dependencies
-      run: |
-        sudo apt update
-        if [ "${{ matrix.compiler }}" == "gcc" ]; then
-          sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-14 100
-          sudo update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-14 100
-          sudo update-alternatives --set gcc /usr/bin/gcc-14
-          sudo update-alternatives --set g++ /usr/bin/g++-14
-        elif [ "${{ matrix.compiler }}" == "clang" ]; then
-          sudo apt install -y clang-19 libc++-19-dev libc++abi-19-dev clang-format-19 clang-tidy-19
-          sudo update-alternatives --remove-all clang
-          sudo update-alternatives --remove-all clang++
-          sudo update-alternatives --install /usr/bin/clang clang /usr/bin/clang-19 190 --slave /usr/bin/clang++ clang++ /usr/bin/clang++-19
-        fi
-        if [ "${{ matrix.system-cryptopp }}" == "ON" ]; then
-          sudo apt install -y libcrypto++-dev libcrypto++-doc libcrypto++-utils
-        else
-          sudo apt remove -y libcrypto++-dev libcrypto++-doc libcrypto++-utils
-        fi
-        if [ "${{ matrix.system-bzip2 }}" == "ON" ]; then
-          sudo apt install -y libbz2-dev
-        else
-          sudo apt remove -y libbz2-dev
-        fi
-
-    - name: Install CMake
-      run: sudo apt install -y cmake
-
-    - name: Configure CMake
-      run: |
-        cmake -B ${{ github.workspace }}/build \
-          -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }} \
-          -DCMAKE_C_COMPILER=/usr/bin/${{ matrix.compiler }} \
-          -DCMAKE_CXX_COMPILER=$([[ ${{ matrix.compiler }} == 'gcc' ]] && echo '/usr/bin/g++' || echo '/usr/bin/clang++') \
-          -DCMAKE_CXX_FLAGS="${{ matrix.stdlib == 'libc++' && matrix.compiler == 'clang' && '--stdlib=libc++' || '' }}" \
-          -G "Ninja" \
-          -DWITH_SYSTEM_STORMBYTE=OFF \
-          -DENABLE_TEST=ON \
+    - name: Build with CMake
+      uses: ashutoshvarma/action-cmake-build@master
+      with:
+        build-dir: ${{ github.workspace }}/build
+        cc: ${{ steps.install-toolchain.outputs.c_compiler }}
+        cxx: ${{ steps.install-toolchain.outputs.cxx_compiler }}
+        configure-options: >-
+          -G Ninja
+          -DWITH_SYSTEM_STORMBYTE=OFF
+          -DENABLE_TEST=ON
           -DGITHUB_WORKFLOW=ON
-
-    - name: Build
-      run: cmake --build ${{ github.workspace }}/build --config ${{ env.BUILD_TYPE }}
+        build-type: ${{ env.BUILD_TYPE }}
 
     - name: Run unit tests
       run: ctest --output-on-failure --test-dir ${{ github.workspace }}/build
@@ -91,30 +63,28 @@ jobs:
         with:
           submodules: true
 
-      - name: Set up ninja
-        uses: ./.github/actions/setup-ninja
-
-      - name: Configure Windows environment
-        uses: ilammy/msvc-dev-cmd@v1
+      - name: Install toolchain
+        id: install-toolchain
+        uses: stormbytepp/install-toolchain@v1
         with:
-          arch: ${{ matrix.arch }}
+          compiler: msvc
 
-      - name: Configure CMake
-        run: |
-          cmake -B "${{ github.workspace }}\build" `
-            -G "Ninja" `
-            -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }} `
-            -DWITH_SYSTEM_STORMBYTE=OFF `
-            -DENABLE_TEST=ON `
+      - name: Build with CMake
+        uses: ashutoshvarma/action-cmake-build@master
+        with:
+          build-dir: ${{ github.workspace }}/build
+          configure-options: >-
+            -G Ninja
+            -DWITH_SYSTEM_STORMBYTE=OFF
+            -DENABLE_TEST=ON
             -DGITHUB_WORKFLOW=ON
-
-      - name: Build
-        run: cmake --build ${{ github.workspace }}\build --config ${{ env.BUILD_TYPE }}
+          build-type: ${{ env.BUILD_TYPE }}
 
       - name: Copy DLLs
         run: |
           Copy-Item -Path "${{ github.workspace }}\build\thirdparty\StormByte\base\lib\StormByte.dll" -Destination "${{ github.workspace }}\build\test" -Force
           Copy-Item -Path "${{ github.workspace }}\build\lib\StormByte-Network.dll" -Destination "${{ github.workspace }}\build\test" -Force
+          
 
       - name: Run unit tests
         run: ctest --output-on-failure --test-dir ${{ github.workspace }}\build
