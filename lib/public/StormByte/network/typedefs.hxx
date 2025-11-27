@@ -2,7 +2,7 @@
 
 #include <StormByte/buffer/consumer.hxx>
 #include <StormByte/buffer/producer.hxx>
-#include <StormByte/buffer/simple.hxx>
+#include <StormByte/buffer/fifo.hxx>
 #include <StormByte/expected.hxx>
 #include <StormByte/network/connection/protocol.hxx>
 #include <StormByte/network/connection/rw.hxx>
@@ -25,9 +25,9 @@ namespace StormByte::Network {
 		class Socket;																													///< The socket class (forward declaration).																							
 		class Client;																													///< The client socket class (forward declaration).
 	}																																	///< The client socket class (forward declaration).
-	using FutureBuffer = std::future<Buffer::Simple>;																					///< The future data type.
-	using PromisedBuffer = std::promise<Buffer::Simple>;																				///< The promised data type.
-	using ExpectedBuffer = StormByte::Expected<Buffer::Simple, ConnectionError>;														///< The expected buffer type.
+	using FutureBuffer = std::future<Buffer::FIFO>;																					///< The future data type.
+	using PromisedBuffer = std::promise<Buffer::FIFO>;																				///< The promised data type.
+	using ExpectedBuffer = StormByte::Expected<Buffer::FIFO, ConnectionError>;														///< The expected buffer type.
 	using ExpectedFutureBuffer = StormByte::Expected<FutureBuffer, ConnectionError>;													///< The expected future type.
 	using ExpectedVoid = StormByte::Expected<void, ConnectionError>;																	///< The expected void type.
 	using ExpectedClient = StormByte::Expected<Socket::Client, ConnectionError>;														///< The expected client type.

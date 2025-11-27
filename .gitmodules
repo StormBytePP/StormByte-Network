@@ -2,3 +2,6 @@
 	path = thirdparty/StormByte/base
 	url = https://github.com/StormBytePP/StormByte.git
 
+[submodule "thirdparty/StormByte/buffer"]
+	path = thirdparty/StormByte/buffer
+	url = https://github.com/StormBytePP/StormByte-Buffer.git

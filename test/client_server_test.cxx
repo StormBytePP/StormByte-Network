@@ -39,22 +39,34 @@ class TestMessagePacket: public Network::Packet {
 			// Opcode is already read in the constructor
 
 			// Read the size of the message
-			Buffer::Simple buffer;
+			Buffer::FIFO buffer;
 			auto expected_size_buffer = reader(sizeof(std::size_t));
 			if (!expected_size_buffer) {
 				return StormByte::Unexpected<Network::PacketError>("Failed to read message size");
 			}
-			auto expected_size_serial = Serializable<std::size_t>::Deserialize(expected_size_buffer.value());
+			auto expected_size_data = expected_size_buffer.value().Extract();
+			if (!expected_size_data) {
+				return StormByte::Unexpected<Network::PacketError>("Failed to extract size data");
+			}
+			auto expected_size_serial = Serializable<std::size_t>::Deserialize(expected_size_data.value());
 			if (!expected_size_serial) {
 				return StormByte::Unexpected<Network::PacketError>("Failed to deserialize message size");
 			}
-			buffer << expected_size_serial.value();
+			buffer.Write(expected_size_data.value());
 			auto str_buffer = reader(expected_size_serial.value());
 			if (!str_buffer) {
 				return StormByte::Unexpected<Network::PacketError>("Failed to read message");
 			}
-			buffer << str_buffer.value();
-			auto string_serial = Serializable<std::string>::Deserialize(buffer);
+			auto str_data = str_buffer.value().Extract();
+			if (!str_data) {
+				return StormByte::Unexpected<Network::PacketError>("Failed to extract string data");
+			}
+			buffer.Write(str_data.value());
+			auto buffer_data = buffer.Extract();
+			if (!buffer_data) {
+				return StormByte::Unexpected<Network::PacketError>("Failed to extract buffer data");
+			}
+			auto string_serial = Serializable<std::string>::Deserialize(buffer_data.value());
 			if (!string_serial) {
 				return StormByte::Unexpected<Network::PacketError>("Failed to deserialize message");
 			}
@@ -64,10 +76,15 @@ class TestMessagePacket: public Network::Packet {
 		}
 
 		Buffer::Consumer Serialize() const noexcept override {
-			Buffer::Producer buffer(Packet::Serialize());
+			Buffer::Consumer base_consumer = Packet::Serialize();
+			auto base_data = base_consumer.Extract();
+			Buffer::Producer buffer;
+			if (base_data) {
+				buffer.Write(base_data.value());
+			}
 			Serializable<std::string> string_serial(m_msg);
-			buffer << string_serial.Serialize();
-			buffer << Buffer::Status::ReadOnly;
+			buffer.Write(string_serial.Serialize());
+			buffer.Close();
 			return buffer.Consumer();
 		}
 };
@@ -106,29 +123,37 @@ class TestClient: public StormByte::Network::Client {
 		}
 };
 
-Buffer::Simple FlipBytes(const Buffer::Simple& buffer) {
-	Buffer::Data flipped_data;
-	for (const auto& byte : buffer.Span()) {
+std::vector<std::byte> FlipBytes(const std::vector<std::byte>& data) {
+	std::vector<std::byte> flipped_data;
+	flipped_data.reserve(data.size());
+	for (const auto& byte : data) {
 		flipped_data.push_back(~byte);
 	}
 	return flipped_data;
 }
 
 void FlipBytes(Buffer::Consumer in, Buffer::Producer out) {
-	while(in.IsReadable() && !in.IsEoF()) {
+	while(!in.IsClosed() || in.AvailableBytes() > 0) {
 		if (in.AvailableBytes() == 0) {
+			if (in.IsClosed()) {
+				break;
+			}
 			std::this_thread::sleep_for(std::chrono::milliseconds(100));
 			continue;
 		}
-		auto expected_data = in.Read(in.AvailableBytes());
-		if (!expected_data) {
-			out << Buffer::Status::Error;
-			return;
+		// Extract all available data without blocking
+		auto expected_data = in.Extract(0);
+		if (!expected_data || expected_data.value().empty()) {
+			if (in.IsClosed()) {
+				break;
+			}
+			std::this_thread::sleep_for(std::chrono::milliseconds(10));
+			continue;
 		}
 		auto flipped_data = FlipBytes(expected_data.value());
-		out << std::move(flipped_data);
+		out.Write(flipped_data);
 	}
-	out << Buffer::Status::ReadOnly;
+	out.Close();
 }
 
 class TestSimulatedEncryptedClient : public TestClient {

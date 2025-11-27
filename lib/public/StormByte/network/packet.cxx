@@ -15,7 +15,11 @@ ExpectedPacket Packet::Read(const PacketInstanceFunction& pif, PacketReaderFunct
 	if (!opcode_buffer) {
 		return StormByte::Unexpected<PacketError>("Failed to read opcode");
 	}
-	auto opcode_serial = Serializable<unsigned short>::Deserialize(opcode_buffer.value());
+	auto opcode_data = opcode_buffer.value().Extract();
+	if (!opcode_data) {
+		return StormByte::Unexpected<PacketError>("Failed to extract opcode data");
+	}
+	auto opcode_serial = Serializable<unsigned short>::Deserialize(opcode_data.value());
 	if (!opcode_serial) {
 		return StormByte::Unexpected<PacketError>("Failed to deserialize opcode");
 	}
@@ -34,6 +38,8 @@ ExpectedPacket Packet::Read(const PacketInstanceFunction& pif, PacketReaderFunct
 StormByte::Buffer::Consumer Packet::Serialize() const noexcept {
 	Buffer::Producer buffer;
 	auto opcode_serial = Serializable<unsigned short>(m_opcode);
-	buffer = opcode_serial.Serialize();
+	auto serialized_data = opcode_serial.Serialize();
+	buffer.Write(serialized_data);
+	buffer.Close();
 	return buffer.Consumer();
 }

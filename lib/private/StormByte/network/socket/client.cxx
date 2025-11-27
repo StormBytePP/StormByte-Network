@@ -65,7 +65,7 @@ ExpectedVoid Socket::Client::Connect(const std::string& hostname, const unsigned
 	return {};
 }
 
-ExpectedVoid Socket::Client::Send(Buffer::ConstByteSpan data) noexcept {
+ExpectedVoid Socket::Client::Send(std::span<const std::byte> data) noexcept {
 	if (m_status != Connection::Status::Connected) {
 		return StormByte::Unexpected<ConnectionError>("Failed to send: Client is not connected");
 	}
@@ -150,8 +150,11 @@ ExpectedVoid Socket::Client::Send(Buffer::Consumer data) noexcept {
 		return StormByte::Unexpected<ConnectionError>("Failed to send: Client is not connected");
 	}
 
-	while (data.IsReadable() && !data.IsEoF()) {
+	while (!data.IsClosed() || data.AvailableBytes() > 0) {
 		if (data.AvailableBytes() == 0) {
+			if (data.IsClosed()) {
+				break;
+			}
 			m_logger << Logger::Level::LowLevel << "No data available to send. Waiting..." << std::endl;
 			std::this_thread::sleep_for(std::chrono::milliseconds(100));
 			continue;
@@ -161,13 +164,11 @@ ExpectedVoid Socket::Client::Send(Buffer::Consumer data) noexcept {
 		if (!expected_data) {
 			return StormByte::Unexpected<ConnectionError>(expected_data.error()->what());
 		}
-		auto expected_send = Send(expected_data.value());
+		auto& data_vec = expected_data.value();
+		auto expected_send = Send(std::span<const std::byte>(data_vec.data(), data_vec.size()));
 		if (!expected_send) {
 			return StormByte::Unexpected<ConnectionError>(expected_send.error()->what());
 		}
-	}
-	if (!data.IsReadable()) {
-		return StormByte::Unexpected<ConnectionError>("Error while sending buffer");
 	}
 
 	return {};
@@ -243,7 +244,7 @@ ExpectedFutureBuffer Socket::Client::Receive(const std::size_t& max_size) noexce
 void Socket::Client::Read(PromisedBuffer& promise, std::size_t max_size) noexcept {
 	m_logger << Logger::Level::LowLevel << "Starting to read data with max_size: " << humanreadable_bytes << max_size << nohumanreadable << std::endl;
 
-	Buffer::Simple buffer;
+	Buffer::FIFO buffer;
 	char internal_buffer[BUFFER_SIZE];
 	std::size_t total_bytes_read = 0;
 
@@ -257,7 +258,7 @@ void Socket::Client::Read(PromisedBuffer& promise, std::size_t max_size) noexcep
 
 		if (valread > 0) {
 			m_logger << Logger::Level::LowLevel << "Chunk received. Size: " << humanreadable_bytes << valread << nohumanreadable << std::endl;
-			buffer << std::string(internal_buffer, static_cast<std::size_t>(valread));
+			buffer.Write(std::string(internal_buffer, static_cast<std::size_t>(valread)));
 			total_bytes_read += valread;
 			if (max_size > 0 && total_bytes_read >= max_size) {
 				m_logger << Logger::Level::LowLevel << "Reached requested max_size: " << total_bytes_read << " bytes. Exiting loop." << std::endl;

@@ -66,15 +66,25 @@ ExpectedPacket EndPoint::Receive(Socket::Client& client, Buffer::Pipeline& pipel
 			auto expected_buffer = client.Receive(size);
 			if (!expected_buffer)
 				return StormByte::Unexpected<ConnectionError>(expected_buffer.error()->what());
-			Buffer::Producer pipeline_buffer(expected_buffer.value().get());
-			pipeline_buffer << Buffer::Status::ReadOnly;
-			auto pipeline_buffer_result = pipeline.Process(pipeline_buffer.Consumer());
-			if (!pipeline_buffer_result.IsReadable())
-				return StormByte::Unexpected<ConnectionError>("Error processing input pipeline");
+			Buffer::FIFO received_fifo = expected_buffer.value().get();
+			// Extract all data from received FIFO
+			auto expected_data = received_fifo.Extract();
+			if (!expected_data)
+				return StormByte::Unexpected<ConnectionError>("Failed to extract data from received buffer");
+			// Create producer and write extracted data
+			Buffer::Producer pipeline_input;
+			pipeline_input.Write(expected_data.value());
+			pipeline_input.Close();
+			// Process through pipeline
+			auto pipeline_buffer_result = pipeline.Process(pipeline_input.Consumer());
+			// Read processed data - block until we have the expected size or buffer is closed
 			auto expected_processed_buffer = pipeline_buffer_result.Read(size);
 			if (!expected_processed_buffer)
 				return StormByte::Unexpected<ConnectionError>(expected_processed_buffer.error()->what());
-			return expected_processed_buffer.value();
+			// Create result FIFO and write processed data
+			Buffer::FIFO result;
+			result.Write(expected_processed_buffer.value());
+			return result;
 		}
 	);
 	if (!expected_packet)
@@ -84,9 +94,8 @@ ExpectedPacket EndPoint::Receive(Socket::Client& client, Buffer::Pipeline& pipel
 }
 
 ExpectedVoid EndPoint::Send(Socket::Client& client, const Packet& packet, Buffer::Pipeline& pipeline) noexcept {
-	Buffer::Producer packet_buffer(packet.Serialize());
-	packet_buffer << Buffer::Status::ReadOnly;
-	Buffer::Consumer pipeline_buffer = pipeline.Process(packet_buffer.Consumer());
+	Buffer::Consumer packet_consumer = packet.Serialize();
+	Buffer::Consumer pipeline_buffer = pipeline.Process(packet_consumer);
 	auto expected_write = client.Send(pipeline_buffer);
 	if (!expected_write)
 		return StormByte::Unexpected<ConnectionError>(expected_write.error()->what());

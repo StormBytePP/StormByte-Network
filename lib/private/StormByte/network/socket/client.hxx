@@ -90,7 +90,7 @@ namespace StormByte::Network::Socket {
 		 * @param data A view of the data to send.
 		 * @return The expected result of the operation.
 		 */
-		ExpectedVoid 													Send(Buffer::ConstByteSpan data) noexcept;
+		ExpectedVoid 															Send(std::span<const std::byte> data) noexcept;
 
 		/**
 		 * @brief Function to send data to the socket using a Buffer::Consumer.
@@ -118,7 +118,7 @@ namespace StormByte::Network::Socket {
 		 * @param size The requested size of data.
 		 * @return The result of the operation.
 		 */
-		Connection::Read::Result 										ReadNonBlocking(Buffer::Simple& buffer) noexcept;
+		Connection::Read::Result 										ReadNonBlocking(Buffer::FIFO& buffer) noexcept;
 
 		/**
 		 * @brief Function to read data from the socket asynchronously.
