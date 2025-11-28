@@ -62,7 +62,7 @@ ExpectedVoid EndPoint::RawSend(Socket::Client& client, const Packet& packet) noe
 ExpectedPacket EndPoint::Receive(Socket::Client& client, Buffer::Pipeline& pipeline) noexcept {
 	auto expected_packet = Packet::Read(
 		m_handler->PacketInstanceFunction(),
-		[&client, &pipeline](const size_t& size) -> ExpectedBuffer {
+		[&client, &pipeline, logger = m_logger](const size_t& size) -> ExpectedBuffer {
 			auto expected_buffer = client.Receive(size);
 			if (!expected_buffer)
 				return StormByte::Unexpected<ConnectionError>(expected_buffer.error()->what());
@@ -76,7 +76,7 @@ ExpectedPacket EndPoint::Receive(Socket::Client& client, Buffer::Pipeline& pipel
 			pipeline_input.Write(expected_data.value());
 			pipeline_input.Close();
 			// Process through pipeline
-			auto pipeline_buffer_result = pipeline.Process(pipeline_input.Consumer());
+			auto pipeline_buffer_result = pipeline.Process(pipeline_input.Consumer(), Buffer::ExecutionMode::Sync, logger);
 			// Read processed data - block until we have the expected size or buffer is closed
 			auto expected_processed_buffer = pipeline_buffer_result.Read(size);
 			if (!expected_processed_buffer)
@@ -95,7 +95,7 @@ ExpectedPacket EndPoint::Receive(Socket::Client& client, Buffer::Pipeline& pipel
 
 ExpectedVoid EndPoint::Send(Socket::Client& client, const Packet& packet, Buffer::Pipeline& pipeline) noexcept {
 	Buffer::Consumer packet_consumer = packet.Serialize();
-	Buffer::Consumer pipeline_buffer = pipeline.Process(packet_consumer);
+	Buffer::Consumer pipeline_buffer = pipeline.Process(packet_consumer, Buffer::ExecutionMode::Sync, m_logger);
 	auto expected_write = client.Send(pipeline_buffer);
 	if (!expected_write)
 		return StormByte::Unexpected<ConnectionError>(expected_write.error()->what());

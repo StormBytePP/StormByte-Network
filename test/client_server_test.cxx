@@ -123,7 +123,7 @@ class TestClient: public StormByte::Network::Client {
 		}
 };
 
-std::vector<std::byte> FlipBytes(const std::vector<std::byte>& data) {
+std::vector<std::byte> FlipBytes(const std::vector<std::byte>& data, std::shared_ptr<Logger> logger) {
 	std::vector<std::byte> flipped_data;
 	flipped_data.reserve(data.size());
 	for (const auto& byte : data) {
@@ -132,7 +132,7 @@ std::vector<std::byte> FlipBytes(const std::vector<std::byte>& data) {
 	return flipped_data;
 }
 
-void FlipBytes(Buffer::Consumer in, Buffer::Producer out) {
+void FlipBytes(Buffer::Consumer in, Buffer::Producer out, std::shared_ptr<Logger> logger) {
 	// Process until the input is closed and no bytes remain
 	while (in.IsWritable() || in.AvailableBytes() > 0) {
 		// If no data is currently available, wait briefly unless closed
@@ -158,7 +158,7 @@ void FlipBytes(Buffer::Consumer in, Buffer::Producer out) {
 			continue;
 		}
 
-		auto flipped_data = FlipBytes(expected_data.value());
+		auto flipped_data = FlipBytes(expected_data.value(), logger);
 		out.Write(flipped_data);
 	}
 	out.Close();
@@ -168,11 +168,11 @@ class TestSimulatedEncryptedClient : public TestClient {
 	public:
 		TestSimulatedEncryptedClient(const Network::Connection::Protocol& protocol, std::shared_ptr<Network::Connection::Handler> handler, std::shared_ptr<Logger> logger) noexcept
 		: TestClient(protocol, handler, logger) {
-			m_input_pipeline.AddPipe([](Buffer::Consumer in, Buffer::Producer out) {
-				FlipBytes(in, out);
+			m_input_pipeline.AddPipe([](Buffer::Consumer in, Buffer::Producer out, std::shared_ptr<Logger> logger) {
+				FlipBytes(in, out, logger);
 			});
-			m_output_pipeline.AddPipe([](Buffer::Consumer in, Buffer::Producer out) {
-				FlipBytes(in, out);
+			m_output_pipeline.AddPipe([](Buffer::Consumer in, Buffer::Producer out, std::shared_ptr<Logger> logger) {
+				FlipBytes(in, out, logger);
 			});
 		}
 };
@@ -199,11 +199,11 @@ class TestSimulatedEncryptedServer : public TestServer {
 	public:
 		TestSimulatedEncryptedServer(Network::Connection::Protocol protocol, std::shared_ptr<Network::Connection::Handler> handler, std::shared_ptr<Logger> logger) noexcept
 		: TestServer(protocol, handler, logger) {
-			m_input_pipeline.AddPipe([](Buffer::Consumer in, Buffer::Producer out) {
-				FlipBytes(in, out);
+			m_input_pipeline.AddPipe([](Buffer::Consumer in, Buffer::Producer out, std::shared_ptr<Logger> logger) {
+				FlipBytes(in, out, logger);
 			});
-			m_output_pipeline.AddPipe([](Buffer::Consumer in, Buffer::Producer out) {
-				FlipBytes(in, out);
+			m_output_pipeline.AddPipe([](Buffer::Consumer in, Buffer::Producer out, std::shared_ptr<Logger> logger) {
+				FlipBytes(in, out, logger);
 			});
 		}
 };
