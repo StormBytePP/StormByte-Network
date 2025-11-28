@@ -13,6 +13,7 @@ using namespace StormByte;
 constexpr const char* host = "localhost";
 constexpr const unsigned short port = 7070;
 auto logger = std::make_shared<Logger>(std::cout, Logger::Level::Info);
+constexpr const std::size_t large_size = 4096;
 
 enum class OpCodes: unsigned short {
 	TestMessage = 1,
@@ -398,7 +399,7 @@ int TestClientServerSimulatedEncryptedLargeCommunication() {
 		ASSERT_TRUE(fn_name, client.Connect(host, port).has_value());
 
 		// Send a test message
-		const std::string test_message = "Hello, Server!";
+		const std::string test_message = std::string(large_size, 'H');
 		auto expected_send = client.SendTestMessage(test_message);
 		ASSERT_TRUE(fn_name, expected_send.has_value());
 		auto expected_receive = client.ReceiveTestMessage();
