@@ -134,20 +134,12 @@ std::vector<std::byte> FlipBytes(const std::vector<std::byte>& data) {
 
 void FlipBytes(Buffer::Consumer in, Buffer::Producer out) {
 	while(!in.IsClosed() || in.AvailableBytes() > 0) {
-		if (in.AvailableBytes() == 0) {
-			if (in.IsClosed()) {
-				break;
-			}
-			std::this_thread::sleep_for(std::chrono::milliseconds(100));
-			continue;
-		}
-		// Extract all available data without blocking
-		auto expected_data = in.Extract(0);
+		// Block until at least 1 byte is available or closed
+		auto expected_data = in.Extract(1);
 		if (!expected_data || expected_data.value().empty()) {
 			if (in.IsClosed()) {
 				break;
 			}
-			std::this_thread::sleep_for(std::chrono::milliseconds(10));
 			continue;
 		}
 		auto flipped_data = FlipBytes(expected_data.value());
@@ -209,16 +201,25 @@ int TestClientServerCommunication() {
 	bool server_ready = false;
 	bool server_completed = false;
 	bool client_completed = false;
+	std::mutex mtx;
+	std::condition_variable cv_ready;
+	std::condition_variable cv_done;
 
 	// Start server thread
 	std::thread server_thread([&]() -> int {
 		TestServer server(Network::Connection::Protocol::IPv4, handler, logger);
 		ASSERT_TRUE(fn_name, server.Connect(host, port).has_value());
+		{
+			std::lock_guard<std::mutex> lk(mtx);
+			server_ready = true;
+		}
+		cv_ready.notify_all();
 
-		server_ready = true;
-
-		// Wait for the server to process clients
-		std::this_thread::sleep_for(std::chrono::seconds(5));
+		// Wait until client finishes
+		{
+			std::unique_lock<std::mutex> lk(mtx);
+			cv_done.wait(lk, [&]{ return client_completed; });
+		}
 
 		server.Disconnect();
 		server_completed = true;
@@ -226,8 +227,9 @@ int TestClientServerCommunication() {
 	});
 
 	// Wait until the server is ready
-	while (!server_ready) {
-		std::this_thread::sleep_for(std::chrono::milliseconds(100));
+	{
+		std::unique_lock<std::mutex> lk(mtx);
+		cv_ready.wait(lk, [&]{ return server_ready; });
 	}
 
 	// Start client thread
@@ -244,7 +246,11 @@ int TestClientServerCommunication() {
 		ASSERT_EQUAL(fn_name, test_message, expected_receive.value());
 
 		client.Disconnect();
-		client_completed = true;
+		{
+			std::lock_guard<std::mutex> lk(mtx);
+			client_completed = true;
+		}
+		cv_done.notify_all();
 		return 0;
 	});
 
@@ -268,16 +274,25 @@ int TestClientServerSimulatedEncryptedCommunication() {
 	bool server_ready = false;
 	bool server_completed = false;
 	bool client_completed = false;
+	std::mutex mtx;
+	std::condition_variable cv_ready;
+	std::condition_variable cv_done;
 
 	// Start server thread
 	std::thread server_thread([&]() -> int {
 		TestSimulatedEncryptedServer server(Network::Connection::Protocol::IPv4, handler, logger);
 		ASSERT_TRUE(fn_name, server.Connect(host, port).has_value());
+		{
+			std::lock_guard<std::mutex> lk(mtx);
+			server_ready = true;
+		}
+		cv_ready.notify_all();
 
-		server_ready = true;
-
-		// Wait for the server to process clients
-		std::this_thread::sleep_for(std::chrono::seconds(5));
+		// Wait until client finishes
+		{
+			std::unique_lock<std::mutex> lk(mtx);
+			cv_done.wait(lk, [&]{ return client_completed; });
+		}
 
 		server.Disconnect();
 		server_completed = true;
@@ -285,8 +300,9 @@ int TestClientServerSimulatedEncryptedCommunication() {
 	});
 
 	// Wait until the server is ready
-	while (!server_ready) {
-		std::this_thread::sleep_for(std::chrono::milliseconds(100));
+	{
+		std::unique_lock<std::mutex> lk(mtx);
+		cv_ready.wait(lk, [&]{ return server_ready; });
 	}
 
 	// Start client thread
@@ -303,7 +319,11 @@ int TestClientServerSimulatedEncryptedCommunication() {
 		ASSERT_EQUAL(fn_name, test_message, expected_receive.value());
 
 		client.Disconnect();
-		client_completed = true;
+		{
+			std::lock_guard<std::mutex> lk(mtx);
+			client_completed = true;
+		}
+		cv_done.notify_all();
 		return 0;
 	});
 
