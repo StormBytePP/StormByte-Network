@@ -133,15 +133,31 @@ std::vector<std::byte> FlipBytes(const std::vector<std::byte>& data) {
 }
 
 void FlipBytes(Buffer::Consumer in, Buffer::Producer out) {
-	while(in.IsWritable() || in.AvailableBytes() > 0) {
-		// Block until at least 1 byte is available or closed
-		auto expected_data = in.Extract(1);
-		if (!expected_data || expected_data.value().empty()) {
+	// Process until the input is closed and no bytes remain
+	while (in.IsWritable() || in.AvailableBytes() > 0) {
+		// If no data is currently available, wait briefly unless closed
+		if (in.AvailableBytes() == 0) {
 			if (!in.IsWritable()) {
 				break;
 			}
+			std::this_thread::sleep_for(std::chrono::milliseconds(1));
 			continue;
 		}
+
+		// Extract as much as is currently available
+		auto expected_data = in.Extract(in.AvailableBytes());
+		if (!expected_data) {
+			// On error, stop processing
+			break;
+		}
+		if (expected_data.value().empty()) {
+			if (!in.IsWritable()) {
+				break;
+			}
+			std::this_thread::sleep_for(std::chrono::milliseconds(1));
+			continue;
+		}
+
 		auto flipped_data = FlipBytes(expected_data.value());
 		out.Write(flipped_data);
 	}
@@ -338,11 +354,83 @@ int TestClientServerSimulatedEncryptedCommunication() {
 	RETURN_TEST(fn_name, 0);
 }
 
+int TestClientServerSimulatedEncryptedLargeCommunication() {
+	// If 4096 then this test stalls and not finish
+	const std::string fn_name = "TestClientServerSimulatedEncryptedLargeCommunication";
+
+	bool server_ready = false;
+	bool server_completed = false;
+	bool client_completed = false;
+	std::mutex mtx;
+	std::condition_variable cv_ready;
+	std::condition_variable cv_done;
+
+	// Start server thread
+	std::thread server_thread([&]() -> int {
+		TestSimulatedEncryptedServer server(Network::Connection::Protocol::IPv4, handler, logger);
+		ASSERT_TRUE(fn_name, server.Connect(host, port).has_value());
+		{
+			std::lock_guard<std::mutex> lk(mtx);
+			server_ready = true;
+		}
+		cv_ready.notify_all();
+
+		// Wait until client finishes
+		{
+			std::unique_lock<std::mutex> lk(mtx);
+			cv_done.wait(lk, [&]{ return client_completed; });
+		}
+
+		server.Disconnect();
+		server_completed = true;
+		return 0;
+	});
+
+	// Wait until the server is ready
+	{
+		std::unique_lock<std::mutex> lk(mtx);
+		cv_ready.wait(lk, [&]{ return server_ready; });
+	}
+
+	// Start client thread
+	std::thread client_thread([&]() -> int {
+		TestSimulatedEncryptedClient client(Network::Connection::Protocol::IPv4, handler, logger);
+		ASSERT_TRUE(fn_name, client.Connect(host, port).has_value());
+
+		// Send a test message
+		const std::string test_message = "Hello, Server!";
+		auto expected_send = client.SendTestMessage(test_message);
+		ASSERT_TRUE(fn_name, expected_send.has_value());
+		auto expected_receive = client.ReceiveTestMessage();
+		ASSERT_TRUE(fn_name, expected_receive.has_value());
+		ASSERT_EQUAL(fn_name, test_message, expected_receive.value());
+
+		client.Disconnect();
+		{
+			std::lock_guard<std::mutex> lk(mtx);
+			client_completed = true;
+		}
+		cv_done.notify_all();
+		return 0;
+	});
+
+	// Join threads
+	server_thread.join();
+	client_thread.join();
+
+	// Final assertions
+	ASSERT_TRUE(fn_name, server_completed);
+	ASSERT_TRUE(fn_name, client_completed);
+
+	RETURN_TEST(fn_name, 0);
+}
+
 int main() {
 	int result = 0;
 
 	result += TestClientServerCommunication();
 	result += TestClientServerSimulatedEncryptedCommunication();
+	result += TestClientServerSimulatedEncryptedLargeCommunication();
 
 	if (result == 0) {
 		std::cout << "All tests passed!" << std::endl;
