@@ -11,8 +11,7 @@
 
 #include <algorithm>
 #include <chrono>
-#include <format>
-#include <future>
+#include <span>
 #include <thread>
 
 constexpr const std::size_t BUFFER_SIZE = 4096;
@@ -210,38 +209,11 @@ bool Socket::Client::HasShutdownRequest() noexcept {
 	return false;
 }
 
-ExpectedFutureBuffer Socket::Client::Receive() noexcept {
+ExpectedBuffer Socket::Client::Receive() noexcept {
 	return Receive(0);
 }
 
-ExpectedFutureBuffer Socket::Client::Receive(const std::size_t& max_size) noexcept {
-	m_logger << Logger::Level::LowLevel << "Initiating receive operation with max_size: " << humanreadable_bytes << max_size << nohumanreadable << std::endl;
-
-	try {
-		auto promise = std::make_shared<PromisedBuffer>();
-		auto future = promise->get_future();
-
-		std::thread([this, promise, max_size]() {
-			m_logger << Logger::Level::LowLevel << "Read thread started. Max size: " << humanreadable_bytes << max_size << nohumanreadable << std::endl;
-			try {
-				Read(*promise, max_size);
-				m_logger << Logger::Level::LowLevel << "Read thread completed successfully." << std::endl;
-			} catch (const std::exception& e) {
-				m_logger << Logger::Level::Error << "Exception in Read thread: " << e.what() << std::endl;
-				promise->set_exception(std::make_exception_ptr(
-					ConnectionError("Exception during read: {}", e.what())));
-			}
-		}).detach();
-
-		m_logger << Logger::Level::LowLevel << "Receive operation initiated successfully. Waiting for future..." << std::endl;
-		return future;
-	} catch (const std::exception& e) {
-		m_logger << Logger::Level::Error << "Failed to initiate receive operation: " << e.what() << std::endl;
-		return StormByte::Unexpected<ConnectionError>("Receive failed: {}", e.what());
-	}
-}
-
-void Socket::Client::Read(PromisedBuffer& promise, std::size_t max_size) noexcept {
+ExpectedBuffer Socket::Client::Receive(const std::size_t& max_size) noexcept {
 	m_logger << Logger::Level::LowLevel << "Starting to read data with max_size: " << humanreadable_bytes << max_size << nohumanreadable << std::endl;
 
 	Buffer::FIFO buffer;
@@ -282,15 +254,13 @@ void Socket::Client::Read(PromisedBuffer& promise, std::size_t max_size) noexcep
 				continue;
 			} else {
 				m_logger << Logger::Level::LowLevel << "Read error: " << m_conn_handler->LastError() << std::endl;
-				promise.set_exception(std::make_exception_ptr(
-					ConnectionError("Receive failed: {}", m_conn_handler->LastError())));
-				return;
+				return StormByte::Unexpected<ConnectionError>("Receive failed: {}", m_conn_handler->LastError());
 			}
 		}
 	}
 
 	m_logger << Logger::Level::LowLevel << "Total data received: " << humanreadable_bytes << buffer.Size() << nohumanreadable << std::endl;
-	promise.set_value(buffer);
+	return buffer;
 }
 
 ExpectedVoid Socket::Client::Write(std::span<const std::byte> data, const std::size_t& size) noexcept {

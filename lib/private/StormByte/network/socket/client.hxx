@@ -6,6 +6,8 @@
 #include <StormByte/network/socket/socket.hxx>
 #include <StormByte/network/typedefs.hxx>
 
+#include <span>
+
 /**
  * @namespace Socket
  * @brief The namespace containing all the socket related classes.
@@ -69,14 +71,14 @@ namespace StormByte::Network::Socket {
 		 * @brief The function to receive data from the socket.
 		 * @return The expected result of the operation.
 		 */
-		ExpectedFutureBuffer											Receive() noexcept;
+		ExpectedBuffer																	Receive() noexcept;
 
 		/**
 		 * @brief The function to receive data from the socket.
 		 * @param size The size of the data to receive.
 		 * @return The expected result of the operation.
 		 */
-		ExpectedFutureBuffer 											Receive(const std::size_t& size) noexcept;
+		ExpectedBuffer 																	Receive(const std::size_t& size) noexcept;
 
 		/**
 		 * @brief Function to send data to the socket using a Packet.
@@ -119,13 +121,6 @@ namespace StormByte::Network::Socket {
 		 * @return The result of the operation.
 		 */
 		Connection::Read::Result 										ReadNonBlocking(Buffer::FIFO& buffer) noexcept;
-
-		/**
-		 * @brief Function to read data from the socket asynchronously.
-		 * @param promise The promise to set the buffer to.
-		 * @param max_size The maximum size of the data to read.
-		 */
-		void 															Read(PromisedBuffer& promise, std::size_t max_size) noexcept;
 
 		/**
 		 * @brief Function to write data to the socket.

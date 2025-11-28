@@ -66,7 +66,7 @@ ExpectedPacket EndPoint::Receive(Socket::Client& client, Buffer::Pipeline& pipel
 			auto expected_buffer = client.Receive(size);
 			if (!expected_buffer)
 				return StormByte::Unexpected<ConnectionError>(expected_buffer.error()->what());
-			Buffer::FIFO received_fifo = expected_buffer.value().get();
+			Buffer::FIFO received_fifo = expected_buffer.value();
 			// Extract all data from received FIFO
 			auto expected_data = received_fifo.Extract();
 			if (!expected_data)
