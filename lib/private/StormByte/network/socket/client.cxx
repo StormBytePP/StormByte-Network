@@ -69,6 +69,10 @@ ExpectedVoid Socket::Client::Send(std::span<const std::byte> data) noexcept {
 		return StormByte::Unexpected<ConnectionError>("Failed to send: Client is not connected");
 	}
 
+	if (!m_handle) {
+		return StormByte::Unexpected<ConnectionError>("Failed to send: Invalid socket handle");
+	}
+
 	std::size_t total_bytes_sent = 0;
 
 	while (!data.empty()) {
@@ -149,6 +153,10 @@ ExpectedVoid Socket::Client::Send(Buffer::Consumer data) noexcept {
 		return StormByte::Unexpected<ConnectionError>("Failed to send: Client is not connected");
 	}
 
+	if (!m_handle) {
+		return StormByte::Unexpected<ConnectionError>("Failed to send: Invalid socket handle");
+	}
+
 	while (!data.IsClosed() || data.AvailableBytes() > 0) {
 		if (data.AvailableBytes() == 0) {
 			if (data.IsClosed()) {
@@ -215,6 +223,10 @@ ExpectedBuffer Socket::Client::Receive() noexcept {
 
 ExpectedBuffer Socket::Client::Receive(const std::size_t& max_size) noexcept {
 	m_logger << Logger::Level::LowLevel << "Starting to read data with max_size: " << humanreadable_bytes << max_size << nohumanreadable << std::endl;
+
+	if (!m_handle) {
+		return StormByte::Unexpected<ConnectionError>("Receive failed: Invalid socket handle");
+	}
 
 	Buffer::FIFO buffer;
 	char internal_buffer[BUFFER_SIZE];

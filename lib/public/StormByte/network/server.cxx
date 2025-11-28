@@ -49,6 +49,15 @@ void Server::Disconnect() noexcept {
 	// Disconnect all clients
 	DisconnectAllClients();
 
+	// Ensure all client threads are joined and cleared
+	{
+		std::lock_guard<std::mutex> lock(m_msg_threads_mutex);
+		for (auto& kv : m_msg_threads) {
+			if (kv.second.joinable()) kv.second.join();
+		}
+		m_msg_threads.clear();
+	}
+
 	// Clear the client vector
 	m_clients.clear();
 
@@ -62,7 +71,40 @@ Socket::Client& Server::AddClient(Socket::Client&& client) noexcept {
 }
 
 void Server::RemoveClient(Socket::Client& client) noexcept {
-	DisconnectClient(client);
+	// If already removed, skip
+	{
+		std::lock_guard<std::mutex> lock(m_clients_mutex);
+		auto itc = std::find_if(m_clients.begin(), m_clients.end(), [&](const Socket::Client& c){ return &c == &client; });
+		if (itc == m_clients.end()) return;
+	}
+	// Unified cleanup: capture handle before disconnect to avoid null-deref.
+	std::unique_lock<std::mutex> threads_lock(m_msg_threads_mutex);
+	bool has_thread = false;
+	bool is_self = false;
+	Connection::Handler::Type client_handler{};
+	if (Connection::IsConnected(client.Status())) {
+		client_handler = client.Handle();
+		auto it = m_msg_threads.find(client_handler);
+		has_thread = (it != m_msg_threads.end());
+		is_self = (has_thread && it->second.get_id() == std::this_thread::get_id());
+	}
+
+	// Disconnect client
+	client.Disconnect();
+
+	// Join if applicable (not self)
+	if (has_thread && !is_self) {
+		auto& client_thread = m_msg_threads.find(client_handler)->second;
+		threads_lock.unlock();
+		client_thread.join();
+		threads_lock.lock();
+	}
+
+	// Remove thread record
+	if (has_thread) {
+		m_msg_threads.erase(client_handler);
+	}
+
 	std::lock_guard<std::mutex> lock(m_clients_mutex);
 	m_clients.erase(std::remove_if(m_clients.begin(), m_clients.end(), [&](const Socket::Client& c) {
 		return &c == &client;
@@ -70,32 +112,18 @@ void Server::RemoveClient(Socket::Client& client) noexcept {
 }
 
 void Server::RemoveClientAsync(Socket::Client& client) noexcept {
-	std::thread([this](Socket::Client& client) {
-		RemoveClient(client);
-	}, std::ref(client)).detach();
+	// Run synchronously to ensure client lifetime is valid.
+	RemoveClient(client);
 }
 
 void Server::DisconnectClient(Socket::Client& client) noexcept {
-	std::lock_guard<std::mutex> lock(m_msg_threads_mutex);
-
-	// It is important to copy the client handle here as when disconnect it will be freed so it will be safe to use for the map
-	const auto client_handler = client.Handle();
-	auto& client_thread = m_msg_threads.at(client_handler);
-
-	// Disconnect client
-	client.Disconnect();
-
-	// Stop client message thread
-	client_thread.join();
-
-	// Remove thread from map
-	m_msg_threads.erase(client_handler);
+	RemoveClient(client);
 }
 
 void Server::DisconnectAllClients() noexcept {
 	std::lock_guard<std::mutex> lock(m_clients_mutex);
 	for (auto& client : m_clients)
-		DisconnectClient(client);
+		RemoveClient(client);
 }
 
 void Server::AcceptClients() noexcept {
@@ -149,8 +177,8 @@ void Server::HandleClientMessages(Socket::Client& client) noexcept {
 		auto expected_wait = client.WaitForData();
 		if (!expected_wait) {
 			m_logger << Logger::Level::Error << expected_wait.error()->what() << std::endl;
-			RemoveClientAsync(client);
-			goto end;
+			client.Disconnect();
+			break;
 		}
 
 		switch(expected_wait.value()) {
@@ -161,22 +189,22 @@ void Server::HandleClientMessages(Socket::Client& client) noexcept {
 					// Instead, we start a thread which will remove it with a delay
 					// Allowing time for this thread to finish
 					m_logger << Logger::Level::LowLevel << "Client has requested shutdown, disconnecting..." << std::endl;
-					RemoveClientAsync(client);
-					goto end;
+					client.Disconnect();
+					break;
 				}
 				else {
 					auto expected_packet = Receive(client);
 					if (!expected_packet) {
 						m_logger << Logger::Level::Error << expected_packet.error()->what() << std::endl;
-						RemoveClientAsync(client);
-						goto end;
+						client.Disconnect();
+						break;
 					}
 
 					auto expected_processed_packet = ProcessClientPacket(client, *expected_packet.value());
 					if (!expected_processed_packet) {
 						m_logger << Logger::Level::Error << expected_processed_packet.error()->what() << std::endl;
-						RemoveClientAsync(client);
-						goto end;
+						client.Disconnect();
+						break;
 					}
 				}
 			}
@@ -186,7 +214,7 @@ void Server::HandleClientMessages(Socket::Client& client) noexcept {
 				continue;
 		}
 	}
-	
-	end:
+	// Final cleanup after loop exits
+	RemoveClient(client);
 	m_logger << Logger::Level::LowLevel << "Stopping handle client messages thread" << std::endl;
 }
