@@ -133,11 +133,11 @@ std::vector<std::byte> FlipBytes(const std::vector<std::byte>& data) {
 }
 
 void FlipBytes(Buffer::Consumer in, Buffer::Producer out) {
-	while(!in.IsClosed() || in.AvailableBytes() > 0) {
+	while(in.IsWritable() || in.AvailableBytes() > 0) {
 		// Block until at least 1 byte is available or closed
 		auto expected_data = in.Extract(1);
 		if (!expected_data || expected_data.value().empty()) {
-			if (in.IsClosed()) {
+			if (!in.IsWritable()) {
 				break;
 			}
 			continue;

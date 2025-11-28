@@ -157,9 +157,9 @@ ExpectedVoid Socket::Client::Send(Buffer::Consumer data) noexcept {
 		return StormByte::Unexpected<ConnectionError>("Failed to send: Invalid socket handle");
 	}
 
-	while (!data.IsClosed() || data.AvailableBytes() > 0) {
+	while (data.IsWritable() || data.AvailableBytes() > 0) {
 		if (data.AvailableBytes() == 0) {
-			if (data.IsClosed()) {
+			if (!data.IsWritable()) {
 				break;
 			}
 			m_logger << Logger::Level::LowLevel << "No data available to send. Waiting..." << std::endl;
