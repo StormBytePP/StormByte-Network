@@ -245,7 +245,7 @@ ExpectedBuffer Socket::Client::Receive(const std::size_t& max_size) noexcept {
 			buffer.Write(std::string(internal_buffer, static_cast<std::size_t>(valread)));
 			total_bytes_read += valread;
 			if (max_size > 0 && total_bytes_read >= max_size) {
-				m_logger << Logger::Level::LowLevel << "Reached requested max_size: " << total_bytes_read << " bytes. Exiting loop." << std::endl;
+				m_logger << Logger::Level::LowLevel << "Reached requested max_size: " << humanreadable_bytes << total_bytes_read << nohumanreadable << ". Exiting loop." << std::endl;
 				break;
 			}
 		} else if (valread == 0) {

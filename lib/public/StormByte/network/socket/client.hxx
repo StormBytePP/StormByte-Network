@@ -71,14 +71,14 @@ namespace StormByte::Network::Socket {
 		 * @brief The function to receive data from the socket.
 		 * @return The expected result of the operation.
 		 */
-		ExpectedBuffer																	Receive() noexcept;
+		ExpectedBuffer													Receive() noexcept;
 
 		/**
 		 * @brief The function to receive data from the socket.
 		 * @param size The size of the data to receive.
 		 * @return The expected result of the operation.
 		 */
-		ExpectedBuffer 																	Receive(const std::size_t& size) noexcept;
+		ExpectedBuffer 													Receive(const std::size_t& size) noexcept;
 
 		/**
 		 * @brief Function to send data to the socket using a Packet.
@@ -92,7 +92,7 @@ namespace StormByte::Network::Socket {
 		 * @param data A view of the data to send.
 		 * @return The expected result of the operation.
 		 */
-		ExpectedVoid 															Send(std::span<const std::byte> data) noexcept;
+		ExpectedVoid 													Send(std::span<const std::byte> data) noexcept;
 
 		/**
 		 * @brief Function to send data to the socket using a Buffer::Consumer.
