@@ -1,8 +1,8 @@
 option(ENABLE_TEST "Enable Unit Tests" OFF)
 if(ENABLE_TEST AND NOT STORMBYTE_AS_DEPENDENCY)
-	#add_executable(ClientServerTests client_server_test.cxx)
-	#target_link_libraries(ClientServerTests StormByte::Network)
-	#add_test(NAME ClientServerTests COMMAND ClientServerTests)
+	# add_executable(ClientServerTests client_server_test.cxx)
+	# target_link_libraries(ClientServerTests StormByte::Network)
+	# add_test(NAME ClientServerTests COMMAND ClientServerTests)
 
 	# Combined server/client socket test (multi-client)
 	add_executable(SocketMultiTest socket_multi_test.cxx)

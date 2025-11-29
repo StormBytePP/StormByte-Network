@@ -5,6 +5,7 @@
 #include <StormByte/buffer/fifo.hxx>
 #include <StormByte/logger.hxx>
 #include <StormByte/network/packet.hxx>
+#include <StormByte/test_handlers.h>
 
 #include <atomic>
 #include <csignal>
@@ -23,23 +24,22 @@ constexpr unsigned short PORT = 7070;
 constexpr std::size_t NUM_CLIENTS = 4;                    // number of concurrent clients
 constexpr std::size_t CHUNK_SIZE = 65536;                 // chunk size for each send
 constexpr std::size_t TOTAL_BYTES_PER_CLIENT = 104857600;   // total bytes each client will send (1 MiB)
+auto logger = std::make_shared<Logger>(std::cout, Logger::Level::Error);
 
-int main() {
+int TestSocketMulti() {
+    const std::string fn_name = "TestSocketMulti";
+
     auto packet_fn = [](const unsigned short&) -> std::shared_ptr<Network::Packet> { return nullptr; };
     auto handler = std::make_shared<Connection::Handler>(packet_fn);
-    auto logger = std::make_shared<Logger>(std::cout, Logger::Level::Info);
 
     std::atomic<bool> stop{false};
     std::atomic<std::size_t> clients_finished{0};
 
     // Server thread
-    std::thread server_thread([&]() {
+    std::thread server_thread([&]() -> int {
         Socket::Server server(Connection::Protocol::IPv4, handler, logger);
         auto listen_res = server.Listen(HOST, PORT);
-        if (!listen_res) {
-            std::cerr << "Server Listen failed: " << listen_res.error()->what() << std::endl;
-            return;
-        }
+        ASSERT_TRUE(fn_name, listen_res.has_value());
 
         std::vector<std::thread> client_handlers;
 
@@ -53,38 +53,25 @@ int main() {
             Socket::Client client_socket = std::move(expected_client.value());
 
             // Handler thread per client
-            client_handlers.emplace_back([client = std::move(client_socket), &clients_finished]() mutable {
+            client_handlers.emplace_back([client = std::move(client_socket), &clients_finished]() mutable -> int {
+                const std::string fn_name_inner = "TestSocketMulti::Handler";
                 auto expected_buffer = client.Receive();
-                if (!expected_buffer) {
-                    std::cerr << "Client handler: Receive failed: " << expected_buffer.error()->what() << std::endl;
-                    client.Disconnect();
-                    clients_finished.fetch_add(1);
-                    return;
-                }
+                ASSERT_TRUE(fn_name_inner, expected_buffer.has_value());
 
                 Buffer::FIFO buffer = std::move(expected_buffer.value());
                 auto expected_data = buffer.Extract();
-                if (!expected_data) {
-                    std::cerr << "Client handler: Extract failed" << std::endl;
-                    client.Disconnect();
-                    clients_finished.fetch_add(1);
-                    return;
-                }
+                ASSERT_TRUE(fn_name_inner, expected_data.has_value());
 
                 auto vec = expected_data.value();
-                if (vec.empty()) {
-                    std::cerr << "Client handler: No data received" << std::endl;
-                }
+                ASSERT_FALSE(fn_name_inner, vec.empty());
 
                 // Echo back
-                if (!client.Send(std::span<const std::byte>(vec.data(), vec.size())).has_value()) {
-                    std::cerr << "Client handler: Echo send failed" << std::endl;
-                } else {
-                    std::cout << "Server: echoed " << vec.size() << " bytes" << std::endl;
-                }
+                auto send_res = client.Send(std::span<const std::byte>(vec.data(), vec.size()));
+                ASSERT_TRUE(fn_name_inner, send_res.has_value());
 
                 client.Disconnect();
                 clients_finished.fetch_add(1);
+                return 0;
             });
         }
 
@@ -94,6 +81,7 @@ int main() {
         if (Connection::IsConnected(server.Status())) {
             server.Disconnect();
         }
+        return 0;
     });
 
     // Small delay to ensure server is listening
@@ -102,13 +90,11 @@ int main() {
     // Client threads
     std::vector<std::thread> clients;
     for (std::size_t i = 0; i < NUM_CLIENTS; ++i) {
-        clients.emplace_back([i, &clients_finished, handler, logger]() {
+        clients.emplace_back([i, &clients_finished, handler]() -> int {
+            const std::string fn_name_inner = "TestSocketMulti::Client";
             Socket::Client client(Connection::Protocol::IPv4, handler, logger);
             auto connect_res = client.Connect(HOST, PORT);
-            if (!connect_res) {
-                std::cerr << "Client " << i << " Connect failed: " << connect_res.error()->what() << std::endl;
-                return;
-            }
+            ASSERT_TRUE(fn_name_inner, connect_res.has_value());
 
             // Prepare payload
             std::vector<std::byte> chunk(CHUNK_SIZE, std::byte('H'));
@@ -116,46 +102,27 @@ int main() {
             while (sent < TOTAL_BYTES_PER_CLIENT) {
                 std::size_t to_send = std::min(CHUNK_SIZE, TOTAL_BYTES_PER_CLIENT - sent);
                 auto res = client.Send(std::span<const std::byte>(chunk.data(), to_send));
-                if (!res) {
-                    std::cerr << "Client " << i << " Send failed: " << res.error()->what() << std::endl;
-                    client.Disconnect();
-                    return;
-                }
+                ASSERT_TRUE(fn_name_inner, res.has_value());
                 sent += to_send;
             }
 
-            std::cout << "Client " << i << ": sent " << sent << " bytes" << std::endl;
-
             // Receive echoed data
             auto recv_buf_res = client.Receive(TOTAL_BYTES_PER_CLIENT);
-            if (!recv_buf_res) {
-                std::cerr << "Client " << i << " Receive failed: " << recv_buf_res.error()->what() << std::endl;
-                client.Disconnect();
-                return;
-            }
+            ASSERT_TRUE(fn_name_inner, recv_buf_res.has_value());
 
             Buffer::FIFO buffer = std::move(recv_buf_res.value());
             auto expected_data = buffer.Extract();
-            if (!expected_data) {
-                std::cerr << "Client " << i << " Extract failed" << std::endl;
-                client.Disconnect();
-                return;
-            }
+            ASSERT_TRUE(fn_name_inner, expected_data.has_value());
 
             auto vec = expected_data.value();
-            std::cout << "Client " << i << ": received " << vec.size() << " bytes" << std::endl;
+            ASSERT_TRUE(fn_name_inner, vec.size() == TOTAL_BYTES_PER_CLIENT);
 
-            bool ok = (vec.size() == TOTAL_BYTES_PER_CLIENT);
-            if (ok) {
-                for (size_t k = 0; k < vec.size(); ++k) {
-                    if (vec[k] != std::byte('H')) { ok = false; break; }
-                }
+            for (size_t k = 0; k < vec.size(); ++k) {
+                ASSERT_TRUE(fn_name_inner, vec[k] == std::byte('H'));
             }
 
-            if (ok) std::cout << "Client " << i << ": echo validation passed" << std::endl;
-            else std::cerr << "Client " << i << ": echo validation failed" << std::endl;
-
             client.Disconnect();
+            return 0;
         });
     }
 
@@ -172,6 +139,16 @@ int main() {
 
     if (server_thread.joinable()) server_thread.join();
 
-    std::cout << "All clients finished, server stopped." << std::endl;
-    return 0;
+    RETURN_TEST(fn_name, 0);
+}
+
+int main() {
+    int result = 0;
+    result += TestSocketMulti();
+    if (result == 0) {
+        std::cout << "All tests passed!" << std::endl;
+    } else {
+        std::cout << result << " tests failed." << std::endl;
+    }
+    return result;
 }
