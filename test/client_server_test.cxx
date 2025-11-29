@@ -137,11 +137,11 @@ void FlipBytes(Buffer::Consumer in, Buffer::Producer out, std::shared_ptr<Logger
 	// Process until the input is closed and no bytes remain
 	while (in.IsWritable() || in.AvailableBytes() > 0) {
 		// If no data is currently available, wait briefly unless closed
-		if (in.AvailableBytes() == 0) {
+			if (in.AvailableBytes() == 0) {
 			if (!in.IsWritable()) {
 				break;
 			}
-			std::this_thread::sleep_for(std::chrono::milliseconds(1));
+			std::this_thread::yield();
 			continue;
 		}
 
@@ -155,7 +155,7 @@ void FlipBytes(Buffer::Consumer in, Buffer::Producer out, std::shared_ptr<Logger
 			if (!in.IsWritable()) {
 				break;
 			}
-			std::this_thread::sleep_for(std::chrono::milliseconds(1));
+			std::this_thread::yield();
 			continue;
 		}
 

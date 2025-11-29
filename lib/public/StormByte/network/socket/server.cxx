@@ -81,7 +81,7 @@ ExpectedClient Socket::Server::Accept() noexcept {
 	FD_ZERO(&read_fds);
 	FD_SET(*m_handle, &read_fds);
 
-	struct timeval timeout = {5, 0}; // 5 seconds timeout
+	struct timeval timeout = {0, 200000}; // 200ms timeout
 	int select_result = select(*m_handle + 1, &read_fds, nullptr, nullptr, &timeout);
 	if (select_result == 0) {
 		return StormByte::Unexpected<ConnectionError>("Timeout occurred while waiting to accept connection.");

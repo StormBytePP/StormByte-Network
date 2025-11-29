@@ -90,8 +90,8 @@ ExpectedVoid Socket::Client::Send(std::span<const std::byte> data) noexcept {
 							"Select error: {} (error code: {})",
 							m_conn_handler->LastError(), m_conn_handler->LastErrorCode());
 		} else if (sel == 0) {
-			// Timeout: no readiness detected, so sleep a little and retry.
-			std::this_thread::sleep_for(std::chrono::milliseconds(10));
+			// Timeout: no readiness detected, yield to other threads and retry.
+			std::this_thread::yield();
 			continue;
 		}
 #else // WINDOWS
@@ -107,7 +107,7 @@ ExpectedVoid Socket::Client::Send(std::span<const std::byte> data) noexcept {
 							"Select error: {} (error code: {})",
 							m_conn_handler->LastError(), m_conn_handler->LastErrorCode());
 		} else if (sel == 0) {
-			std::this_thread::sleep_for(std::chrono::milliseconds(10));
+			std::this_thread::yield();
 			continue;
 		}
 #endif
@@ -162,8 +162,8 @@ ExpectedVoid Socket::Client::Send(Buffer::Consumer data) noexcept {
 			if (!data.IsWritable()) {
 				break;
 			}
-			m_logger << Logger::Level::LowLevel << "No data available to send. Waiting..." << std::endl;
-			std::this_thread::sleep_for(std::chrono::milliseconds(100));
+			m_logger << Logger::Level::LowLevel << "No data available to send. Yielding..." << std::endl;
+			std::this_thread::yield();
 			continue;
 		}
 		auto send_bytes = data.AvailableBytes();
