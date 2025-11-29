@@ -1,0 +1,56 @@
+[
+{
+  "directory": "/home/stormbyte/Software/StormByte/StormByte/network/build-asan/lib",
+  "command": "/usr/bin/c++ -DStormByte_Network_EXPORTS -isystem /home/stormbyte/Software/StormByte/StormByte/network/lib/public -isystem /home/stormbyte/Software/StormByte/StormByte/network/lib/private -isystem /home/stormbyte/Software/StormByte/StormByte/network/thirdparty/StormByte/base/lib/public -isystem /home/stormbyte/Software/StormByte/StormByte/network/thirdparty/StormByte/buffer/lib/public -isystem /home/stormbyte/Software/StormByte/StormByte/network/thirdparty/StormByte/buffer/lib/private -fsanitize=address -fno-omit-frame-pointer -pipe -g -ggdb -Wall -Wextra -Wnon-virtual-dtor -pedantic -pedantic-errors -O0 -std=c++23 -fPIC -fvisibility=hidden -fvisibility-inlines-hidden -o CMakeFiles/StormByte-Network.dir/private/StormByte/network/socket/client.cxx.o -c /home/stormbyte/Software/StormByte/StormByte/network/lib/private/StormByte/network/socket/client.cxx",
+  "file": "/home/stormbyte/Software/StormByte/StormByte/network/lib/private/StormByte/network/socket/client.cxx",
+  "output": "lib/CMakeFiles/StormByte-Network.dir/private/StormByte/network/socket/client.cxx.o"
+},
+{
+  "directory": "/home/stormbyte/Software/StormByte/StormByte/network/build-asan/lib",
+  "command": "/usr/bin/c++ -DStormByte_Network_EXPORTS -isystem /home/stormbyte/Software/StormByte/StormByte/network/lib/public -isystem /home/stormbyte/Software/StormByte/StormByte/network/lib/private -isystem /home/stormbyte/Software/StormByte/StormByte/network/thirdparty/StormByte/base/lib/public -isystem /home/stormbyte/Software/StormByte/StormByte/network/thirdparty/StormByte/buffer/lib/public -isystem /home/stormbyte/Software/StormByte/StormByte/network/thirdparty/StormByte/buffer/lib/private -fsanitize=address -fno-omit-frame-pointer -pipe -g -ggdb -Wall -Wextra -Wnon-virtual-dtor -pedantic -pedantic-errors -O0 -std=c++23 -fPIC -fvisibility=hidden -fvisibility-inlines-hidden -o CMakeFiles/StormByte-Network.dir/private/StormByte/network/socket/server.cxx.o -c /home/stormbyte/Software/StormByte/StormByte/network/lib/private/StormByte/network/socket/server.cxx",
+  "file": "/home/stormbyte/Software/StormByte/StormByte/network/lib/private/StormByte/network/socket/server.cxx",
+  "output": "lib/CMakeFiles/StormByte-Network.dir/private/StormByte/network/socket/server.cxx.o"
+},
+{
+  "directory": "/home/stormbyte/Software/StormByte/StormByte/network/build-asan/lib",
+  "command": "/usr/bin/c++ -DStormByte_Network_EXPORTS -isystem /home/stormbyte/Software/StormByte/StormByte/network/lib/public -isystem /home/stormbyte/Software/StormByte/StormByte/network/lib/private -isystem /home/stormbyte/Software/StormByte/StormByte/network/thirdparty/StormByte/base/lib/public -isystem /home/stormbyte/Software/StormByte/StormByte/network/thirdparty/StormByte/buffer/lib/public -isystem /home/stormbyte/Software/StormByte/StormByte/network/thirdparty/StormByte/buffer/lib/private -fsanitize=address -fno-omit-frame-pointer -pipe -g -ggdb -Wall -Wextra -Wnon-virtual-dtor -pedantic -pedantic-errors -O0 -std=c++23 -fPIC -fvisibility=hidden -fvisibility-inlines-hidden -o CMakeFiles/StormByte-Network.dir/private/StormByte/network/socket/socket.cxx.o -c /home/stormbyte/Software/StormByte/StormByte/network/lib/private/StormByte/network/socket/socket.cxx",
+  "file": "/home/stormbyte/Software/StormByte/StormByte/network/lib/private/StormByte/network/socket/socket.cxx",
+  "output": "lib/CMakeFiles/StormByte-Network.dir/private/StormByte/network/socket/socket.cxx.o"
+},
+{
+  "directory": "/home/stormbyte/Software/StormByte/StormByte/network/build-asan/lib",
+  "command": "/usr/bin/c++ -DStormByte_Network_EXPORTS -isystem /home/stormbyte/Software/StormByte/StormByte/network/lib/public -isystem /home/stormbyte/Software/StormByte/StormByte/network/lib/private -isystem /home/stormbyte/Software/StormByte/StormByte/network/thirdparty/StormByte/base/lib/public -isystem /home/stormbyte/Software/StormByte/StormByte/network/thirdparty/StormByte/buffer/lib/public -isystem /home/stormbyte/Software/StormByte/StormByte/network/thirdparty/StormByte/buffer/lib/private -fsanitize=address -fno-omit-frame-pointer -pipe -g -ggdb -Wall -Wextra -Wnon-virtual-dtor -pedantic -pedantic-errors -O0 -std=c++23 -fPIC -fvisibility=hidden -fvisibility-inlines-hidden -o CMakeFiles/StormByte-Network.dir/public/StormByte/network/client.cxx.o -c /home/stormbyte/Software/StormByte/StormByte/network/lib/public/StormByte/network/client.cxx",
+  "file": "/home/stormbyte/Software/StormByte/StormByte/network/lib/public/StormByte/network/client.cxx",
+  "output": "lib/CMakeFiles/StormByte-Network.dir/public/StormByte/network/client.cxx.o"
+},
+{
+  "directory": "/home/stormbyte/Software/StormByte/StormByte/network/build-asan/lib",
+  "command": "/usr/bin/c++ -DStormByte_Network_EXPORTS -isystem /home/stormbyte/Software/StormByte/StormByte/network/lib/public -isystem /home/stormbyte/Software/StormByte/StormByte/network/lib/private -isystem /home/stormbyte/Software/StormByte/StormByte/network/thirdparty/StormByte/base/lib/public -isystem /home/stormbyte/Software/StormByte/StormByte/network/thirdparty/StormByte/buffer/lib/public -isystem /home/stormbyte/Software/StormByte/StormByte/network/thirdparty/StormByte/buffer/lib/private -fsanitize=address -fno-omit-frame-pointer -pipe -g -ggdb -Wall -Wextra -Wnon-virtual-dtor -pedantic -pedantic-errors -O0 -std=c++23 -fPIC -fvisibility=hidden -fvisibility-inlines-hidden -o CMakeFiles/StormByte-Network.dir/public/StormByte/network/connection/handler.cxx.o -c /home/stormbyte/Software/StormByte/StormByte/network/lib/public/StormByte/network/connection/handler.cxx",
+  "file": "/home/stormbyte/Software/StormByte/StormByte/network/lib/public/StormByte/network/connection/handler.cxx",
+  "output": "lib/CMakeFiles/StormByte-Network.dir/public/StormByte/network/connection/handler.cxx.o"
+},
+{
+  "directory": "/home/stormbyte/Software/StormByte/StormByte/network/build-asan/lib",
+  "command": "/usr/bin/c++ -DStormByte_Network_EXPORTS -isystem /home/stormbyte/Software/StormByte/StormByte/network/lib/public -isystem /home/stormbyte/Software/StormByte/StormByte/network/lib/private -isystem /home/stormbyte/Software/StormByte/StormByte/network/thirdparty/StormByte/base/lib/public -isystem /home/stormbyte/Software/StormByte/StormByte/network/thirdparty/StormByte/buffer/lib/public -isystem /home/stormbyte/Software/StormByte/StormByte/network/thirdparty/StormByte/buffer/lib/private -fsanitize=address -fno-omit-frame-pointer -pipe -g -ggdb -Wall -Wextra -Wnon-virtual-dtor -pedantic -pedantic-errors -O0 -std=c++23 -fPIC -fvisibility=hidden -fvisibility-inlines-hidden -o CMakeFiles/StormByte-Network.dir/public/StormByte/network/connection/info.cxx.o -c /home/stormbyte/Software/StormByte/StormByte/network/lib/public/StormByte/network/connection/info.cxx",
+  "file": "/home/stormbyte/Software/StormByte/StormByte/network/lib/public/StormByte/network/connection/info.cxx",
+  "output": "lib/CMakeFiles/StormByte-Network.dir/public/StormByte/network/connection/info.cxx.o"
+},
+{
+  "directory": "/home/stormbyte/Software/StormByte/StormByte/network/build-asan/lib",
+  "command": "/usr/bin/c++ -DStormByte_Network_EXPORTS -isystem /home/stormbyte/Software/StormByte/StormByte/network/lib/public -isystem /home/stormbyte/Software/StormByte/StormByte/network/lib/private -isystem /home/stormbyte/Software/StormByte/StormByte/network/thirdparty/StormByte/base/lib/public -isystem /home/stormbyte/Software/StormByte/StormByte/network/thirdparty/StormByte/buffer/lib/public -isystem /home/stormbyte/Software/StormByte/StormByte/network/thirdparty/StormByte/buffer/lib/private -fsanitize=address -fno-omit-frame-pointer -pipe -g -ggdb -Wall -Wextra -Wnon-virtual-dtor -pedantic -pedantic-errors -O0 -std=c++23 -fPIC -fvisibility=hidden -fvisibility-inlines-hidden -o CMakeFiles/StormByte-Network.dir/public/StormByte/network/endpoint.cxx.o -c /home/stormbyte/Software/StormByte/StormByte/network/lib/public/StormByte/network/endpoint.cxx",
+  "file": "/home/stormbyte/Software/StormByte/StormByte/network/lib/public/StormByte/network/endpoint.cxx",
+  "output": "lib/CMakeFiles/StormByte-Network.dir/public/StormByte/network/endpoint.cxx.o"
+},
+{
+  "directory": "/home/stormbyte/Software/StormByte/StormByte/network/build-asan/lib",
+  "command": "/usr/bin/c++ -DStormByte_Network_EXPORTS -isystem /home/stormbyte/Software/StormByte/StormByte/network/lib/public -isystem /home/stormbyte/Software/StormByte/StormByte/network/lib/private -isystem /home/stormbyte/Software/StormByte/StormByte/network/thirdparty/StormByte/base/lib/public -isystem /home/stormbyte/Software/StormByte/StormByte/network/thirdparty/StormByte/buffer/lib/public -isystem /home/stormbyte/Software/StormByte/StormByte/network/thirdparty/StormByte/buffer/lib/private -fsanitize=address -fno-omit-frame-pointer -pipe -g -ggdb -Wall -Wextra -Wnon-virtual-dtor -pedantic -pedantic-errors -O0 -std=c++23 -fPIC -fvisibility=hidden -fvisibility-inlines-hidden -o CMakeFiles/StormByte-Network.dir/public/StormByte/network/packet.cxx.o -c /home/stormbyte/Software/StormByte/StormByte/network/lib/public/StormByte/network/packet.cxx",
+  "file": "/home/stormbyte/Software/StormByte/StormByte/network/lib/public/StormByte/network/packet.cxx",
+  "output": "lib/CMakeFiles/StormByte-Network.dir/public/StormByte/network/packet.cxx.o"
+},
+{
+  "directory": "/home/stormbyte/Software/StormByte/StormByte/network/build-asan/lib",
+  "command": "/usr/bin/c++ -DStormByte_Network_EXPORTS -isystem /home/stormbyte/Software/StormByte/StormByte/network/lib/public -isystem /home/stormbyte/Software/StormByte/StormByte/network/lib/private -isystem /home/stormbyte/Software/StormByte/StormByte/network/thirdparty/StormByte/base/lib/public -isystem /home/stormbyte/Software/StormByte/StormByte/network/thirdparty/StormByte/buffer/lib/public -isystem /home/stormbyte/Software/StormByte/StormByte/network/thirdparty/StormByte/buffer/lib/private -fsanitize=address -fno-omit-frame-pointer -pipe -g -ggdb -Wall -Wextra -Wnon-virtual-dtor -pedantic -pedantic-errors -O0 -std=c++23 -fPIC -fvisibility=hidden -fvisibility-inlines-hidden -o CMakeFiles/StormByte-Network.dir/public/StormByte/network/server.cxx.o -c /home/stormbyte/Software/StormByte/StormByte/network/lib/public/StormByte/network/server.cxx",
+  "file": "/home/stormbyte/Software/StormByte/StormByte/network/lib/public/StormByte/network/server.cxx",
+  "output": "lib/CMakeFiles/StormByte-Network.dir/public/StormByte/network/server.cxx.o"
+}
+]
