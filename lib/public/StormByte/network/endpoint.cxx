@@ -95,10 +95,20 @@ ExpectedPacket EndPoint::Receive(Socket::Client& client, Buffer::Pipeline& pipel
 
 ExpectedVoid EndPoint::Send(Socket::Client& client, const Packet& packet, Buffer::Pipeline& pipeline) noexcept {
 	Buffer::Consumer packet_consumer = packet.Serialize();
-	Buffer::Consumer pipeline_buffer = pipeline.Process(packet_consumer, Buffer::ExecutionMode::Sync, m_logger);
-	auto expected_write = client.Send(pipeline_buffer);
-	if (!expected_write)
-		return StormByte::Unexpected<ConnectionError>(expected_write.error()->what());
+	Buffer::Consumer pipeline_buffer = pipeline.Process(packet_consumer, Buffer::ExecutionMode::Async, m_logger);
+	while (!pipeline_buffer.EoF()) {
+		if (pipeline_buffer.AvailableBytes() == 0) {
+			std::this_thread::yield();
+			continue;
+		}
+		auto buff = pipeline_buffer.Extract();
+		auto expected_write = client.Send(pipeline_buffer);
+		if (!expected_write) {
+			pipeline.SetError();
+			return StormByte::Unexpected<ConnectionError>(expected_write.error()->what());
+		}
+	}
+	
 
 	return {};
 }
