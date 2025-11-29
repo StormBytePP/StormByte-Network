@@ -150,8 +150,12 @@ void Server::AcceptClients() noexcept {
 			}
 
 			case Connection::Read::Result::Timeout:
+				// No incoming connection within timeout; continue waiting
+				m_logger << Logger::Level::LowLevel << "Accept wait timed out, continuing" << std::endl;
+				continue;
 			case Connection::Read::Result::Closed:
-				m_logger << Logger::Level::LowLevel << "Socket closed or timeout occurred" << std::endl;
+				// Listening socket was closed or became invalid — stop accepting
+				m_logger << Logger::Level::LowLevel << "Listening socket closed; stopping accept loop" << std::endl;
 				return;
 			default:
 				continue;

@@ -10,6 +10,9 @@
 #include <csignal>
 #include <cstdlib>
 #include <iostream>
+#include <thread>
+#include <vector>
+#include <memory>
 
 using namespace StormByte;
 using namespace StormByte::Network;
@@ -50,6 +53,7 @@ int main(int argc, char** argv) {
     std::cout << "Server listening on " << host << ":" << port << " expecting " << expected_size << " bytes" << std::endl;
 
     // Accept loop: remain active until SIGINT triggers server.Disconnect()
+    std::vector<std::thread> client_threads;
     while (Connection::IsConnected(server.Status())) {
         auto expected_client = server.Accept();
         if (!expected_client) {
@@ -60,35 +64,43 @@ int main(int argc, char** argv) {
 
         Socket::Client client_socket = std::move(expected_client.value());
 
-        // Read until the peer closes the connection (max_size == 0)
-        auto expected_buffer = client_socket.Receive();
-        if (!expected_buffer) {
-            std::cerr << "Receive failed: " << expected_buffer.error()->what() << std::endl;
-            client_socket.Disconnect();
-            continue; // keep server running
-        }
+        // Spawn a thread to handle this client concurrently
+        client_threads.emplace_back([client = std::move(client_socket)]() mutable {
+            // Read until the peer closes the connection (max_size == 0)
+            auto expected_buffer = client.Receive();
+            if (!expected_buffer) {
+                std::cerr << "Client handler: Receive failed: " << expected_buffer.error()->what() << std::endl;
+                client.Disconnect();
+                return;
+            }
 
-        Buffer::FIFO buffer = std::move(expected_buffer.value());
-        auto expected_data = buffer.Extract();
-        if (!expected_data) {
-            std::cerr << "Extract failed" << std::endl;
-            client_socket.Disconnect();
-            continue;
-        }
+            Buffer::FIFO buffer = std::move(expected_buffer.value());
+            auto expected_data = buffer.Extract();
+            if (!expected_data) {
+                std::cerr << "Client handler: Extract failed" << std::endl;
+                client.Disconnect();
+                return;
+            }
 
-        auto vec = expected_data.value();
-        if (vec.empty()) {
-            std::cerr << "No data received" << std::endl;
-        }
+            auto vec = expected_data.value();
+            if (vec.empty()) {
+                std::cerr << "Client handler: No data received" << std::endl;
+            }
 
-        // Echo back
-        if (!client_socket.Send(std::span<const std::byte>(vec.data(), vec.size())).has_value()) {
-            std::cerr << "Echo send failed" << std::endl;
-        } else {
-            std::cout << "Server: echoed " << vec.size() << " bytes" << std::endl;
-        }
+            // Echo back
+            if (!client.Send(std::span<const std::byte>(vec.data(), vec.size())).has_value()) {
+                std::cerr << "Client handler: Echo send failed" << std::endl;
+            } else {
+                std::cout << "Server: echoed " << vec.size() << " bytes" << std::endl;
+            }
 
-        client_socket.Disconnect();
+            client.Disconnect();
+        });
+    }
+
+    // Join handler threads before exiting
+    for (auto &t : client_threads) {
+        if (t.joinable()) t.join();
     }
 
     // If we exited the accept loop due to disconnect request, ensure cleanup

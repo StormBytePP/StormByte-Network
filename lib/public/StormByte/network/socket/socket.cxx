@@ -2,6 +2,7 @@
 
 #ifdef LINUX
 #include <netinet/in.h>
+#include <netinet/tcp.h>
 #include <fcntl.h>
 #include <sys/socket.h>
 #include <unistd.h>
@@ -14,7 +15,7 @@
 #include <chrono>
 #include <format>
 
-constexpr const int SOCKET_BUFFER_SIZE = 65536;
+constexpr const int SOCKET_BUFFER_SIZE = 262144; // 256 KiB
 
 using namespace StormByte::Network::Socket;
 
@@ -159,9 +160,64 @@ void Socket::InitializeAfterConnect() noexcept {
 	m_mtu = GetMTU();
 	SetNonBlocking();
 	
-	// Increase the socket buffer size
-	//setsockopt(*m_handle, SOL_SOCKET, SO_SNDBUF, (const char*)&SOCKET_BUFFER_SIZE, sizeof(SOCKET_BUFFER_SIZE));
-	setsockopt(*m_handle, SOL_SOCKET, SO_RCVBUF, (const char*)&SOCKET_BUFFER_SIZE, sizeof(SOCKET_BUFFER_SIZE));
+	// Increase the socket buffer sizes (send and receive)
+	int buf_size = SOCKET_BUFFER_SIZE;
+	int rc = 0;
+#ifdef WINDOWS
+	rc = setsockopt(*m_handle, SOL_SOCKET, SO_SNDBUF, reinterpret_cast<const char*>(&buf_size), sizeof(buf_size));
+	if (rc != 0) {
+		m_logger << Logger::Level::Warning << "setsockopt(SO_SNDBUF) failed: " << m_conn_handler->LastError() << std::endl;
+	}
+	rc = setsockopt(*m_handle, SOL_SOCKET, SO_RCVBUF, reinterpret_cast<const char*>(&buf_size), sizeof(buf_size));
+	if (rc != 0) {
+		m_logger << Logger::Level::Warning << "setsockopt(SO_RCVBUF) failed: " << m_conn_handler->LastError() << std::endl;
+	}
+#else
+	rc = setsockopt(*m_handle, SOL_SOCKET, SO_SNDBUF, &buf_size, sizeof(buf_size));
+	if (rc != 0) {
+		m_logger << Logger::Level::Warning << "setsockopt(SO_SNDBUF) failed: " << m_conn_handler->LastError() << std::endl;
+	}
+	rc = setsockopt(*m_handle, SOL_SOCKET, SO_RCVBUF, &buf_size, sizeof(buf_size));
+	if (rc != 0) {
+		m_logger << Logger::Level::Warning << "setsockopt(SO_RCVBUF) failed: " << m_conn_handler->LastError() << std::endl;
+	}
+#endif
+
+	// Query and log effective buffer sizes
+	int effective = 0;
+#ifdef WINDOWS
+	int optlen = sizeof(effective);
+	if (getsockopt(*m_handle, SOL_SOCKET, SO_SNDBUF, reinterpret_cast<char*>(&effective), &optlen) == 0) {
+		m_logger << Logger::Level::LowLevel << "Effective SO_SNDBUF: " << effective << std::endl;
+	}
+	optlen = sizeof(effective);
+	if (getsockopt(*m_handle, SOL_SOCKET, SO_RCVBUF, reinterpret_cast<char*>(&effective), &optlen) == 0) {
+		m_logger << Logger::Level::LowLevel << "Effective SO_RCVBUF: " << effective << std::endl;
+	}
+#else
+	socklen_t optlen = sizeof(effective);
+	if (getsockopt(*m_handle, SOL_SOCKET, SO_SNDBUF, &effective, &optlen) == 0) {
+		m_logger << Logger::Level::LowLevel << "Effective SO_SNDBUF: " << effective << std::endl;
+	}
+	optlen = sizeof(effective);
+	if (getsockopt(*m_handle, SOL_SOCKET, SO_RCVBUF, &effective, &optlen) == 0) {
+		m_logger << Logger::Level::LowLevel << "Effective SO_RCVBUF: " << effective << std::endl;
+	}
+#endif
+
+	// Disable Nagle for lower latency on small writes
+	int flag = 1;
+#ifdef WINDOWS
+	rc = setsockopt(*m_handle, IPPROTO_TCP, TCP_NODELAY, reinterpret_cast<const char*>(&flag), sizeof(flag));
+	if (rc != 0) {
+		m_logger << Logger::Level::Warning << "setsockopt(TCP_NODELAY) failed: " << m_conn_handler->LastError() << std::endl;
+	}
+#else
+	rc = setsockopt(*m_handle, IPPROTO_TCP, TCP_NODELAY, &flag, sizeof(flag));
+	if (rc != 0) {
+		m_logger << Logger::Level::Warning << "setsockopt(TCP_NODELAY) failed: " << m_conn_handler->LastError() << std::endl;
+	}
+#endif
 }
 
 #ifdef LINUX

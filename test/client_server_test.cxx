@@ -12,8 +12,8 @@ using namespace StormByte;
 
 constexpr const char* host = "localhost";
 constexpr const unsigned short port = 7070;
-auto logger = std::make_shared<Logger>(std::cout, Logger::Level::Info);
-constexpr const std::size_t large_size = 4096;
+auto logger = std::make_shared<Logger>(std::cout, Logger::Level::LowLevel);
+constexpr const std::size_t large_size = 40960000;
 
 enum class OpCodes: unsigned short {
 	TestMessage = 1,

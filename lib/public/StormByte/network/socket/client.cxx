@@ -14,7 +14,7 @@
 #include <span>
 #include <thread>
 
-constexpr const std::size_t BUFFER_SIZE = 4096;
+constexpr const std::size_t BUFFER_SIZE = 65536;
 
 using namespace StormByte::Network;
 
@@ -254,16 +254,33 @@ ExpectedBuffer Socket::Client::Receive(const std::size_t& max_size) noexcept {
 		} else {
 #ifdef WINDOWS
 			if (m_conn_handler->LastErrorCode() == WSAEWOULDBLOCK) {
-#else
-			if (m_conn_handler->LastErrorCode() == EAGAIN || m_conn_handler->LastErrorCode() == EWOULDBLOCK) {
-#endif
-				m_logger << Logger::Level::LowLevel << "Socket would block, retrying..." << std::endl;
-				if (max_size == 0 && total_bytes_read > 0) {
-					m_logger << Logger::Level::LowLevel << "No additional data expected and socket would block. Exiting loop." << std::endl;
+				// On Windows, fall through to a short wait using select via WaitForData
+				auto wait_res = WaitForData(100000); // 100ms
+				if (!wait_res) {
+					// Treat as connection closed/error
 					break;
 				}
-				std::this_thread::sleep_for(std::chrono::milliseconds(100));
-				continue;
+				if (wait_res.value() == Connection::Read::Result::Timeout) {
+					if (max_size == 0 && total_bytes_read > 0) {
+						break;
+					}
+					continue;
+				}
+#else
+			if (m_conn_handler->LastErrorCode() == EAGAIN || m_conn_handler->LastErrorCode() == EWOULDBLOCK) {
+				// Socket would block: wait efficiently for data instead of busy-looping and logging repeatedly
+				auto wait_res = WaitForData(100000); // 100ms
+				if (!wait_res) {
+					// Connection closed or error
+					break;
+				}
+				if (wait_res.value() == Connection::Read::Result::Timeout) {
+					if (max_size == 0 && total_bytes_read > 0) {
+						break;
+					}
+					continue;
+				}
+#endif
 			} else {
 				m_logger << Logger::Level::LowLevel << "Read error: " << m_conn_handler->LastError() << std::endl;
 				return StormByte::Unexpected<ConnectionError>("Receive failed: {}", m_conn_handler->LastError());
