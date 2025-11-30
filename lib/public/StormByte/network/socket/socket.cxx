@@ -120,7 +120,7 @@ StormByte::Network::ExpectedReadResult Socket::WaitForData(const long long& usec
 			}
 			auto remaining = std::chrono::duration_cast<std::chrono::microseconds>(deadline - now2);
 			tv_storage.tv_sec = static_cast<time_t>(remaining.count() / 1000000);
-			tv_storage.tv_usec = static_cast<suseconds_t>(remaining.count() % 1000000);
+			tv_storage.tv_usec = static_cast<decltype(tv_storage.tv_usec)>(remaining.count() % 1000000);
 			tv_ptr = &tv_storage;
 		}
 
