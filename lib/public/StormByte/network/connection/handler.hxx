@@ -65,6 +65,14 @@ namespace StormByte::Network::Connection {
 			std::string 														LastError() const noexcept;
 
 			/**
+			 * @brief Convert an errno code to a human-readable string in a
+			 * thread-safe, cross-platform manner.
+			 * @param errnum The errno value to stringify.
+			 * @return Human-readable error string (or numeric value on failure).
+			 */
+			std::string 														ErrnoToString(int errnum) const noexcept;
+
+			/**
 			 * @brief Get last error code
 			 * @return The last error code.
 			 */

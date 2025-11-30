@@ -8,7 +8,7 @@
 #include <windows.h>
 #endif
 
-#include <StormByte/network/errno_util.hxx>
+#include <cstring>
 
 using namespace StormByte::Network::Connection;
 
@@ -38,9 +38,27 @@ std::string Handler::LastError() const noexcept {
 	LocalFree(errorMsg);
 	#else
 	if (errno != 0)
-		error_string = StormByte::Network::errno_to_string(errno);
+		error_string = ErrnoToString(errno);
 	#endif
 	return error_string;
+}
+
+std::string Handler::ErrnoToString(int errnum) const noexcept {
+#if defined(_MSC_VER)
+    char buf[256] = {0};
+    if (strerror_s(buf, sizeof(buf), errnum) == 0) return std::string(buf);
+    return std::to_string(errnum);
+#else
+    char buf[256] = {0};
+    // Handle both GNU (returns char*) and POSIX (returns int) strerror_r variants
+#if defined(__GLIBC__) && !defined(__APPLE__)
+    char *msg = strerror_r(errnum, buf, sizeof(buf));
+    return std::string(msg ? msg : "Unknown error");
+#else
+    if (strerror_r(errnum, buf, sizeof(buf)) == 0) return std::string(buf);
+    return std::to_string(errnum);
+#endif
+#endif
 }
 
 int Handler::LastErrorCode() const noexcept {

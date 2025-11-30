@@ -1,6 +1,5 @@
 #include <StormByte/network/socket/client.hxx>
 #include <StormByte/system.hxx>
-#include <StormByte/network/errno_util.hxx>
 
 #ifdef LINUX
 #include <arpa/inet.h>
@@ -146,7 +145,7 @@ ExpectedVoid Socket::Client::Send(std::span<const std::byte> data) noexcept {
 			int sys_errno = errno;
 			m_logger << Logger::Level::Error << "Send failed: " << m_conn_handler->LastError()
 					 << " (code: " << m_conn_handler->LastErrorCode() << ")"
-					 << " errno: " << sys_errno << " (" << StormByte::Network::errno_to_string(sys_errno) << ")" << std::endl;
+					 << " errno: " << sys_errno << " (" << m_conn_handler->ErrnoToString(sys_errno) << ")" << std::endl;
 			return StormByte::Unexpected<ConnectionError>(
 							"Failed to write: {} (error code: {})",
 							m_conn_handler->LastError(), m_conn_handler->LastErrorCode());
@@ -359,9 +358,9 @@ ExpectedVoid Socket::Client::Write(std::span<const std::byte> data, const std::s
 						chunk.size(), send_flags);
 		if (written <= 0) {
 			int sys_errno = errno;
-			    m_logger << Logger::Level::Error << "Write failed: " << m_conn_handler->LastError()
-				    << " (code: " << m_conn_handler->LastErrorCode() << ")"
-				    << " errno: " << sys_errno << " (" << StormByte::Network::errno_to_string(sys_errno) << ")" << std::endl;
+				m_logger << Logger::Level::Error << "Write failed: " << m_conn_handler->LastError()
+					    << " (code: " << m_conn_handler->LastErrorCode() << ")"
+					    << " errno: " << sys_errno << " (" << m_conn_handler->ErrnoToString(sys_errno) << ")" << std::endl;
 			return StormByte::Unexpected<ConnectionError>(
 				"Write failed: {} (error code: {})",
 				m_conn_handler->LastError(),
