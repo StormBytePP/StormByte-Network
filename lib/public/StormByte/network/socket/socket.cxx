@@ -14,6 +14,7 @@
 
 #include <chrono>
 #include <format>
+#include <atomic>
 #ifdef LINUX
 #include <fstream>
 #include <string>
@@ -77,15 +78,6 @@ StormByte::Network::ExpectedReadResult Socket::WaitForData(const long long& usec
 	}
 
 	fd_set read_fds;
-	struct timeval timeout;
-	struct timeval* timeout_ptr = nullptr;
-
-	// If timeout is specified, prepare timeout_ptr
-	if (usecs > 0) {
-		timeout.tv_sec = usecs / 1000000;
-		timeout.tv_usec = usecs % 1000000;
-		timeout_ptr = &timeout;
-	}
 
 	// Store the starting time and compute deadline when a timeout is requested
 	auto start_time = std::chrono::steady_clock::now();
@@ -95,14 +87,21 @@ StormByte::Network::ExpectedReadResult Socket::WaitForData(const long long& usec
 	const std::chrono::microseconds effective_usecs = (usecs > 0) ? std::max(requested_usecs, MIN_WAIT) : std::chrono::microseconds::zero();
 	const auto deadline = (usecs > 0) ? (start_time + effective_usecs) : std::chrono::steady_clock::time_point::max();
 
-	// Throttle logging so we don't spam on tight loops
-	auto last_log_time = start_time - std::chrono::seconds(10);
+	// Throttle logging so we don't spam on tight loops. Use a process-wide
+	// atomic timestamp (microseconds since epoch) so multiple threads don't
+	// all log simultaneously. This ensures at most one "Waiting for data"
+	// log per second across the process.
+	static std::atomic<long long> s_last_log_us{0};
 
 	while (Connection::IsConnected(m_status)) {
 		auto now = std::chrono::steady_clock::now();
-		if (now - last_log_time >= std::chrono::seconds(1)) {
-			m_logger << Logger::Level::LowLevel << "Waiting for data on socket..." << std::endl;
-			last_log_time = now;
+		long long now_us = std::chrono::duration_cast<std::chrono::microseconds>(now.time_since_epoch()).count();
+		long long prev = s_last_log_us.load(std::memory_order_relaxed);
+		if (now_us - prev >= 1000000) {
+			// Attempt to update; only the successful thread should log.
+			if (s_last_log_us.compare_exchange_strong(prev, now_us, std::memory_order_acq_rel)) {
+				m_logger << Logger::Level::LowLevel << "Waiting for data on socket..." << std::endl;
+			}
 		}
 
 		FD_ZERO(&read_fds);
