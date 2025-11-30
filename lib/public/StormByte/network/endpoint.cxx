@@ -99,7 +99,7 @@ ExpectedVoid EndPoint::Send(Socket::Client& client, const Packet& packet, Buffer
 	Buffer::Consumer pipeline_buffer = pipeline.Process(packet_consumer, Buffer::ExecutionMode::Async, m_logger);
 	while (!pipeline_buffer.EoF()) {
 		if (pipeline_buffer.AvailableBytes() == 0) {
-			StormByte::System::Yield();
+			std::this_thread::yield();
 			continue;
 		}
 		auto buff = pipeline_buffer.Extract();
