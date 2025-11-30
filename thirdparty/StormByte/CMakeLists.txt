@@ -1,6 +1,6 @@
 option(WITH_SYSTEM_STORMBYTE "Use system StormByte" OFF)
 if(WITH_SYSTEM_STORMBYTE)
-	find_package(StormByte REQUIRED)
+	find_package(StormByte REQUIRED Buffer Logger)
 else()
 	if (NOT TARGET StormByte)
 		set(STORMBYTE_AS_DEPENDENCY TRUE)
