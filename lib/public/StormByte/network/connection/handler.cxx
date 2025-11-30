@@ -44,21 +44,21 @@ std::string Handler::LastError() const noexcept {
 }
 
 std::string Handler::ErrnoToString(int errnum) const noexcept {
-#if defined(_MSC_VER)
+	#ifdef WINDOWS
     char buf[256] = {0};
     if (strerror_s(buf, sizeof(buf), errnum) == 0) return std::string(buf);
     return std::to_string(errnum);
-#else
+	#else
     char buf[256] = {0};
     // Handle both GNU (returns char*) and POSIX (returns int) strerror_r variants
-#if defined(__GLIBC__) && !defined(__APPLE__)
+	#if defined(__GLIBC__) && !defined(__APPLE__)
     char *msg = strerror_r(errnum, buf, sizeof(buf));
     return std::string(msg ? msg : "Unknown error");
-#else
+	#else
     if (strerror_r(errnum, buf, sizeof(buf)) == 0) return std::string(buf);
     return std::to_string(errnum);
-#endif
-#endif
+	#endif
+	#endif
 }
 
 int Handler::LastErrorCode() const noexcept {
