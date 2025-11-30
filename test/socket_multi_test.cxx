@@ -1,9 +1,9 @@
 // Combined multi-client server/client test
+#include <StormByte/buffer/fifo.hxx>
+#include <StormByte/logger/threaded_log.hxx>
+#include <StormByte/network/connection/handler.hxx>
 #include <StormByte/network/socket/server.hxx>
 #include <StormByte/network/socket/client.hxx>
-#include <StormByte/network/connection/handler.hxx>
-#include <StormByte/buffer/fifo.hxx>
-#include <StormByte/logger.hxx>
 #include <StormByte/network/packet.hxx>
 #include <StormByte/test_handlers.h>
 
@@ -24,7 +24,7 @@ constexpr unsigned short PORT = 7070;
 constexpr std::size_t NUM_CLIENTS = 4;                    // number of concurrent clients
 constexpr std::size_t CHUNK_SIZE = 65536;                 // chunk size for each send
 constexpr std::size_t TOTAL_BYTES_PER_CLIENT = 104857600;   // total bytes each client will send (1 MiB)
-auto logger = std::make_shared<Logger>(std::cout, Logger::Level::Error);
+auto logger = Logger::ThreadedLog(std::cout, Logger::Level::Error);
 
 int TestSocketMulti() {
     const std::string fn_name = "TestSocketMulti";

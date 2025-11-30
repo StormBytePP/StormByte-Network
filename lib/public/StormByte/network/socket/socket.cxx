@@ -19,14 +19,14 @@ constexpr const int SOCKET_BUFFER_SIZE = 262144; // 256 KiB
 
 using namespace StormByte::Network::Socket;
 
-Socket::Socket(const Connection::Protocol& protocol, std::shared_ptr<const Connection::Handler> handler, std::shared_ptr<Logger> logger) noexcept:
+Socket::Socket(const Connection::Protocol& protocol, std::shared_ptr<const Connection::Handler> handler, Logger::ThreadedLog logger) noexcept:
 m_protocol(protocol), m_status(Connection::Status::Disconnected),
 m_handle(nullptr), m_conn_handler(handler), m_conn_info(nullptr), m_mtu(DEFAULT_MTU), m_logger(logger) {}
 
 Socket::Socket(Socket&& other) noexcept:
 m_protocol(other.m_protocol), m_status(other.m_status),
 m_handle(std::move(other.m_handle)), m_conn_handler(other.m_conn_handler),
-m_conn_info(std::move(other.m_conn_info)), m_mtu(other.m_mtu) {
+m_conn_info(std::move(other.m_conn_info)), m_mtu(other.m_mtu), m_logger(other.m_logger) {
 	other.m_status = Connection::Status::Disconnected;
 }
 
@@ -42,6 +42,7 @@ Socket& Socket::operator=(Socket&& other) noexcept {
 		m_conn_handler = other.m_conn_handler;
 		m_conn_info = std::move(other.m_conn_info);
 		m_mtu = other.m_mtu;
+		m_logger = std::move(other.m_logger);
 		other.m_status = Connection::Status::Disconnected;
 	}
 	return *this;

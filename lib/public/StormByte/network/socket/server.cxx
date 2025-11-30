@@ -13,7 +13,7 @@
 
 using namespace StormByte::Network;
 
-Socket::Server::Server(const Connection::Protocol& protocol, std::shared_ptr<const Connection::Handler> handler, std::shared_ptr<Logger> logger) noexcept:
+Socket::Server::Server(const Connection::Protocol& protocol, std::shared_ptr<const Connection::Handler> handler, Logger::ThreadedLog logger) noexcept:
 Socket(protocol, handler, logger) {}
 
 ExpectedVoid Socket::Server::Listen(const std::string& hostname, const unsigned short& port) noexcept {

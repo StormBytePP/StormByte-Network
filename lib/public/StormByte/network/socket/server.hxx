@@ -20,7 +20,7 @@ namespace StormByte::Network::Socket {
 			 * @param protocol The protocol of the socket.
 			 * @param handler The handler of the socket.
 			 */
-			Server(const Connection::Protocol& protocol, std::shared_ptr<const Connection::Handler> handler, std::shared_ptr<Logger> logger) noexcept;
+			Server(const Connection::Protocol& protocol, std::shared_ptr<const Connection::Handler> handler, Logger::ThreadedLog logger) noexcept;
 
 			/**
 			 * @brief The copy constructor of the Server class.
@@ -57,13 +57,13 @@ namespace StormByte::Network::Socket {
 			 * @brief The function to listen for incoming connections.
 			 * @return The expected result of the operation.
 			 */
-			ExpectedVoid												Listen(const std::string& hostname, const unsigned short& port) noexcept;
+			ExpectedVoid													Listen(const std::string& hostname, const unsigned short& port) noexcept;
 
 			/**
 			 * @brief The function to accept a client connection.
 			 * @return The expected result of the operation.
 			 */
-			ExpectedClient												Accept() noexcept;
+			ExpectedClient													Accept() noexcept;
 
 			/**
 			 * @brief Disconnect the server and any active clients.
@@ -71,6 +71,6 @@ namespace StormByte::Network::Socket {
 			void Disconnect() noexcept override;
 
 		private:
-			std::vector<Connection::Handler::Type> m_active_clients; ///< Active accepted client handles
+			std::vector<Connection::Handler::Type> m_active_clients; 		///< Active accepted client handles
 	};
 }

@@ -20,7 +20,7 @@ namespace StormByte::Network {
 			 * @param protocol The protocol to use.
 			 * @param handler The handler to use.
 			 */
-			Server(Connection::Protocol protocol, std::shared_ptr<Connection::Handler> handler, std::shared_ptr<Logger> logger) noexcept;
+			Server(Connection::Protocol protocol, std::shared_ptr<Connection::Handler> handler, Logger::ThreadedLog logger) noexcept;
 
 			/**
 			 * @brief Copy constructor (deleted).

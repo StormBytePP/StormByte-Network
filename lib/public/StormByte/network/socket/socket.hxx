@@ -1,7 +1,7 @@
 #pragma once
 
 #include <StormByte/expected.hxx>
-#include <StormByte/logger.hxx>
+#include <StormByte/logger/threaded_log.hxx>
 #include <StormByte/network/connection/handler.hxx>
 #include <StormByte/network/connection/info.hxx>
 #include <StormByte/network/connection/protocol.hxx>
@@ -39,9 +39,9 @@ namespace StormByte::Network::Socket {
 		std::shared_ptr<const Connection::Handler> m_conn_handler;
 		std::unique_ptr<Connection::Info> m_conn_info;
 		unsigned long m_mtu;
-		std::shared_ptr<Logger> m_logger;
+		Logger::ThreadedLog m_logger;
 
-		Socket(const Connection::Protocol& protocol, std::shared_ptr<const Connection::Handler> handler, std::shared_ptr<Logger> logger) noexcept;
+		Socket(const Connection::Protocol& protocol, std::shared_ptr<const Connection::Handler> handler, Logger::ThreadedLog logger) noexcept;
 		Expected<Connection::Handler::Type, ConnectionError> CreateSocket() noexcept;
 		void InitializeAfterConnect() noexcept;
 

@@ -5,3 +5,6 @@
 [submodule "thirdparty/StormByte/buffer"]
 	path = thirdparty/StormByte/buffer
 	url = https://github.com/StormBytePP/StormByte-Buffer.git
+[submodule "thirdparty/StormByte/logger"]
+	path = thirdparty/StormByte/logger
+	url = https://github.com/StormBytePP/StormByte-Logger.git

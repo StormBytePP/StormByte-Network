@@ -3,7 +3,7 @@
 
 using namespace StormByte::Network;
 
-Client::Client(const Connection::Protocol& protocol, std::shared_ptr<Connection::Handler> handler, std::shared_ptr<Logger> logger) noexcept:
+Client::Client(const Connection::Protocol& protocol, std::shared_ptr<Connection::Handler> handler, Logger::ThreadedLog logger) noexcept:
 EndPoint(protocol, handler, logger) {}
 
 ExpectedVoid Client::Connect(const std::string& hostname, const unsigned short& port) noexcept {

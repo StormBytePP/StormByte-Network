@@ -16,9 +16,10 @@
 
 constexpr const std::size_t BUFFER_SIZE = 65536;
 
+using namespace StormByte::Logger;
 using namespace StormByte::Network;
 
-Socket::Client::Client(const Connection::Protocol& protocol, std::shared_ptr<const Connection::Handler> handler, std::shared_ptr<Logger> logger) noexcept
+Socket::Client::Client(const Connection::Protocol& protocol, std::shared_ptr<const Connection::Handler> handler, Logger::ThreadedLog logger) noexcept
 :Socket(protocol, handler, logger) {}
 
 ExpectedVoid Socket::Client::Connect(const std::string& hostname, const unsigned short& port) noexcept {
