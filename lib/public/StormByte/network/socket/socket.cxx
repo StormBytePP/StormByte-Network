@@ -87,20 +87,47 @@ StormByte::Network::ExpectedReadResult Socket::WaitForData(const long long& usec
 		timeout_ptr = &timeout;
 	}
 
-	// Store the starting time
+	// Store the starting time and compute deadline when a timeout is requested
 	auto start_time = std::chrono::steady_clock::now();
+	const std::chrono::microseconds requested_usecs = std::chrono::microseconds(usecs);
+	// Enforce a sensible minimum wait to avoid very tight polling from callers
+	constexpr std::chrono::microseconds MIN_WAIT = std::chrono::microseconds(100000); // 100ms
+	const std::chrono::microseconds effective_usecs = (usecs > 0) ? std::max(requested_usecs, MIN_WAIT) : std::chrono::microseconds::zero();
+	const auto deadline = (usecs > 0) ? (start_time + effective_usecs) : std::chrono::steady_clock::time_point::max();
+
+	// Throttle logging so we don't spam on tight loops
+	auto last_log_time = start_time - std::chrono::seconds(10);
 
 	while (Connection::IsConnected(m_status)) {
-		m_logger << Logger::Level::LowLevel << "Waiting for data on socket..." << std::endl;
+		auto now = std::chrono::steady_clock::now();
+		if (now - last_log_time >= std::chrono::seconds(1)) {
+			m_logger << Logger::Level::LowLevel << "Waiting for data on socket..." << std::endl;
+			last_log_time = now;
+		}
+
 		FD_ZERO(&read_fds);
 		FD_SET(*m_handle, &read_fds);
+
+		// Recompute remaining timeout for this select call (select may modify timeval)
+		struct timeval tv_storage;
+		struct timeval* tv_ptr = nullptr;
+		if (usecs > 0) {
+			auto now2 = std::chrono::steady_clock::now();
+			if (now2 >= deadline) {
+				return Connection::Read::Result::Timeout; // Deadline expired
+			}
+			auto remaining = std::chrono::duration_cast<std::chrono::microseconds>(deadline - now2);
+			tv_storage.tv_sec = static_cast<time_t>(remaining.count() / 1000000);
+			tv_storage.tv_usec = static_cast<suseconds_t>(remaining.count() % 1000000);
+			tv_ptr = &tv_storage;
+		}
 
 		int select_result;
 
 #ifdef WINDOWS
-		select_result = select(0, &read_fds, nullptr, nullptr, timeout_ptr);
+		select_result = select(0, &read_fds, nullptr, nullptr, tv_ptr);
 #else
-		select_result = select(*m_handle + 1, &read_fds, nullptr, nullptr, timeout_ptr);
+		select_result = select(*m_handle + 1, &read_fds, nullptr, nullptr, tv_ptr);
 #endif
 
 		if (select_result > 0) {
