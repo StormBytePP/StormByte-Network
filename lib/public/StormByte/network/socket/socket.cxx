@@ -6,6 +6,8 @@
 #include <fcntl.h>
 #include <sys/socket.h>
 #include <unistd.h>
+#include <sys/epoll.h>
+#include <errno.h>
 #else
 #include <winsock2.h>
 #include <ws2tcpip.h>
@@ -83,7 +85,8 @@ StormByte::Network::ExpectedReadResult Socket::WaitForData(const long long& usec
 	auto start_time = std::chrono::steady_clock::now();
 	const std::chrono::microseconds requested_usecs = std::chrono::microseconds(usecs);
 	// Enforce a sensible minimum wait to avoid very tight polling from callers
-	constexpr std::chrono::microseconds MIN_WAIT = std::chrono::microseconds(100000); // 100ms
+	// Use a smaller minimum (10ms) to remain responsive while avoiding busy loops
+	constexpr std::chrono::microseconds MIN_WAIT = std::chrono::microseconds(10000); // 10ms
 	const std::chrono::microseconds effective_usecs = (usecs > 0) ? std::max(requested_usecs, MIN_WAIT) : std::chrono::microseconds::zero();
 	const auto deadline = (usecs > 0) ? (start_time + effective_usecs) : std::chrono::steady_clock::time_point::max();
 
@@ -121,51 +124,75 @@ StormByte::Network::ExpectedReadResult Socket::WaitForData(const long long& usec
 			tv_ptr = &tv_storage;
 		}
 
-		int select_result;
+		// Platform-specific wait: use epoll on Linux for event-driven semantics
+#ifdef LINUX
+		int timeout_ms = -1;
+		if (usecs > 0) {
+			auto now2 = std::chrono::steady_clock::now();
+			if (now2 >= deadline) return Connection::Read::Result::Timeout;
+			auto remaining = std::chrono::duration_cast<std::chrono::milliseconds>(deadline - now2);
+			timeout_ms = static_cast<int>(remaining.count());
+			if (timeout_ms < 0) timeout_ms = 0;
+		}
 
-#ifdef WINDOWS
-		select_result = select(0, &read_fds, nullptr, nullptr, tv_ptr);
-#else
-		select_result = select(*m_handle + 1, &read_fds, nullptr, nullptr, tv_ptr);
-#endif
+		// Create a one-shot epoll instance, add our socket, wait, then clean up.
+		int epfd = epoll_create1(0);
+		if (epfd == -1) {
+			// Fall back to select path if epoll creation failed
+			return StormByte::Unexpected<ConnectionClosed>("Failed to create epoll instance");
+		}
 
-		if (select_result > 0) {
-			// Connection can be closed in this step and select will notify us
-			if (m_status != Connection::Status::Connected) {
-				return Connection::Read::Result::Closed; // Connection closed
-			}
-			// Check if our requested socket has data
-			if (FD_ISSET(*m_handle, &read_fds)) {
-				return Connection::Read::Result::Success; // Success, data available on our FD
-			} else {
-				// Data is available, but not on our requested FD
-				// Check elapsed time to determine if we should continue
-				auto elapsed_time = std::chrono::steady_clock::now() - start_time;
-				auto elapsed_microseconds = std::chrono::duration_cast<std::chrono::microseconds>(elapsed_time).count();
+		struct epoll_event ev;
+		ev.events = EPOLLIN | EPOLLPRI;
+		ev.data.fd = *m_handle;
 
-				if (usecs > 0 && elapsed_microseconds >= usecs) {
-					return Connection::Read::Result::Timeout; // Timeout reached
-				}
-				// Otherwise, continue and retry
-				continue;
-			}
-		} else if (select_result == 0) {
-			// Timeout occurred
+		if (epoll_ctl(epfd, EPOLL_CTL_ADD, *m_handle, &ev) == -1) {
+			close(epfd);
+			return StormByte::Unexpected<ConnectionClosed>("Failed to add fd to epoll");
+		}
+
+		struct epoll_event events[1];
+		int nfds = epoll_wait(epfd, events, 1, timeout_ms);
+		// Clean up epoll registration and fd
+		epoll_ctl(epfd, EPOLL_CTL_DEL, *m_handle, nullptr);
+		close(epfd);
+
+		if (nfds > 0) {
+			// Event(s) available
+			if (m_status != Connection::Status::Connected) return Connection::Read::Result::Closed;
+			return Connection::Read::Result::Success;
+		} else if (nfds == 0) {
 			return Connection::Read::Result::Timeout;
 		} else {
 			// Error occurred
-#ifdef WINDOWS
-			if (m_conn_handler->LastErrorCode() == WSAECONNRESET || m_conn_handler->LastErrorCode() == WSAENOTSOCK) {
+			if (errno == ECONNRESET || errno == EBADF) {
+				return StormByte::Unexpected<ConnectionClosed>("Connection closed or invalid socket");
+			}
+			return StormByte::Unexpected<ConnectionClosed>("Failed to wait for data: epoll_wait error");
+		}
 #else
-			if (m_conn_handler->LastErrorCode() == ECONNRESET || m_conn_handler->LastErrorCode() == EBADF) {
-#endif
+		// Windows: continue using select-based semantics
+		int select_result = select(0, &read_fds, nullptr, nullptr, tv_ptr);
+		if (select_result > 0) {
+			if (m_status != Connection::Status::Connected) return Connection::Read::Result::Closed;
+			if (FD_ISSET(*m_handle, &read_fds)) return Connection::Read::Result::Success;
+			// Data available elsewhere; compute elapsed and continue
+			auto elapsed_time = std::chrono::steady_clock::now() - start_time;
+			auto elapsed_microseconds = std::chrono::duration_cast<std::chrono::microseconds>(elapsed_time).count();
+			if (usecs > 0 && elapsed_microseconds >= usecs) return Connection::Read::Result::Timeout;
+			continue;
+		} else if (select_result == 0) {
+			return Connection::Read::Result::Timeout;
+		} else {
+			if (m_conn_handler->LastErrorCode() == WSAECONNRESET || m_conn_handler->LastErrorCode() == WSAENOTSOCK) {
 				return StormByte::Unexpected<ConnectionClosed>("Connection closed or invalid socket");
 			} else {
 				return StormByte::Unexpected<ConnectionClosed>("Failed to wait for data: {} (error code: {})",
-																			m_conn_handler->LastError(),
-																			m_conn_handler->LastErrorCode());
+																	m_conn_handler->LastError(),
+																	m_conn_handler->LastErrorCode());
 			}
 		}
+#endif
 	}
 
 	return StormByte::Unexpected<ConnectionClosed>("Failed to wait for data: Unknown error occurred");

@@ -27,7 +27,7 @@ constexpr const std::size_t N = 4;
 constexpr const std::size_t CHUNK_SIZE = 640 * 1024; // 640 KiB
 // Total bytes each client will send (bytes)
 constexpr const std::size_t TOTAL_BYTES_PER_CLIENT = 100 * 1024 * 1024; // 100 MiB
-auto logger = Logger::ThreadedLog(std::cout, Logger::Level::LowLevel, "[%L] [T%i] %T: ");
+auto logger = Logger::ThreadedLog(std::cout, Logger::Level::Error, "[%L] [T%i] %T: ");
 
 int TestSocketMulti() {
     const std::string fn_name = "TestSocketMulti";
