@@ -6,6 +6,7 @@
 #include <fcntl.h>
 #include <sys/ioctl.h>
 #include <sys/socket.h>
+#include <poll.h>
 #include <unistd.h>
 #endif
 
@@ -84,21 +85,24 @@ ExpectedVoid Socket::Client::Send(std::span<const std::byte> data) noexcept {
 	while (!data.empty()) {
 		// Wait for the socket to be writable
 #ifdef LINUX
-		fd_set writefds;
-		FD_ZERO(&writefds);
-		FD_SET(*m_handle, &writefds);
-		timeval tv;
-		tv.tv_sec  = 0;
-		tv.tv_usec = 50000; // wait up to 50ms for writability
-		int sel = select(*m_handle + 1, nullptr, &writefds, nullptr, &tv);
-		if (sel < 0) {
+		// Use poll() to avoid FD_SET/select limitations (fd may exceed FD_SETSIZE)
+		struct pollfd pfd;
+		pfd.fd = *m_handle;
+		pfd.events = POLLOUT;
+		int pol = poll(&pfd, 1, 50); // timeout 50ms
+		if (pol < 0) {
 			return StormByte::Unexpected<ConnectionError>(
-							"Select error: {} (error code: {})",
+							"Poll error: {} (error code: {})",
 							m_conn_handler->LastError(), m_conn_handler->LastErrorCode());
-		} else if (sel == 0) {
+		} else if (pol == 0) {
 			// Timeout: no readiness detected, yield to other threads and retry.
 			std::this_thread::yield();
 			continue;
+		} else {
+			if (!(pfd.revents & POLLOUT)) {
+				std::this_thread::yield();
+				continue;
+			}
 		}
 #else // WINDOWS
 		fd_set writefds;
