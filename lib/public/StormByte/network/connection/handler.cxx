@@ -3,10 +3,12 @@
 
 #ifdef LINUX
 #include <cerrno> // For errno
-#include <cstring> // For strerror
+#include <cstring> // For strerror_r
 #else
 #include <windows.h>
 #endif
+
+#include <StormByte/network/errno_util.hxx>
 
 using namespace StormByte::Network::Connection;
 
@@ -36,7 +38,7 @@ std::string Handler::LastError() const noexcept {
 	LocalFree(errorMsg);
 	#else
 	if (errno != 0)
-		error_string = strerror(errno);
+		error_string = StormByte::Network::errno_to_string(errno);
 	#endif
 	return error_string;
 }
