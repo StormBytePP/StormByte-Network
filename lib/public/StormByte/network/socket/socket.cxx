@@ -239,10 +239,10 @@ void Socket::InitializeAfterConnect() noexcept {
 	int sys_wmem_max = read_proc_int("/proc/sys/net/core/wmem_max");
 	int sys_rmem_max = read_proc_int("/proc/sys/net/core/rmem_max");
 	if (sys_wmem_max > 0) {
-		m_logger << Logger::Level::LowLevel << "System wmem_max: " << sys_wmem_max << std::endl;
+		m_logger << Logger::Level::LowLevel << "System wmem_max: " << Logger::humanreadable_bytes << sys_wmem_max << Logger::nohumanreadable << std::endl;
 	}
 	if (sys_rmem_max > 0) {
-		m_logger << Logger::Level::LowLevel << "System rmem_max: " << sys_rmem_max << std::endl;
+		m_logger << Logger::Level::LowLevel << "System rmem_max: " << Logger::humanreadable_bytes << sys_rmem_max << Logger::nohumanreadable << std::endl;
 	}
 
 	int send_buf = desired_buf;
@@ -291,12 +291,12 @@ void Socket::InitializeAfterConnect() noexcept {
 #ifdef WINDOWS
 	int optlen = sizeof(effective);
 	if (getsockopt(*m_handle, SOL_SOCKET, SO_SNDBUF, reinterpret_cast<char*>(&effective), &optlen) == 0) {
-		m_logger << Logger::Level::LowLevel << "Effective SO_SNDBUF: " << effective << std::endl;
+		m_logger << Logger::Level::LowLevel << "Effective SO_SNDBUF: " << Logger::humanreadable_bytes << effective << Logger::nohumanreadable << std::endl;
 		m_effective_send_buf = effective;
 	}
 	optlen = sizeof(effective);
 	if (getsockopt(*m_handle, SOL_SOCKET, SO_RCVBUF, reinterpret_cast<char*>(&effective), &optlen) == 0) {
-		m_logger << Logger::Level::LowLevel << "Effective SO_RCVBUF: " << effective << std::endl;
+		m_logger << Logger::Level::LowLevel << "Effective SO_RCVBUF: " << Logger::humanreadable_bytes << effective << Logger::nohumanreadable << std::endl;
 		m_effective_recv_buf = effective;
 
 		// Compute per-call chunk capacities (capped by the client-side MAX_SINGLE_IO)
@@ -307,17 +307,17 @@ void Socket::InitializeAfterConnect() noexcept {
 		if (recv_cap == 0) recv_cap = 65536;
 		send_cap = std::min(send_cap, max_single);
 		recv_cap = std::min(recv_cap, max_single);
-		m_logger << Logger::Level::LowLevel << "Per-call send capacity: " << send_cap << " bytes, recv capacity: " << recv_cap << " bytes (max single IO: " << max_single << ")" << std::endl;
+		m_logger << Logger::Level::LowLevel << Logger::humanreadable_bytes << "Per-call send capacity: " << send_cap << ", recv capacity: " << recv_cap << " (max single IO: " << max_single << ")" << Logger::nohumanreadable << std::endl;
 	}
 #else
 	socklen_t optlen = sizeof(effective);
 	if (getsockopt(*m_handle, SOL_SOCKET, SO_SNDBUF, &effective, &optlen) == 0) {
-		m_logger << Logger::Level::LowLevel << "Effective SO_SNDBUF: " << effective << std::endl;
+		m_logger << Logger::Level::LowLevel << "Effective SO_SNDBUF: " << Logger::humanreadable_bytes << effective << Logger::nohumanreadable << std::endl;
 		m_effective_send_buf = effective;
 	}
 	optlen = sizeof(effective);
 	if (getsockopt(*m_handle, SOL_SOCKET, SO_RCVBUF, &effective, &optlen) == 0) {
-		m_logger << Logger::Level::LowLevel << "Effective SO_RCVBUF: " << effective << std::endl;
+		m_logger << Logger::Level::LowLevel << "Effective SO_RCVBUF: " << Logger::humanreadable_bytes << effective << Logger::nohumanreadable << std::endl;
 		m_effective_recv_buf = effective;
 	}
 #if defined(LINUX)
@@ -329,7 +329,7 @@ void Socket::InitializeAfterConnect() noexcept {
 	if (recv_cap == 0) recv_cap = 65536;
 	send_cap = std::min(send_cap, max_single);
 	recv_cap = std::min(recv_cap, max_single);
-	m_logger << Logger::Level::LowLevel << "Per-call send capacity: " << send_cap << " bytes, recv capacity: " << recv_cap << " bytes (max single IO: " << max_single << ")" << std::endl;
+	m_logger << Logger::Level::LowLevel << Logger::humanreadable_bytes << "Per-call send capacity: " << send_cap << ", recv capacity: " << recv_cap << " (max single IO: " << max_single << ")" << Logger::nohumanreadable << std::endl;
 #endif
 #endif
 

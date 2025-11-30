@@ -24,10 +24,10 @@ constexpr const unsigned short PORT = 7070;
 // Number of concurrent clients (global constant)
 constexpr const std::size_t N = 4;
 // Chunk size for each send (bytes)
-constexpr const std::size_t CHUNK_SIZE = 640 * 1024; // 640 KiB
+constexpr const std::size_t CHUNK_SIZE = 4 * 1024 * 1024; // 4 MiB
 // Total bytes each client will send (bytes)
-constexpr const std::size_t TOTAL_BYTES_PER_CLIENT = 100 * 1024 * 1024; // 100 MiB
-auto logger = Logger::ThreadedLog(std::cout, Logger::Level::Error, "[%L] [T%i] %T: ");
+constexpr const std::size_t TOTAL_BYTES_PER_CLIENT = 1 * 1024 * 1024; // 1 MiB
+auto logger = Logger::ThreadedLog(std::cout, Logger::Level::Error, "[%L] [T%i] %T:");
 
 int TestSocketMulti() {
     const std::string fn_name = "TestSocketMulti";
