@@ -8,7 +8,7 @@ file(GLOB_RECURSE STORMBYTE_CONFIG_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_LI
 # Library
 add_library(StormByte-Network SHARED ${STORMBYTE_CONFIG_SOURCES})
 add_library(StormByte::Network ALIAS StormByte-Network)
-target_link_libraries(StormByte-Network PUBLIC StormByte StormByte-Buffer)
+target_link_libraries(StormByte-Network PUBLIC StormByte::Buffer)
 set_target_properties(StormByte-Network PROPERTIES
 	LINKER_LANGUAGE CXX
 	SOVERSION		${CMAKE_PROJECT_VERSION}
