@@ -171,28 +171,47 @@ StormByte::Network::ExpectedReadResult Socket::WaitForData(const long long& usec
 			return StormByte::Unexpected<ConnectionClosed>("Failed to wait for data: epoll_wait error");
 		}
 #else
-		// Windows: continue using select-based semantics
-		int select_result = select(0, &read_fds, nullptr, nullptr, tv_ptr);
-		if (select_result > 0) {
-			if (m_status != Connection::Status::Connected) return Connection::Read::Result::Closed;
-			if (FD_ISSET(*m_handle, &read_fds)) return Connection::Read::Result::Success;
-			// Data available elsewhere; compute elapsed and continue
-			auto elapsed_time = std::chrono::steady_clock::now() - start_time;
-			auto elapsed_microseconds = std::chrono::duration_cast<std::chrono::microseconds>(elapsed_time).count();
-			if (usecs > 0 && elapsed_microseconds >= usecs) return Connection::Read::Result::Timeout;
-			continue;
-		} else if (select_result == 0) {
-			return Connection::Read::Result::Timeout;
-		} else {
-			if (m_conn_handler->LastErrorCode() == WSAECONNRESET || m_conn_handler->LastErrorCode() == WSAENOTSOCK) {
-				return StormByte::Unexpected<ConnectionClosed>("Connection closed or invalid socket");
-			} else {
-				return StormByte::Unexpected<ConnectionClosed>("Failed to wait for data: {} (error code: {})",
-																	m_conn_handler->LastError(),
-																	m_conn_handler->LastErrorCode());
-			}
+		// Windows: use WSAEventSelect + WSAWaitForMultipleEvents for event-driven wait
+		int timeout_ms = -1;
+		if (usecs > 0) {
+			auto now2 = std::chrono::steady_clock::now();
+			if (now2 >= deadline) return Connection::Read::Result::Timeout;
+			auto remaining = std::chrono::duration_cast<std::chrono::milliseconds>(deadline - now2);
+			timeout_ms = static_cast<int>(remaining.count());
+			if (timeout_ms < 0) timeout_ms = 0;
 		}
-#endif
+
+		WSAEVENT ev = WSACreateEvent();
+		if (ev == WSA_INVALID_EVENT) {
+			return StormByte::Unexpected<ConnectionClosed>("Failed to create WSA event");
+		}
+
+		// Request notification for read/close events on the socket
+		if (WSAEventSelect(*m_handle, ev, FD_READ | FD_CLOSE) == SOCKET_ERROR) {
+			WSACloseEvent(ev);
+			return StormByte::Unexpected<ConnectionClosed>("WSAEventSelect failed");
+		}
+
+		DWORD wait_res = WSAWaitForMultipleEvents(1, &ev, FALSE, (timeout_ms < 0 ? WSA_INFINITE : static_cast<DWORD>(timeout_ms)), FALSE);
+
+		// Disable event notification and clean up
+		WSAEventSelect(*m_handle, NULL, 0);
+		WSACloseEvent(ev);
+
+		if (wait_res == WSA_WAIT_TIMEOUT) {
+			return Connection::Read::Result::Timeout;
+		} else if (wait_res == WSA_WAIT_FAILED) {
+			int wsa_err = WSAGetLastError();
+			if (wsa_err == WSAECONNRESET || wsa_err == WSAENOTSOCK) {
+				return StormByte::Unexpected<ConnectionClosed>("Connection closed or invalid socket");
+			}
+			return StormByte::Unexpected<ConnectionClosed>("WSAWaitForMultipleEvents failed");
+		} else {
+			// Event signaled — treat as data available or connection state change
+			if (m_status != Connection::Status::Connected) return Connection::Read::Result::Closed;
+			return Connection::Read::Result::Success;
+		}
+	#endif
 	}
 
 	return StormByte::Unexpected<ConnectionClosed>("Failed to wait for data: Unknown error occurred");
