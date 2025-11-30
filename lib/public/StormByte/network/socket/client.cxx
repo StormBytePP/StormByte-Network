@@ -1,4 +1,5 @@
 #include <StormByte/network/socket/client.hxx>
+#include <StormByte/system.hxx>
 
 #ifdef LINUX
 #include <arpa/inet.h>
@@ -12,9 +13,14 @@
 #include <algorithm>
 #include <chrono>
 #include <span>
+#include <cerrno>
+#include <cstring>
+#include <vector>
 #include <thread>
 
 constexpr const std::size_t BUFFER_SIZE = 65536;
+// Optional safety cap for a single syscall to avoid extremely large syscalls
+constexpr const std::size_t MAX_SINGLE_IO = 4 * 1024 * 1024; // 4 MiB
 
 using namespace StormByte::Logger;
 using namespace StormByte::Network;
@@ -92,7 +98,7 @@ ExpectedVoid Socket::Client::Send(std::span<const std::byte> data) noexcept {
 							m_conn_handler->LastError(), m_conn_handler->LastErrorCode());
 		} else if (sel == 0) {
 			// Timeout: no readiness detected, yield to other threads and retry.
-			std::this_thread::yield();
+			StormByte::System::Yield();
 			continue;
 		}
 #else // WINDOWS
@@ -108,31 +114,45 @@ ExpectedVoid Socket::Client::Send(std::span<const std::byte> data) noexcept {
 							"Select error: {} (error code: {})",
 							m_conn_handler->LastError(), m_conn_handler->LastErrorCode());
 		} else if (sel == 0) {
-			std::this_thread::yield();
+			StormByte::System::Yield();
 			continue;
 		}
 #endif
 
-		// Now that the socket is writable, send a chunk.
-		std::size_t chunk_size = std::min(BUFFER_SIZE, data.size());
+		// Now that the socket is writable, send a chunk sized to the
+		// effective send buffer (or a sensible fallback), capped to avoid
+		// extremely large single syscalls.
+		std::size_t chunk_capacity = BUFFER_SIZE;
+		if (m_effective_send_buf > 0) {
+			chunk_capacity = static_cast<std::size_t>(m_effective_send_buf);
+		}
+		chunk_capacity = std::min(chunk_capacity, MAX_SINGLE_IO);
+
+		std::size_t chunk_size = std::min(chunk_capacity, data.size());
 		std::span<const std::byte> chunk = data.subspan(0, chunk_size);
 
 #ifdef LINUX
+		const int send_flags = MSG_NOSIGNAL;
 		const ssize_t written = ::send(*m_handle,
 #else
+		const int send_flags = 0;
 		const int written = ::send(*m_handle,
 #endif
-										reinterpret_cast<const char*>(chunk.data()),
-										chunk.size(), 0);
+						reinterpret_cast<const char*>(chunk.data()),
+						chunk.size(), send_flags);
 
 		if (written <= 0) {
+			int sys_errno = errno;
+			m_logger << Logger::Level::Error << "Send failed: " << m_conn_handler->LastError()
+					 << " (code: " << m_conn_handler->LastErrorCode() << ")"
+					 << " errno: " << sys_errno << " (" << std::strerror(sys_errno) << ")" << std::endl;
 			return StormByte::Unexpected<ConnectionError>(
 							"Failed to write: {} (error code: {})",
 							m_conn_handler->LastError(), m_conn_handler->LastErrorCode());
 		}
 
-		total_bytes_sent += written;
-		data = data.subspan(written);
+		total_bytes_sent += static_cast<std::size_t>(written);
+		data = data.subspan(static_cast<std::size_t>(written));
 
 		// Optional: add a brief sleep here to further throttle if needed
 		// std::this_thread::sleep_for(std::chrono::milliseconds(1));
@@ -164,7 +184,7 @@ ExpectedVoid Socket::Client::Send(Buffer::Consumer data) noexcept {
 				break;
 			}
 			m_logger << Logger::Level::LowLevel << "No data available to send. Yielding..." << std::endl;
-			std::this_thread::yield();
+			StormByte::System::Yield();
 			continue;
 		}
 		auto send_bytes = data.AvailableBytes();
@@ -230,20 +250,29 @@ ExpectedBuffer Socket::Client::Receive(const std::size_t& max_size) noexcept {
 	}
 
 	Buffer::FIFO buffer;
-	char internal_buffer[BUFFER_SIZE];
 	std::size_t total_bytes_read = 0;
 
 	while (true) {
-		const std::size_t bytes_to_read = (max_size > 0) ? std::min(BUFFER_SIZE, max_size - total_bytes_read) : BUFFER_SIZE;
+		// Determine read buffer size based on effective recv buffer, fallback to BUFFER_SIZE
+		std::size_t read_capacity = BUFFER_SIZE;
+		if (m_effective_recv_buf > 0) {
+			read_capacity = static_cast<std::size_t>(m_effective_recv_buf);
+		}
+		read_capacity = std::min(read_capacity, MAX_SINGLE_IO);
+
+		const std::size_t bytes_to_read = (max_size > 0) ? std::min(read_capacity, max_size - total_bytes_read) : read_capacity;
+
+		// Use a heap buffer so we don't stack-allocate very large arrays
+		std::vector<char> internal_buffer(bytes_to_read);
 #ifdef LINUX
-		const ssize_t valread = recv(*m_handle, internal_buffer, bytes_to_read, 0);
+	const ssize_t valread = recv(*m_handle, internal_buffer.data(), bytes_to_read, 0);
 #else
-		const int valread = recv(*m_handle, internal_buffer, bytes_to_read, 0);
+	const int valread = recv(*m_handle, internal_buffer.data(), bytes_to_read, 0);
 #endif
 
 		if (valread > 0) {
 			m_logger << Logger::Level::LowLevel << "Chunk received. Size: " << humanreadable_bytes << valread << nohumanreadable << std::endl;
-			buffer.Write(std::string(internal_buffer, static_cast<std::size_t>(valread)));
+			buffer.Write(std::string(internal_buffer.data(), static_cast<std::size_t>(valread)));
 			total_bytes_read += valread;
 			if (max_size > 0 && total_bytes_read >= max_size) {
 				m_logger << Logger::Level::LowLevel << "Reached requested max_size: " << humanreadable_bytes << total_bytes_read << nohumanreadable << ". Exiting loop." << std::endl;
@@ -307,23 +336,38 @@ ExpectedVoid Socket::Client::Write(std::span<const std::byte> data, const std::s
 
 	while (total_written < bytes_to_write) {
 		auto current_data = data.subspan(total_written);
+
+		// Chunk using effective send buffer if available
+		std::size_t chunk_capacity = BUFFER_SIZE;
+		if (m_effective_send_buf > 0) {
+			chunk_capacity = static_cast<std::size_t>(m_effective_send_buf);
+		}
+		chunk_capacity = std::min(chunk_capacity, MAX_SINGLE_IO);
+
+		std::size_t to_write = std::min(chunk_capacity, current_data.size());
+		auto chunk = current_data.subspan(0, to_write);
+
 #ifdef LINUX
+		const int send_flags = MSG_NOSIGNAL;
 		const ssize_t written = ::send(*m_handle,
 #else
+		const int send_flags = 0;
 		const int written = ::send(*m_handle,
 #endif
-										reinterpret_cast<const char*>(current_data.data()),
-										current_data.size(), 0);
+						reinterpret_cast<const char*>(chunk.data()),
+						chunk.size(), send_flags);
 		if (written <= 0) {
+			int sys_errno = errno;
 			m_logger << Logger::Level::Error << "Write failed: " << m_conn_handler->LastError()
-					<< " (code: " << m_conn_handler->LastErrorCode() << ")" << std::endl;
+					<< " (code: " << m_conn_handler->LastErrorCode() << ")"
+					<< " errno: " << sys_errno << " (" << std::strerror(sys_errno) << ")" << std::endl;
 			return StormByte::Unexpected<ConnectionError>(
 				"Write failed: {} (error code: {})",
 				m_conn_handler->LastError(),
 				m_conn_handler->LastErrorCode()
 			);
 		}
-		total_written += written;
+		total_written += static_cast<std::size_t>(written);
 	}
 
 	m_logger << Logger::Level::LowLevel << "Write of size " << humanreadable_bytes << bytes_to_write << nohumanreadable << " bytes completed successfully" << std::endl;

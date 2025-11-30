@@ -20,20 +20,28 @@ using namespace StormByte::Network;
 
 // Configuration
 constexpr const char* HOST = "127.0.0.1";
-constexpr unsigned short PORT = 7070;
-constexpr std::size_t NUM_CLIENTS = 4;                    // number of concurrent clients
-constexpr std::size_t CHUNK_SIZE = 65536;                 // chunk size for each send
-constexpr std::size_t TOTAL_BYTES_PER_CLIENT = 104857600;   // total bytes each client will send (1 MiB)
+constexpr const unsigned short PORT = 7070;
+// Number of concurrent clients (global constant)
+constexpr const std::size_t N = 4;
+// Chunk size for each send (bytes)
+constexpr const std::size_t CHUNK_SIZE = 640 * 1024; // 640 KiB
+// Total bytes each client will send (bytes)
+constexpr const std::size_t TOTAL_BYTES_PER_CLIENT = 100 * 1024 * 1024; // 100 MiB
 auto logger = Logger::ThreadedLog(std::cout, Logger::Level::Error, "[%L] [T%i] %T: ");
 
 int TestSocketMulti() {
     const std::string fn_name = "TestSocketMulti";
+	const std::string send_data(TOTAL_BYTES_PER_CLIENT, 'H');
 
     auto packet_fn = [](const unsigned short&) -> std::shared_ptr<Network::Packet> { return nullptr; };
     auto handler = std::make_shared<Connection::Handler>(packet_fn);
 
     std::atomic<bool> stop{false};
     std::atomic<std::size_t> clients_finished{0};
+    std::atomic<int> failures{0};
+    // Containers to capture thread return codes (0 = ok, non-zero = failure)
+    std::vector<int> handler_results;
+    std::vector<int> client_results;
 
     // Server thread
     std::thread server_thread([&]() -> int {
@@ -53,25 +61,48 @@ int TestSocketMulti() {
             Socket::Client client_socket = std::move(expected_client.value());
 
             // Handler thread per client
-            client_handlers.emplace_back([client = std::move(client_socket), &clients_finished]() mutable -> int {
+            handler_results.emplace_back(0);
+            const std::size_t handler_idx = handler_results.size() - 1;
+
+            auto worker = [client = std::move(client_socket), &clients_finished]() mutable -> int {
                 const std::string fn_name_inner = "TestSocketMulti::Handler";
-                auto expected_buffer = client.Receive();
-                ASSERT_TRUE(fn_name_inner, expected_buffer.has_value());
+                // Ensure clients_finished is incremented on any exit path from this handler
+                struct FinishedGuard {
+                    std::atomic<std::size_t> &counter;
+                    FinishedGuard(std::atomic<std::size_t> &c) noexcept : counter(c) {}
+                    ~FinishedGuard() { counter.fetch_add(1); }
+                } guard(clients_finished);
 
-                Buffer::FIFO buffer = std::move(expected_buffer.value());
-                auto expected_data = buffer.Extract();
-                ASSERT_TRUE(fn_name_inner, expected_data.has_value());
+                // Accumulate until we've received the full payload from this client
+                std::vector<std::byte> accumulated;
+                std::size_t total_received = 0;
+                while (total_received < TOTAL_BYTES_PER_CLIENT) {
+                    auto recv_res = client.Receive(TOTAL_BYTES_PER_CLIENT - total_received);
+                    ASSERT_TRUE(fn_name_inner, recv_res.has_value());
 
-                auto vec = expected_data.value();
-                ASSERT_FALSE(fn_name_inner, vec.empty());
+                    Buffer::FIFO buffer = std::move(recv_res.value());
+                    auto expected_data = buffer.Extract();
+                    ASSERT_TRUE(fn_name_inner, expected_data.has_value());
 
-                // Echo back
-                auto send_res = client.Send(std::span<const std::byte>(vec.data(), vec.size()));
-                ASSERT_TRUE(fn_name_inner, send_res.has_value());
+                    auto chunk = expected_data.value();
+                    ASSERT_FALSE(fn_name_inner, chunk.empty());
+
+                    accumulated.insert(accumulated.end(), chunk.begin(), chunk.end());
+                    total_received = accumulated.size();
+                }
+
+                // Echo back the accumulated payload
+                if (!accumulated.empty()) {
+                    auto send_res = client.Send(std::span<const std::byte>(accumulated.data(), accumulated.size()));
+                    ASSERT_TRUE(fn_name_inner, send_res.has_value());
+                }
 
                 client.Disconnect();
-                clients_finished.fetch_add(1);
                 return 0;
+            };
+
+            client_handlers.emplace_back([worker = std::move(worker), &handler_results, handler_idx]() mutable {
+                handler_results[handler_idx] = worker();
             });
         }
 
@@ -89,57 +120,74 @@ int TestSocketMulti() {
 
     // Client threads
     std::vector<std::thread> clients;
-    for (std::size_t i = 0; i < NUM_CLIENTS; ++i) {
-        clients.emplace_back([i, &clients_finished, handler]() -> int {
+    client_results.reserve(N);
+    for (std::size_t i = 0; i < N; ++i) {
+        client_results.emplace_back(0);
+        const std::size_t client_idx = client_results.size() - 1;
+
+        auto worker = [i, &clients_finished, handler, &send_data]() -> int {
             const std::string fn_name_inner = "TestSocketMulti::Client";
             Socket::Client client(Connection::Protocol::IPv4, handler, logger);
             auto connect_res = client.Connect(HOST, PORT);
             ASSERT_TRUE(fn_name_inner, connect_res.has_value());
-
-            // Prepare payload
-            std::vector<std::byte> chunk(CHUNK_SIZE, std::byte('H'));
+            // Send `send_data` in CHUNK_SIZE slices
             std::size_t sent = 0;
             while (sent < TOTAL_BYTES_PER_CLIENT) {
                 std::size_t to_send = std::min(CHUNK_SIZE, TOTAL_BYTES_PER_CLIENT - sent);
-                auto res = client.Send(std::span<const std::byte>(chunk.data(), to_send));
+                auto span = std::span<const std::byte>(reinterpret_cast<const std::byte*>(send_data.data() + sent), to_send);
+                auto res = client.Send(span);
                 ASSERT_TRUE(fn_name_inner, res.has_value());
                 sent += to_send;
             }
 
-            // Receive echoed data
-            auto recv_buf_res = client.Receive(TOTAL_BYTES_PER_CLIENT);
-            ASSERT_TRUE(fn_name_inner, recv_buf_res.has_value());
+            // Receive echoed data and accumulate into a std::string
+            std::string received;
+            received.reserve(TOTAL_BYTES_PER_CLIENT);
+            while (received.size() < TOTAL_BYTES_PER_CLIENT) {
+                auto recv_buf_res = client.Receive(TOTAL_BYTES_PER_CLIENT - received.size());
+                ASSERT_TRUE(fn_name_inner, recv_buf_res.has_value());
 
-            Buffer::FIFO buffer = std::move(recv_buf_res.value());
-            auto expected_data = buffer.Extract();
-            ASSERT_TRUE(fn_name_inner, expected_data.has_value());
+                Buffer::FIFO buffer = std::move(recv_buf_res.value());
+                auto expected_data = buffer.Extract();
+                ASSERT_TRUE(fn_name_inner, expected_data.has_value());
 
-            auto vec = expected_data.value();
-            ASSERT_TRUE(fn_name_inner, vec.size() == TOTAL_BYTES_PER_CLIENT);
-
-            for (size_t k = 0; k < vec.size(); ++k) {
-                ASSERT_TRUE(fn_name_inner, vec[k] == std::byte('H'));
+                auto vec = expected_data.value();
+                received.append(reinterpret_cast<const char*>(vec.data()), vec.size());
             }
+
+            // Simple equality check
+            ASSERT_TRUE(fn_name_inner, received == send_data);
 
             client.Disconnect();
             return 0;
+        };
+
+        clients.emplace_back([worker = std::move(worker), &client_results, client_idx]() mutable {
+            client_results[client_idx] = worker();
         });
     }
 
     // Wait for all clients to finish
     for (auto &t : clients) if (t.joinable()) t.join();
 
+    // Aggregate client results into failures
+    for (auto v : client_results) if (v != 0) failures.fetch_add(1);
+
     // Signal server to stop accepting (it will finish handling existing clients)
     stop.store(true);
 
     // Wait until server observed all clients finished
-    while (clients_finished.load() < NUM_CLIENTS) {
+    while (clients_finished.load() < N) {
         std::this_thread::sleep_for(std::chrono::milliseconds(50));
     }
 
     if (server_thread.joinable()) server_thread.join();
 
-    RETURN_TEST(fn_name, 0);
+    // Aggregate handler results into failures
+    for (auto v : handler_results) if (v != 0) failures.fetch_add(1);
+
+    // Return 1 if any thread reported failures, 0 otherwise
+    RETURN_TEST(fn_name, failures.load() ? 1 : 0);
 }
 
 int main() {

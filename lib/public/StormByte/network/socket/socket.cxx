@@ -14,6 +14,10 @@
 
 #include <chrono>
 #include <format>
+#ifdef LINUX
+#include <fstream>
+#include <string>
+#endif
 
 constexpr const int SOCKET_BUFFER_SIZE = 262144; // 256 KiB
 
@@ -162,25 +166,70 @@ void Socket::InitializeAfterConnect() noexcept {
 	SetNonBlocking();
 	
 	// Increase the socket buffer sizes (send and receive)
-	int buf_size = SOCKET_BUFFER_SIZE;
+	int desired_buf = SOCKET_BUFFER_SIZE;
 	int rc = 0;
-#ifdef WINDOWS
-	rc = setsockopt(*m_handle, SOL_SOCKET, SO_SNDBUF, reinterpret_cast<const char*>(&buf_size), sizeof(buf_size));
+
+	// On Linux try to detect system maximums and use them if larger than our desired size
+#ifdef LINUX
+	auto read_proc_int = [](const char* path) -> int {
+		std::ifstream f(path);
+		if (!f.is_open()) return -1;
+		std::string s;
+		std::getline(f, s);
+		try {
+			return std::stoi(s);
+		} catch (...) {
+			return -1;
+		}
+	};
+
+	int sys_wmem_max = read_proc_int("/proc/sys/net/core/wmem_max");
+	int sys_rmem_max = read_proc_int("/proc/sys/net/core/rmem_max");
+	if (sys_wmem_max > 0) {
+		m_logger << Logger::Level::LowLevel << "System wmem_max: " << sys_wmem_max << std::endl;
+	}
+	if (sys_rmem_max > 0) {
+		m_logger << Logger::Level::LowLevel << "System rmem_max: " << sys_rmem_max << std::endl;
+	}
+
+	int send_buf = desired_buf;
+	int recv_buf = desired_buf;
+	if (sys_wmem_max > send_buf) send_buf = sys_wmem_max;
+	if (sys_rmem_max > recv_buf) recv_buf = sys_rmem_max;
+
+	rc = setsockopt(*m_handle, SOL_SOCKET, SO_SNDBUF, &send_buf, sizeof(send_buf));
 	if (rc != 0) {
 		m_logger << Logger::Level::Warning << "setsockopt(SO_SNDBUF) failed: " << m_conn_handler->LastError() << std::endl;
 	}
-	rc = setsockopt(*m_handle, SOL_SOCKET, SO_RCVBUF, reinterpret_cast<const char*>(&buf_size), sizeof(buf_size));
+	rc = setsockopt(*m_handle, SOL_SOCKET, SO_RCVBUF, &recv_buf, sizeof(recv_buf));
 	if (rc != 0) {
 		m_logger << Logger::Level::Warning << "setsockopt(SO_RCVBUF) failed: " << m_conn_handler->LastError() << std::endl;
 	}
 #else
-	rc = setsockopt(*m_handle, SOL_SOCKET, SO_SNDBUF, &buf_size, sizeof(buf_size));
+	// On Windows there's no simple /proc equivalent. Try to request a large buffer
+	// (the system will clamp it to the maximum allowed). We'll attempt a reasonably
+	// large value and read back the effective size.
+	constexpr int WINDOWS_DESIRED_MAX = 64 * 1024 * 1024; // 64 MiB
+	int try_send = WINDOWS_DESIRED_MAX;
+	int try_recv = WINDOWS_DESIRED_MAX;
+
+	rc = setsockopt(*m_handle, SOL_SOCKET, SO_SNDBUF, reinterpret_cast<const char*>(&try_send), sizeof(try_send));
 	if (rc != 0) {
-		m_logger << Logger::Level::Warning << "setsockopt(SO_SNDBUF) failed: " << m_conn_handler->LastError() << std::endl;
+		m_logger << Logger::Level::Warning << "setsockopt(SO_SNDBUF) attempt failed: " << m_conn_handler->LastError() << std::endl;
+		// Fall back to requested default
+		rc = setsockopt(*m_handle, SOL_SOCKET, SO_SNDBUF, reinterpret_cast<const char*>(&desired_buf), sizeof(desired_buf));
+		if (rc != 0) {
+			m_logger << Logger::Level::Warning << "setsockopt(SO_SNDBUF) fallback failed: " << m_conn_handler->LastError() << std::endl;
+		}
 	}
-	rc = setsockopt(*m_handle, SOL_SOCKET, SO_RCVBUF, &buf_size, sizeof(buf_size));
+
+	rc = setsockopt(*m_handle, SOL_SOCKET, SO_RCVBUF, reinterpret_cast<const char*>(&try_recv), sizeof(try_recv));
 	if (rc != 0) {
-		m_logger << Logger::Level::Warning << "setsockopt(SO_RCVBUF) failed: " << m_conn_handler->LastError() << std::endl;
+		m_logger << Logger::Level::Warning << "setsockopt(SO_RCVBUF) attempt failed: " << m_conn_handler->LastError() << std::endl;
+		rc = setsockopt(*m_handle, SOL_SOCKET, SO_RCVBUF, reinterpret_cast<const char*>(&desired_buf), sizeof(desired_buf));
+		if (rc != 0) {
+			m_logger << Logger::Level::Warning << "setsockopt(SO_RCVBUF) fallback failed: " << m_conn_handler->LastError() << std::endl;
+		}
 	}
 #endif
 
@@ -190,20 +239,45 @@ void Socket::InitializeAfterConnect() noexcept {
 	int optlen = sizeof(effective);
 	if (getsockopt(*m_handle, SOL_SOCKET, SO_SNDBUF, reinterpret_cast<char*>(&effective), &optlen) == 0) {
 		m_logger << Logger::Level::LowLevel << "Effective SO_SNDBUF: " << effective << std::endl;
+		m_effective_send_buf = effective;
 	}
 	optlen = sizeof(effective);
 	if (getsockopt(*m_handle, SOL_SOCKET, SO_RCVBUF, reinterpret_cast<char*>(&effective), &optlen) == 0) {
 		m_logger << Logger::Level::LowLevel << "Effective SO_RCVBUF: " << effective << std::endl;
+		m_effective_recv_buf = effective;
+
+		// Compute per-call chunk capacities (capped by the client-side MAX_SINGLE_IO)
+		std::size_t send_cap = static_cast<std::size_t>(m_effective_send_buf);
+		std::size_t recv_cap = static_cast<std::size_t>(m_effective_recv_buf);
+		const std::size_t max_single = 4 * 1024 * 1024; // must match client.cxx MAX_SINGLE_IO
+		if (send_cap == 0) send_cap = 65536;
+		if (recv_cap == 0) recv_cap = 65536;
+		send_cap = std::min(send_cap, max_single);
+		recv_cap = std::min(recv_cap, max_single);
+		m_logger << Logger::Level::LowLevel << "Per-call send capacity: " << send_cap << " bytes, recv capacity: " << recv_cap << " bytes (max single IO: " << max_single << ")" << std::endl;
 	}
 #else
 	socklen_t optlen = sizeof(effective);
 	if (getsockopt(*m_handle, SOL_SOCKET, SO_SNDBUF, &effective, &optlen) == 0) {
 		m_logger << Logger::Level::LowLevel << "Effective SO_SNDBUF: " << effective << std::endl;
+		m_effective_send_buf = effective;
 	}
 	optlen = sizeof(effective);
 	if (getsockopt(*m_handle, SOL_SOCKET, SO_RCVBUF, &effective, &optlen) == 0) {
 		m_logger << Logger::Level::LowLevel << "Effective SO_RCVBUF: " << effective << std::endl;
+		m_effective_recv_buf = effective;
 	}
+#if defined(LINUX)
+	// Compute per-call chunk capacities used by the client code (capped by MAX_SINGLE_IO)
+	std::size_t send_cap = static_cast<std::size_t>(m_effective_send_buf);
+	std::size_t recv_cap = static_cast<std::size_t>(m_effective_recv_buf);
+	const std::size_t max_single = 4 * 1024 * 1024; // must match client.cxx MAX_SINGLE_IO
+	if (send_cap == 0) send_cap = 65536;
+	if (recv_cap == 0) recv_cap = 65536;
+	send_cap = std::min(send_cap, max_single);
+	recv_cap = std::min(recv_cap, max_single);
+	m_logger << Logger::Level::LowLevel << "Per-call send capacity: " << send_cap << " bytes, recv capacity: " << recv_cap << " bytes (max single IO: " << max_single << ")" << std::endl;
+#endif
 #endif
 
 	// Disable Nagle for lower latency on small writes

@@ -41,6 +41,11 @@ namespace StormByte::Network::Socket {
 		unsigned long m_mtu;
 		Logger::ThreadedLog m_logger;
 
+		// Effective socket buffer sizes as reported by the OS (bytes).
+		// Initialized to a sensible default; updated in InitializeAfterConnect().
+		int m_effective_send_buf = 65536;
+		int m_effective_recv_buf = 65536;
+
 		Socket(const Connection::Protocol& protocol, std::shared_ptr<const Connection::Handler> handler, Logger::ThreadedLog logger) noexcept;
 		Expected<Connection::Handler::Type, ConnectionError> CreateSocket() noexcept;
 		void InitializeAfterConnect() noexcept;

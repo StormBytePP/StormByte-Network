@@ -1,5 +1,6 @@
 #include <StormByte/network/endpoint.hxx>
 #include <StormByte/network/socket/client.hxx>
+#include <StormByte/system.hxx>
 
 using namespace StormByte::Network;
 
@@ -98,7 +99,7 @@ ExpectedVoid EndPoint::Send(Socket::Client& client, const Packet& packet, Buffer
 	Buffer::Consumer pipeline_buffer = pipeline.Process(packet_consumer, Buffer::ExecutionMode::Async, m_logger);
 	while (!pipeline_buffer.EoF()) {
 		if (pipeline_buffer.AvailableBytes() == 0) {
-			std::this_thread::yield();
+			StormByte::System::Yield();
 			continue;
 		}
 		auto buff = pipeline_buffer.Extract();
