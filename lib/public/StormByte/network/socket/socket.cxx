@@ -233,7 +233,7 @@ StormByte::Expected<StormByte::Network::Connection::Handler::Type, StormByte::Ne
 }
 
 void Socket::InitializeAfterConnect() noexcept {
-	m_status = Connection::Status::Connected;
+	m_status = Connection::Status::Connecting;
 	m_mtu = GetMTU();
 	SetNonBlocking();
 	
@@ -365,6 +365,7 @@ void Socket::InitializeAfterConnect() noexcept {
 		m_logger << Logger::Level::Warning << "setsockopt(TCP_NODELAY) failed: " << m_conn_handler->LastError() << std::endl;
 	}
 #endif
+	m_status = Connection::Status::Connected;
 }
 
 #ifdef LINUX
