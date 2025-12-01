@@ -92,6 +92,9 @@ ExpectedPacket EndPoint::Receive(Socket::Client& client, Buffer::Pipeline& pipel
 	// 	return StormByte::Unexpected<PacketError>(expected_packet.error());
 
 	// return expected_packet;
+
+	// This will be fully reworked later, for now we just silence compiler warnings/errors
+	return StormByte::Unexpected<PacketError>("Not implemented");
 }
 
 ExpectedVoid EndPoint::Send(Socket::Client& client, const Packet& packet, Buffer::Pipeline& pipeline) noexcept {
