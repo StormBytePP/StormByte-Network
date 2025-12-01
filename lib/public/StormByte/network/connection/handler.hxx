@@ -78,17 +78,10 @@ namespace StormByte::Network::Connection {
 			 */
 			int 																LastErrorCode() const noexcept;
 
-			/**
-			 * @brief The function to get the packet instance function.
-			 * @return The packet instance function.
-			 */
-			const PacketInstanceFunction& 										PacketInstanceFunction() const noexcept;
-
 		private:
 			bool m_initialized = false;											///< The initialization flag.
 			#ifdef WINDOWS
 			WSADATA m_wsaData;		///< The Handler data.
 			#endif
-			const Network::PacketInstanceFunction m_packet_instance_function;	///< The packet instance function.
 	};
 }
