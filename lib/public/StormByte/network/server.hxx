@@ -20,7 +20,7 @@ namespace StormByte::Network {
 			 * @param protocol The protocol to use.
 			 * @param logger The logger to use.
 			 */
-			Server(Connection::Protocol protocol, Logger::ThreadedLog logger) noexcept;
+			Server(const enum Protocol& protocol, Logger::ThreadedLog logger) noexcept;
 
 			/**
 			 * @brief Copy constructor (deleted).

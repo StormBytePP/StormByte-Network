@@ -18,7 +18,7 @@ namespace StormByte::Network {
 			 * @brief The constructor of the Client class.
 			 * @param address The address of the server.
 			 */
-			Client(const Connection::Protocol& protocol, Logger::ThreadedLog logger) noexcept;
+			Client(const enum Protocol& protocol, Logger::ThreadedLog logger) noexcept;
 
 			/**
 			 * @brief The copy constructor of the Client class.

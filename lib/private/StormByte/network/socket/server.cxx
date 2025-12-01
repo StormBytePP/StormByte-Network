@@ -14,7 +14,7 @@
 
 using namespace StormByte::Network;
 
-Socket::Server::Server(const Connection::Protocol& protocol, Logger::ThreadedLog logger) noexcept:
+Socket::Server::Server(const Protocol& protocol, Logger::ThreadedLog logger) noexcept:
 Socket(protocol, logger) {}
 
 ExpectedVoid Socket::Server::Listen(const std::string& hostname, const unsigned short& port) noexcept {

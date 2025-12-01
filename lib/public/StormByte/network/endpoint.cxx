@@ -4,7 +4,7 @@
 
 using namespace StormByte::Network;
 
-EndPoint::EndPoint(const Connection::Protocol& protocol, Logger::ThreadedLog logger) noexcept:
+EndPoint::EndPoint(const enum Protocol& protocol, Logger::ThreadedLog logger) noexcept:
 m_protocol(protocol), m_logger(logger), m_status(Connection::Status::Disconnected), m_socket(nullptr) {}
 
 EndPoint::~EndPoint() noexcept {
@@ -20,7 +20,7 @@ void EndPoint::Disconnect() noexcept {
 	m_status.store(Connection::Status::Disconnected);
 }
 
-const Connection::Protocol& EndPoint::Protocol() const noexcept {
+const Protocol& EndPoint::Protocol() const noexcept {
 	return m_protocol;
 }
 

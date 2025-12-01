@@ -4,7 +4,7 @@
 
 using namespace StormByte::Network;
 
-Server::Server(Connection::Protocol protocol, Logger::ThreadedLog logger) noexcept:
+Server::Server(const enum Protocol& protocol, Logger::ThreadedLog logger) noexcept:
 EndPoint(protocol, logger) {}
 
 Server::~Server() noexcept {

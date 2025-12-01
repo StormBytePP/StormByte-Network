@@ -23,7 +23,7 @@ namespace StormByte::Network {
 			 * @param protocol The protocol to use (e.g., IPv4, IPv6).
 			 * @param logger A shared pointer to the logger instance.
 			 */
-			EndPoint(const Connection::Protocol& protocol, Logger::ThreadedLog logger) noexcept;
+			EndPoint(const Protocol& protocol, Logger::ThreadedLog logger) noexcept;
 
 			/**
 			 * @brief Deleted copy constructor to prevent copying.
@@ -67,7 +67,7 @@ namespace StormByte::Network {
 			 * @brief Retrieves the protocol used by the endpoint.
 			 * @return A constant reference to the protocol.
 			 */
-			const Connection::Protocol& 										Protocol() const noexcept;
+			const enum Protocol& 												Protocol() const noexcept;
 
 			/**
 			 * @brief Retrieves the current connection status of the endpoint.
@@ -76,7 +76,7 @@ namespace StormByte::Network {
 			Connection::Status 													Status() const noexcept;
 
 		protected:
-			Connection::Protocol m_protocol;									///< The protocol used by the endpoint (e.g., IPv4, IPv6).
+			enum Protocol m_protocol;											///< The protocol used by the endpoint (e.g., IPv4, IPv6).
 			Logger::ThreadedLog m_logger;										///< The logger instance.
 			std::atomic<Connection::Status> m_status;							///< The current connection status of the endpoint.
 			Socket::Socket* m_socket;											///< Unique pointer to the socket instance.

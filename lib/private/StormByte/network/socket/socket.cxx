@@ -27,7 +27,7 @@ constexpr const int SOCKET_BUFFER_SIZE = 262144; // 256 KiB
 
 using namespace StormByte::Network::Socket;
 
-Socket::Socket(const Connection::Protocol& protocol, Logger::ThreadedLog logger) noexcept:
+Socket::Socket(const Protocol& protocol, Logger::ThreadedLog logger) noexcept:
 m_protocol(protocol), m_status(Connection::Status::Disconnected),
 m_handle(nullptr), m_conn_info(nullptr), m_mtu(DEFAULT_MTU), m_logger(logger) {}
 
@@ -218,7 +218,7 @@ StormByte::Network::ExpectedReadResult Socket::WaitForData(const long long& usec
 }
 
 StormByte::Expected<StormByte::Network::Connection::HandlerType, StormByte::Network::ConnectionError> Socket::CreateSocket() noexcept {
-	auto protocol = m_protocol == Connection::Protocol::IPv4 ? AF_INET : AF_INET6;
+	auto protocol = m_protocol == Protocol::IPv4 ? AF_INET : AF_INET6;
 	Connection::HandlerType handle = ::socket(protocol, SOCK_STREAM, 0);
 	#ifdef WINDOWS
 	if (handle == INVALID_SOCKET) {

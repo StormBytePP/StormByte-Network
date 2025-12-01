@@ -4,7 +4,7 @@
 #include <StormByte/buffer/producer.hxx>
 #include <StormByte/buffer/fifo.hxx>
 #include <StormByte/expected.hxx>
-#include <StormByte/network/connection/protocol.hxx>
+#include <StormByte/network/protocol.hxx>
 #include <StormByte/network/connection/rw.hxx>
 #include <StormByte/network/connection/status.hxx>
 #include <StormByte/network/exception.hxx>

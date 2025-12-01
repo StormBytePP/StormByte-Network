@@ -5,10 +5,10 @@
 #include <string>
 
 /**
- * @namespace Connection
- * @brief The namespace containing the connection items.
+ * @namespace Network
+ * @brief The namespace containing all the network related classes.
  */
-namespace StormByte::Network::Connection {
+namespace StormByte::Network {
 	/**
 	 * @enum class Protocol
 	 * @brief The enum class representing the protocol.

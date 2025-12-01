@@ -4,7 +4,7 @@
 #include <StormByte/logger/threaded_log.hxx>
 #include <StormByte/network/connection/handler.hxx>
 #include <StormByte/network/connection/info.hxx>
-#include <StormByte/network/connection/protocol.hxx>
+#include <StormByte/network/protocol.hxx>
 #include <StormByte/network/connection/status.hxx>
 #include <StormByte/network/exception.hxx>
 #include <StormByte/network/typedefs.hxx>
@@ -32,7 +32,7 @@ namespace StormByte::Network::Socket {
 		ExpectedReadResult WaitForData(const long long& usecs = 0) noexcept;
 
 	protected:
-		Connection::Protocol m_protocol;
+		Protocol m_protocol;
 		Connection::Status m_status;
 		std::unique_ptr<const Connection::HandlerType> m_handle;
 		std::unique_ptr<Connection::Info> m_conn_info;
@@ -44,7 +44,7 @@ namespace StormByte::Network::Socket {
 		int m_effective_send_buf = 65536;
 		int m_effective_recv_buf = 65536;
 
-		Socket(const Connection::Protocol& protocol, Logger::ThreadedLog logger) noexcept;
+		Socket(const Protocol& protocol, Logger::ThreadedLog logger) noexcept;
 		Expected<Connection::HandlerType, ConnectionError> CreateSocket() noexcept;
 		void InitializeAfterConnect() noexcept;
 

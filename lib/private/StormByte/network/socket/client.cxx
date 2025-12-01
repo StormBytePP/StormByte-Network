@@ -26,7 +26,7 @@ constexpr const std::size_t MAX_SINGLE_IO = 4 * 1024 * 1024; // 4 MiB
 using namespace StormByte::Logger;
 using namespace StormByte::Network;
 
-Socket::Client::Client(const Connection::Protocol& protocol, Logger::ThreadedLog logger) noexcept
+Socket::Client::Client(const Protocol& protocol, Logger::ThreadedLog logger) noexcept
 :Socket(protocol, logger) {}
 
 ExpectedVoid Socket::Client::Connect(const std::string& hostname, const unsigned short& port) noexcept {

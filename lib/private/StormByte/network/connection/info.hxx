@@ -2,7 +2,7 @@
 
 #include <StormByte/expected.hxx>
 #include <StormByte/network/exception.hxx>
-#include <StormByte/network/connection/protocol.hxx>
+#include <StormByte/network/protocol.hxx>
 
 #ifdef WINDOWS
 #include <winsock2.h>
