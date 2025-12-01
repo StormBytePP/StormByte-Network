@@ -33,8 +33,7 @@ int TestSocketMulti() {
     const std::string fn_name = "TestSocketMulti";
 	const std::string send_data(TOTAL_BYTES_PER_CLIENT, 'H');
 
-    auto packet_fn = [](const unsigned short&) -> std::shared_ptr<Network::Packet> { return nullptr; };
-    auto handler = std::make_shared<Connection::Handler>(packet_fn);
+    auto handler = std::make_shared<Connection::Handler>();
 
     std::atomic<bool> stop{false};
     std::atomic<std::size_t> clients_finished{0};

@@ -63,7 +63,7 @@ namespace StormByte::Network {
 			 * @param reader The function to read the packet data.
 			 * @return An expected packet or an error.
 			 */
-			static ExpectedPacket										Read(const PacketInstanceFunction& pif, PacketReaderFunction reader) noexcept;
+			//static ExpectedPacket										Read(const PacketInstanceFunction& pif, PacketReaderFunction reader) noexcept;
 
 			/**
 			 * @brief Serializes the packet.

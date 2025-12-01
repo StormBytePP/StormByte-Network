@@ -12,7 +12,7 @@
 
 using namespace StormByte::Network::Connection;
 
-Handler::Handler(const Network::PacketInstanceFunction& packet_instance_function) noexcept {
+Handler::Handler() noexcept {
 	#ifdef WINDOWS
 	m_initialized = WSAStartup(MAKEWORD(2, 2), &m_wsaData) != 0;
 	#else

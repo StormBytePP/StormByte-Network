@@ -23,9 +23,8 @@ namespace StormByte::Network::Connection {
 
 			/**
 			 * @brief The constructor of the Handler class.
-			 * @param packet_instance_function The packet instance function.
 			 */
-			Handler(const PacketInstanceFunction& packet_instance_function) noexcept;
+			Handler() noexcept;
 
 			/**
 			 * @brief The copy constructor of the Handler class.

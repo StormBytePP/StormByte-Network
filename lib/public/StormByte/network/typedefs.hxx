@@ -31,6 +31,5 @@ namespace StormByte::Network {
 	using SharedConsumerBuffer = std::shared_ptr<Buffer::Consumer>;																	///< The shared consumer buffer type.
 	using SharedProducerBuffer = std::shared_ptr<Buffer::Producer>;																	///< The shared producer buffer type.
 	using ExpectedPacket = StormByte::Expected<std::shared_ptr<Packet>, PacketError>;													///< The expected packet type.
-	using PacketInstanceFunction = std::function<std::shared_ptr<Packet>(const unsigned short&)>;										///< The packet instance function type.
 	using PacketReaderFunction = std::function<ExpectedBuffer(const size_t&)>;															///< The packet reader function type.
 }
