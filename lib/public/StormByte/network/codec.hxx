@@ -106,9 +106,7 @@ namespace StormByte::Network {
 			 * @param consumer Source of raw input bytes.
 			 * @return Shared pointer to constructed `Packet` (or nullptr on failure).
 			 */
-			inline std::shared_ptr<Packet>					Encode(const Buffer::Consumer& consumer) noexcept {
-				return DoEncode(m_in_pipeline.Process(consumer, Buffer::ExecutionMode::Sync, m_log));
-			}
+			std::shared_ptr<Packet>							Encode(Buffer::Consumer consumer) const noexcept;
 
 			/**
 			 * @brief Decode a `Packet` into a domain `Object`.
@@ -120,7 +118,7 @@ namespace StormByte::Network {
 			 * @param packet The packet to decode.
 			 * @return Shared pointer to decoded `Object` (or nullptr on failure).
 			 */
-			inline std::shared_ptr<Object>					Decode(const Packet& packet) noexcept {
+			inline std::shared_ptr<Object>					Decode(const Packet& packet) const noexcept {
 				return DoDecode(packet);
 			}
 
@@ -133,9 +131,9 @@ namespace StormByte::Network {
 			 * conversion and pipeline steps.
 			 *
 			 * @param packet The packet to process.
-			 * @return Vector of bytes ready for sending on the wire.
+			 * @return Buffer::FIFO of bytes ready for sending on the wire.
 			 */
-			std::vector<std::byte>							Process(const Packet& packet) noexcept;
+			Buffer::FIFO									Process(const Packet& packet) const noexcept;
 
 			/**
 			 * @brief Configure input and output buffer pipelines.
@@ -153,8 +151,8 @@ namespace StormByte::Network {
 			}
 
 		protected:
-			Buffer::Pipeline m_in_pipeline, m_out_pipeline; ///< Pre/post-processing pipelines
-			Logger::ThreadedLog m_log;                      ///< Logger for diagnostics
+			Buffer::Pipeline m_in_pipeline, m_out_pipeline;	///< Pre/post-processing pipelines
+			mutable Logger::ThreadedLog m_log;				///< Logger for diagnostics
 
 			/**
 			 * @brief Protected ctor accepting a logger.
@@ -164,7 +162,45 @@ namespace StormByte::Network {
 			 */
 			inline Codec(const Logger::ThreadedLog& log) noexcept: m_log(log) {}
 
-			virtual std::shared_ptr<Packet>					DoEncode(const Buffer::Consumer& consumer) noexcept = 0;
-			virtual std::shared_ptr<Object>					DoDecode(const Packet& packet) noexcept = 0;
+		private:
+			/**
+			 * @brief Construct a `Packet` from raw payload bytes.
+			 *
+			 * Implementations receive the `opcode` (already parsed) and a
+			 * `Buffer::Consumer` containing only the packet payload bytes — the
+			 * framing layer has already removed opcode bytes from the consumer.
+			 * Implementors MUST NOT attempt to re-read the opcode from the
+			 * `consumer`; instead, focus on parsing the custom payload fields for
+			 * the given opcode. The function must parse
+			 * the consumer according to the wire-format for the given opcode and
+			 * return a concrete `Packet` instance wrapped in `std::shared_ptr`.
+			 *
+			 * The method is `noexcept` to keep the Codec API exception-free; when
+			 * parsing fails implementations should return `nullptr` rather than
+			 * throwing.
+			 *
+			 * @param opcode Already-parsed opcode identifying the packet type.
+			 * @param consumer Provides the packet payload bytes to decode.
+			 * @return `std::shared_ptr<Packet>` to a newly-constructed packet,
+			 *         or `nullptr` on parse/error.
+			 */
+			virtual std::shared_ptr<Packet>					DoEncode(const unsigned short& opcode, Buffer::Consumer consumer) const noexcept = 0;
+
+			/**
+			 * @brief Construct a domain `Object` from a decoded `Packet`.
+			 *
+			 * Translate a protocol-level `Packet` into an application-level
+			 * `Object`. Implementations should examine the packet contents and
+			 * return a `std::shared_ptr<Object>` pointing to a concrete derived
+			 * type. Return `nullptr` to indicate an error or an unknown/unsupported
+			 * packet.
+			 *
+			 * This function is `noexcept` by API contract; do not throw from
+			 * implementations.
+			 *
+			 * @param packet Decoded packet to convert.
+			 * @return `std::shared_ptr<Object>` to the created object, or `nullptr`.
+			 */
+			virtual std::shared_ptr<Object>					DoDecode(const Packet& packet) const noexcept = 0;
 	};
 }
