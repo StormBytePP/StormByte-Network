@@ -9,6 +9,9 @@
 #include <StormByte/network/connection/status.hxx>
 #include <StormByte/network/exception.hxx>
 
+#ifdef WINDOWS
+#include <winsock2.h>
+#endif
 #include <functional>
 
 /**
