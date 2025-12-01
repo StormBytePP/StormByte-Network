@@ -2,7 +2,6 @@
 
 #include <StormByte/expected.hxx>
 #include <StormByte/network/exception.hxx>
-#include <StormByte/network/connection/handler.hxx>
 #include <StormByte/network/connection/protocol.hxx>
 
 #ifdef WINDOWS
@@ -25,7 +24,7 @@ namespace StormByte::Network::Connection {
 	 * @class Info
 	 * @brief The class representing the connection information.
 	 */
-	class STORMBYTE_NETWORK_PUBLIC Info {
+	class STORMBYTE_NETWORK_PRIVATE Info {
 		public:
 			/**
 			 * @brief The copy constructor of the Info class.
@@ -66,7 +65,7 @@ namespace StormByte::Network::Connection {
 			 * @param handler The connection handler.
 			 * @return The expected connection info or error.
 			 */
-			static StormByte::Expected<Info, Exception>									FromHost(const std::string& hostname, const unsigned short& port, const Protocol& protocol, std::shared_ptr<const Handler> handler) noexcept;
+			static StormByte::Expected<Info, Exception>									FromHost(const std::string& hostname, const unsigned short& port, const Protocol& protocol) noexcept;
 			
 			/**
 			 * @brief The function to create a connection info from a socket address.
@@ -119,7 +118,7 @@ namespace StormByte::Network::Connection {
 			 * @param handler The connection handler.
 			 * @return The expected connection info or error.
 			 */
-			static StormByte::Expected<std::shared_ptr<sockaddr>, Exception> 			ResolveHostname(const std::string& hostname, const unsigned short& port, const Protocol& protocol, std::shared_ptr<const Handler> handler) noexcept;
+			static StormByte::Expected<std::shared_ptr<sockaddr>, Exception> 			ResolveHostname(const std::string& hostname, const unsigned short& port, const Protocol& protocol) noexcept;
 
 			/**
 			 * @brief Initializes from a socket address.

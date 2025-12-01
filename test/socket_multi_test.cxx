@@ -33,8 +33,6 @@ int TestSocketMulti() {
     const std::string fn_name = "TestSocketMulti";
 	const std::string send_data(TOTAL_BYTES_PER_CLIENT, 'H');
 
-    auto handler = std::make_shared<Connection::Handler>();
-
     std::atomic<bool> stop{false};
     std::atomic<std::size_t> clients_finished{0};
     std::atomic<int> failures{0};
@@ -44,7 +42,7 @@ int TestSocketMulti() {
 
     // Server thread
     std::thread server_thread([&]() -> int {
-        Socket::Server server(Connection::Protocol::IPv4, handler, logger);
+        Socket::Server server(Connection::Protocol::IPv4, logger);
         auto listen_res = server.Listen(HOST, PORT);
         ASSERT_TRUE(fn_name, listen_res.has_value());
 
@@ -124,9 +122,9 @@ int TestSocketMulti() {
         client_results.emplace_back(0);
         const std::size_t client_idx = client_results.size() - 1;
 
-        auto worker = [i, &clients_finished, handler, &send_data]() -> int {
+        auto worker = [i, &clients_finished, &send_data]() -> int {
             const std::string fn_name_inner = "TestSocketMulti::Client";
-            Socket::Client client(Connection::Protocol::IPv4, handler, logger);
+            Socket::Client client(Connection::Protocol::IPv4, logger);
             auto connect_res = client.Connect(HOST, PORT);
             ASSERT_TRUE(fn_name_inner, connect_res.has_value());
             // Send `send_data` in CHUNK_SIZE slices

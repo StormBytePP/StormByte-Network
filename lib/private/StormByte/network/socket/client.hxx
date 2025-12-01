@@ -1,7 +1,6 @@
 #pragma once
 
 #include <StormByte/buffer/consumer.hxx>
-#include <StormByte/network/connection/rw.hxx>
 #include <StormByte/network/packet.hxx>
 #include <StormByte/network/socket/socket.hxx>
 #include <StormByte/network/typedefs.hxx>
@@ -23,10 +22,9 @@ namespace StormByte::Network::Socket {
 		/**
 		 * @brief The constructor of the Client class.
 		 * @param protocol The protocol of the socket.
-		 * @param handler The handler of the socket.
 		 * @param logger The logger to use.
 		 */
-		Client(const Connection::Protocol& protocol, std::shared_ptr<const Connection::Handler> handler, Logger::ThreadedLog logger) noexcept;
+		Client(const Connection::Protocol& protocol, Logger::ThreadedLog logger) noexcept;
 
 		/**
 		 * @brief The copy constructor of the Client class.

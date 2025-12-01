@@ -1,3 +1,4 @@
+#include <StormByte/network/connection/handler.hxx>
 #include <StormByte/network/connection/info.hxx>
 
 #ifdef LINUX
@@ -23,8 +24,8 @@ Info::Info(std::shared_ptr<sockaddr> sock_addr) noexcept:
 	Initialize(sock_addr);
 }
 
-StormByte::Expected<Info, StormByte::Network::Exception> Info::FromHost(const std::string& hostname, const unsigned short& port, const Protocol& protocol, std::shared_ptr<const Handler> handler) noexcept {
-	auto expected_sock_addr = Info::ResolveHostname(hostname, port, protocol, handler);
+StormByte::Expected<Info, StormByte::Network::Exception> Info::FromHost(const std::string& hostname, const unsigned short& port, const Protocol& protocol) noexcept {
+	auto expected_sock_addr = Info::ResolveHostname(hostname, port, protocol);
 	if (!expected_sock_addr)
 		return StormByte::Unexpected<Exception>(expected_sock_addr.error());
 
@@ -38,7 +39,7 @@ StormByte::Expected<Info, StormByte::Network::Exception> Info::FromSockAddr(std:
 	return Info(sockaddr);
 }
 
-StormByte::Expected<std::shared_ptr<sockaddr>, StormByte::Network::Exception> Info::ResolveHostname(const std::string& hostname, const unsigned short& port, const Protocol& protocol, std::shared_ptr<const Handler> handler) noexcept {
+StormByte::Expected<std::shared_ptr<sockaddr>, StormByte::Network::Exception> Info::ResolveHostname(const std::string& hostname, const unsigned short& port, const Protocol& protocol) noexcept {
 	struct addrinfo hints{}, *res = nullptr;
 
 	hints.ai_family = protocol == Protocol::IPv4 ? AF_INET : AF_INET6; // Use IPv4 or IPv6
@@ -46,7 +47,7 @@ StormByte::Expected<std::shared_ptr<sockaddr>, StormByte::Network::Exception> In
 
 	int ret = getaddrinfo(hostname.c_str(), nullptr, &hints, &res);
 	if (ret != 0 || !res)
-		return StormByte::Unexpected<StormByte::Network::Exception>("Can't resolve host '{}': {}", hostname, handler->LastError());
+		return StormByte::Unexpected<StormByte::Network::Exception>("Can't resolve host '{}': {}", hostname, Handler::Instance().LastError());
 
 	std::unique_ptr<addrinfo, decltype(&freeaddrinfo)> res_guard(res, freeaddrinfo);
 

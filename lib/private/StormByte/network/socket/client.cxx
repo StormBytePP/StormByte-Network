@@ -1,3 +1,4 @@
+#include <StormByte/network/connection/handler.hxx>
 #include <StormByte/network/socket/client.hxx>
 
 #ifdef LINUX
@@ -25,8 +26,8 @@ constexpr const std::size_t MAX_SINGLE_IO = 4 * 1024 * 1024; // 4 MiB
 using namespace StormByte::Logger;
 using namespace StormByte::Network;
 
-Socket::Client::Client(const Connection::Protocol& protocol, std::shared_ptr<const Connection::Handler> handler, Logger::ThreadedLog logger) noexcept
-:Socket(protocol, handler, logger) {}
+Socket::Client::Client(const Connection::Protocol& protocol, Logger::ThreadedLog logger) noexcept
+:Socket(protocol, logger) {}
 
 ExpectedVoid Socket::Client::Connect(const std::string& hostname, const unsigned short& port) noexcept {
 	m_logger << Logger::Level::LowLevel << "Connecting to " << hostname << ":" << port << std::endl;
@@ -44,9 +45,9 @@ ExpectedVoid Socket::Client::Connect(const std::string& hostname, const unsigned
 		return StormByte::Unexpected(expected_socket.error());
 	}
 
-	m_handle = std::make_unique<Connection::Handler::Type>(expected_socket.value());
+	m_handle = std::make_unique<Connection::HandlerType>(expected_socket.value());
 
-	auto expected_conn_info = Connection::Info::FromHost(hostname, port, m_protocol, m_conn_handler);
+	auto expected_conn_info = Connection::Info::FromHost(hostname, port, m_protocol);
 	if (!expected_conn_info) {
 		m_logger << Logger::Level::Error << "Failed to resolve host: " << expected_conn_info.error()->what() << std::endl;
 		return StormByte::Unexpected<ConnectionError>(expected_conn_info.error()->what());
@@ -60,8 +61,8 @@ ExpectedVoid Socket::Client::Connect(const std::string& hostname, const unsigned
 #else
 	if (::connect(*m_handle, m_conn_info->SockAddr().get(), sizeof(*m_conn_info->SockAddr())) == -1) {
 #endif
-		m_logger << Logger::Level::Error << "Failed to connect: " << m_conn_handler->LastError() << std::endl;
-		return StormByte::Unexpected<ConnectionError>(m_conn_handler->LastError());
+		m_logger << Logger::Level::Error << "Failed to connect: " << Connection::Handler::Instance().LastError() << std::endl;
+		return StormByte::Unexpected<ConnectionError>(Connection::Handler::Instance().LastError());
 	}
 
 	InitializeAfterConnect();
@@ -93,7 +94,7 @@ ExpectedVoid Socket::Client::Send(std::span<const std::byte> data) noexcept {
 		if (pol < 0) {
 			return StormByte::Unexpected<ConnectionError>(
 							"Poll error: {} (error code: {})",
-							m_conn_handler->LastError(), m_conn_handler->LastErrorCode());
+							Connection::Handler::Instance().LastError(), Connection::Handler::Instance().LastErrorCode());
 		} else if (pol == 0) {
 			// Timeout: no readiness detected, yield to other threads and retry.
 			std::this_thread::yield();
@@ -115,7 +116,7 @@ ExpectedVoid Socket::Client::Send(std::span<const std::byte> data) noexcept {
 		if (sel == SOCKET_ERROR) {
 			return StormByte::Unexpected<ConnectionError>(
 							"Select error: {} (error code: {})",
-							m_conn_handler->LastError(), m_conn_handler->LastErrorCode());
+							Connection::Handler::Instance().LastError(), Connection::Handler::Instance().LastErrorCode());
 		} else if (sel == 0) {
 			std::this_thread::yield();
 			continue;
@@ -146,12 +147,12 @@ ExpectedVoid Socket::Client::Send(std::span<const std::byte> data) noexcept {
 
 		if (written <= 0) {
 			int sys_errno = errno;
-			m_logger << Logger::Level::Error << "Send failed: " << m_conn_handler->LastError()
-					 << " (code: " << m_conn_handler->LastErrorCode() << ")"
-					 << " errno: " << sys_errno << " (" << m_conn_handler->ErrnoToString(sys_errno) << ")" << std::endl;
+			m_logger << Logger::Level::Error << "Send failed: " << Connection::Handler::Instance().LastError()
+					 << " (code: " << Connection::Handler::Instance().LastErrorCode() << ")"
+					 << " errno: " << sys_errno << " (" << Connection::Handler::Instance().ErrnoToString(sys_errno) << ")" << std::endl;
 			return StormByte::Unexpected<ConnectionError>(
 							"Failed to write: {} (error code: {})",
-							m_conn_handler->LastError(), m_conn_handler->LastErrorCode());
+							Connection::Handler::Instance().LastError(), Connection::Handler::Instance().LastErrorCode());
 		}
 
 		total_bytes_sent += static_cast<std::size_t>(written);
@@ -212,7 +213,7 @@ bool Socket::Client::HasShutdownRequest() noexcept {
 #else
 	int result = ::recv(*m_handle, buffer, sizeof(buffer), MSG_PEEK);
 	if (result == SOCKET_ERROR) {
-		if (m_conn_handler->LastErrorCode() == WSAEWOULDBLOCK) {
+		if (Connection::Handler::Instance().LastErrorCode() == WSAEWOULDBLOCK) {
 			// No data available; not a shutdown
 			return false;
 		} else {
@@ -227,7 +228,7 @@ bool Socket::Client::HasShutdownRequest() noexcept {
 		return true;
 	} else if (result < 0) {
 #ifdef LINUX
-		if (m_conn_handler->LastErrorCode() == EAGAIN || m_conn_handler->LastErrorCode() == EWOULDBLOCK) {
+		if (Connection::Handler::Instance().LastErrorCode() == EAGAIN || Connection::Handler::Instance().LastErrorCode() == EWOULDBLOCK) {
 			// No data available; not a shutdown
 			return false;
 		} else {
@@ -286,7 +287,7 @@ ExpectedBuffer Socket::Client::Receive(const std::size_t& max_size) noexcept {
 			break;
 		} else {
 #ifdef WINDOWS
-			if (m_conn_handler->LastErrorCode() == WSAEWOULDBLOCK) {
+			if (Connection::Handler::Instance().LastErrorCode() == WSAEWOULDBLOCK) {
 				// On Windows, fall through to a short wait using select via WaitForData
 				auto wait_res = WaitForData(100000); // 100ms
 				if (!wait_res) {
@@ -300,7 +301,7 @@ ExpectedBuffer Socket::Client::Receive(const std::size_t& max_size) noexcept {
 					continue;
 				}
 #else
-			if (m_conn_handler->LastErrorCode() == EAGAIN || m_conn_handler->LastErrorCode() == EWOULDBLOCK) {
+			if (Connection::Handler::Instance().LastErrorCode() == EAGAIN || Connection::Handler::Instance().LastErrorCode() == EWOULDBLOCK) {
 				// Socket would block: wait efficiently for data instead of busy-looping and logging repeatedly
 				auto wait_res = WaitForData(100000); // 100ms
 				if (!wait_res) {
@@ -315,8 +316,8 @@ ExpectedBuffer Socket::Client::Receive(const std::size_t& max_size) noexcept {
 				}
 #endif
 			} else {
-				m_logger << Logger::Level::LowLevel << "Read error: " << m_conn_handler->LastError() << std::endl;
-				return StormByte::Unexpected<ConnectionError>("Receive failed: {}", m_conn_handler->LastError());
+				m_logger << Logger::Level::LowLevel << "Read error: " << Connection::Handler::Instance().LastError() << std::endl;
+				return StormByte::Unexpected<ConnectionError>("Receive failed: {}", Connection::Handler::Instance().LastError());
 			}
 		}
 	}
@@ -361,13 +362,13 @@ ExpectedVoid Socket::Client::Write(std::span<const std::byte> data, const std::s
 						chunk.size(), send_flags);
 		if (written <= 0) {
 			int sys_errno = errno;
-				m_logger << Logger::Level::Error << "Write failed: " << m_conn_handler->LastError()
-					    << " (code: " << m_conn_handler->LastErrorCode() << ")"
-					    << " errno: " << sys_errno << " (" << m_conn_handler->ErrnoToString(sys_errno) << ")" << std::endl;
+				m_logger << Logger::Level::Error << "Write failed: " << Connection::Handler::Instance().LastError()
+					    << " (code: " << Connection::Handler::Instance().LastErrorCode() << ")"
+					    << " errno: " << sys_errno << " (" << Connection::Handler::Instance().ErrnoToString(sys_errno) << ")" << std::endl;
 			return StormByte::Unexpected<ConnectionError>(
 				"Write failed: {} (error code: {})",
-				m_conn_handler->LastError(),
-				m_conn_handler->LastErrorCode()
+				Connection::Handler::Instance().LastError(),
+				Connection::Handler::Instance().LastErrorCode()
 			);
 		}
 		total_written += static_cast<std::size_t>(written);
@@ -388,7 +389,7 @@ bool Socket::Client::Ping() noexcept {
 #else
 	int result = ::recv(*m_handle, buffer, sizeof(buffer), MSG_PEEK);
 	if (result == SOCKET_ERROR) {
-		if (m_conn_handler->LastErrorCode() == WSAEWOULDBLOCK) {
+		if (Connection::Handler::Instance().LastErrorCode() == WSAEWOULDBLOCK) {
 			// No data available; not a shutdown
 			ping_success = true;
 		}
@@ -403,7 +404,7 @@ bool Socket::Client::Ping() noexcept {
 		ping_success = false;
 	} else {
 #ifdef LINUX
-		if (m_conn_handler->LastErrorCode() == EAGAIN || m_conn_handler->LastErrorCode() == EWOULDBLOCK) {
+		if (Connection::Handler::Instance().LastErrorCode() == EAGAIN || Connection::Handler::Instance().LastErrorCode() == EWOULDBLOCK) {
 			// No data available; connection is still alive
 			ping_success = true;
 		} else {

@@ -4,8 +4,8 @@
 
 using namespace StormByte::Network;
 
-Server::Server(Connection::Protocol protocol, std::shared_ptr<Connection::Handler> handler, Logger::ThreadedLog logger) noexcept:
-EndPoint(protocol, handler, logger) {}
+Server::Server(Connection::Protocol protocol, Logger::ThreadedLog logger) noexcept:
+EndPoint(protocol, logger) {}
 
 Server::~Server() noexcept {
 	Disconnect();
@@ -16,7 +16,7 @@ ExpectedVoid Server::Connect(const std::string& host, const unsigned short& port
 		return StormByte::Unexpected<ConnectionError>("Server is already connected");
 
 	try {
-		m_socket = new Socket::Server(m_protocol, m_handler, m_logger);
+		m_socket = new Socket::Server(m_protocol, m_logger);
 	}
 	catch (const std::bad_alloc& e) {
 		return StormByte::Unexpected<ConnectionError>("Can not create connection: {}", e.what());
@@ -81,7 +81,7 @@ void Server::RemoveClient(Socket::Client& client) noexcept {
 	std::unique_lock<std::mutex> threads_lock(m_msg_threads_mutex);
 	bool has_thread = false;
 	bool is_self = false;
-	Connection::Handler::Type client_handler{};
+	Connection::HandlerType client_handler{};
 	if (Connection::IsConnected(client.Status())) {
 		client_handler = client.Handle();
 		auto it = m_msg_threads.find(client_handler);

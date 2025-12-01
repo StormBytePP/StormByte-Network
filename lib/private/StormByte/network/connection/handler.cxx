@@ -26,6 +26,11 @@ Handler::~Handler() noexcept {
 	#endif
 }
 
+Handler& Handler::Instance() noexcept {
+	static Handler instance;
+	return instance;
+}
+
 std::string Handler::LastError() const noexcept {
 	std::string error_string;
 	#ifdef WINDOWS
@@ -40,6 +45,14 @@ std::string Handler::LastError() const noexcept {
 		error_string = ErrnoToString(errno);
 	#endif
 	return error_string;
+}
+
+int Handler::LastErrorCode() const noexcept {
+	#ifdef WINDOWS
+	return WSAGetLastError();
+	#else
+	return errno;
+	#endif
 }
 
 std::string Handler::ErrnoToString(int errnum) const noexcept {
@@ -57,13 +70,5 @@ std::string Handler::ErrnoToString(int errnum) const noexcept {
     if (strerror_r(errnum, buf, sizeof(buf)) == 0) return std::string(buf);
     return std::to_string(errnum);
 	#endif
-	#endif
-}
-
-int Handler::LastErrorCode() const noexcept {
-	#ifdef WINDOWS
-	return WSAGetLastError();
-	#else
-	return errno;
 	#endif
 }

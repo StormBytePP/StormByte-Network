@@ -1,3 +1,4 @@
+#include <StormByte/network/connection/handler.hxx>
 #include <StormByte/network/socket/socket.hxx>
 
 #ifdef LINUX
@@ -26,14 +27,14 @@ constexpr const int SOCKET_BUFFER_SIZE = 262144; // 256 KiB
 
 using namespace StormByte::Network::Socket;
 
-Socket::Socket(const Connection::Protocol& protocol, std::shared_ptr<const Connection::Handler> handler, Logger::ThreadedLog logger) noexcept:
+Socket::Socket(const Connection::Protocol& protocol, Logger::ThreadedLog logger) noexcept:
 m_protocol(protocol), m_status(Connection::Status::Disconnected),
-m_handle(nullptr), m_conn_handler(handler), m_conn_info(nullptr), m_mtu(DEFAULT_MTU), m_logger(logger) {}
+m_handle(nullptr), m_conn_info(nullptr), m_mtu(DEFAULT_MTU), m_logger(logger) {}
 
 Socket::Socket(Socket&& other) noexcept:
 m_protocol(other.m_protocol), m_status(other.m_status),
-m_handle(std::move(other.m_handle)), m_conn_handler(other.m_conn_handler),
-m_conn_info(std::move(other.m_conn_info)), m_mtu(other.m_mtu), m_logger(other.m_logger) {
+m_handle(std::move(other.m_handle)), m_conn_info(std::move(other.m_conn_info)),
+m_mtu(other.m_mtu), m_logger(other.m_logger) {
 	other.m_status = Connection::Status::Disconnected;
 }
 
@@ -46,7 +47,6 @@ Socket& Socket::operator=(Socket&& other) noexcept {
 		m_protocol = other.m_protocol;
 		m_status = other.m_status;
 		m_handle = std::move(other.m_handle);
-		m_conn_handler = other.m_conn_handler;
 		m_conn_info = std::move(other.m_conn_info);
 		m_mtu = other.m_mtu;
 		m_logger = std::move(other.m_logger);
@@ -217,16 +217,16 @@ StormByte::Network::ExpectedReadResult Socket::WaitForData(const long long& usec
 	return StormByte::Unexpected<ConnectionClosed>("Failed to wait for data: Unknown error occurred");
 }
 
-StormByte::Expected<StormByte::Network::Connection::Handler::Type, StormByte::Network::ConnectionError> Socket::CreateSocket() noexcept {
+StormByte::Expected<StormByte::Network::Connection::HandlerType, StormByte::Network::ConnectionError> Socket::CreateSocket() noexcept {
 	auto protocol = m_protocol == Connection::Protocol::IPv4 ? AF_INET : AF_INET6;
-	Connection::Handler::Type handle = ::socket(protocol, SOCK_STREAM, 0);
+	Connection::HandlerType handle = ::socket(protocol, SOCK_STREAM, 0);
 	#ifdef WINDOWS
 	if (handle == INVALID_SOCKET) {
 	#else
 	if (handle == -1) {
 	#endif
 		m_status = Connection::Status::Disconnected;
-		return StormByte::Unexpected<ConnectionError>(m_conn_handler->LastError());
+		return StormByte::Unexpected<ConnectionError>(Connection::Handler::Instance().LastError());
 	}
 
 	return handle;
@@ -271,11 +271,11 @@ void Socket::InitializeAfterConnect() noexcept {
 
 	rc = setsockopt(*m_handle, SOL_SOCKET, SO_SNDBUF, &send_buf, sizeof(send_buf));
 	if (rc != 0) {
-		m_logger << Logger::Level::Warning << "setsockopt(SO_SNDBUF) failed: " << m_conn_handler->LastError() << std::endl;
+		m_logger << Logger::Level::Warning << "setsockopt(SO_SNDBUF) failed: " << Connection::Handler::Instance().LastError() << std::endl;
 	}
 	rc = setsockopt(*m_handle, SOL_SOCKET, SO_RCVBUF, &recv_buf, sizeof(recv_buf));
 	if (rc != 0) {
-		m_logger << Logger::Level::Warning << "setsockopt(SO_RCVBUF) failed: " << m_conn_handler->LastError() << std::endl;
+		m_logger << Logger::Level::Warning << "setsockopt(SO_RCVBUF) failed: " << Connection::Handler::Instance().LastError() << std::endl;
 	}
 #else
 	// On Windows there's no simple /proc equivalent. Try to request a large buffer
@@ -287,20 +287,20 @@ void Socket::InitializeAfterConnect() noexcept {
 
 	rc = setsockopt(*m_handle, SOL_SOCKET, SO_SNDBUF, reinterpret_cast<const char*>(&try_send), sizeof(try_send));
 	if (rc != 0) {
-		m_logger << Logger::Level::Warning << "setsockopt(SO_SNDBUF) attempt failed: " << m_conn_handler->LastError() << std::endl;
+		m_logger << Logger::Level::Warning << "setsockopt(SO_SNDBUF) attempt failed: " << Connection::Handler::Instance().LastError() << std::endl;
 		// Fall back to requested default
 		rc = setsockopt(*m_handle, SOL_SOCKET, SO_SNDBUF, reinterpret_cast<const char*>(&desired_buf), sizeof(desired_buf));
 		if (rc != 0) {
-			m_logger << Logger::Level::Warning << "setsockopt(SO_SNDBUF) fallback failed: " << m_conn_handler->LastError() << std::endl;
+			m_logger << Logger::Level::Warning << "setsockopt(SO_SNDBUF) fallback failed: " << Connection::Handler::Instance().LastError() << std::endl;
 		}
 	}
 
 	rc = setsockopt(*m_handle, SOL_SOCKET, SO_RCVBUF, reinterpret_cast<const char*>(&try_recv), sizeof(try_recv));
 	if (rc != 0) {
-		m_logger << Logger::Level::Warning << "setsockopt(SO_RCVBUF) attempt failed: " << m_conn_handler->LastError() << std::endl;
+		m_logger << Logger::Level::Warning << "setsockopt(SO_RCVBUF) attempt failed: " << Connection::Handler::Instance().LastError() << std::endl;
 		rc = setsockopt(*m_handle, SOL_SOCKET, SO_RCVBUF, reinterpret_cast<const char*>(&desired_buf), sizeof(desired_buf));
 		if (rc != 0) {
-			m_logger << Logger::Level::Warning << "setsockopt(SO_RCVBUF) fallback failed: " << m_conn_handler->LastError() << std::endl;
+			m_logger << Logger::Level::Warning << "setsockopt(SO_RCVBUF) fallback failed: " << Connection::Handler::Instance().LastError() << std::endl;
 		}
 	}
 #endif
@@ -357,12 +357,12 @@ void Socket::InitializeAfterConnect() noexcept {
 #ifdef WINDOWS
 	rc = setsockopt(*m_handle, IPPROTO_TCP, TCP_NODELAY, reinterpret_cast<const char*>(&flag), sizeof(flag));
 	if (rc != 0) {
-		m_logger << Logger::Level::Warning << "setsockopt(TCP_NODELAY) failed: " << m_conn_handler->LastError() << std::endl;
+		m_logger << Logger::Level::Warning << "setsockopt(TCP_NODELAY) failed: " << Connection::Handler::Instance().LastError() << std::endl;
 	}
 #else
 	rc = setsockopt(*m_handle, IPPROTO_TCP, TCP_NODELAY, &flag, sizeof(flag));
 	if (rc != 0) {
-		m_logger << Logger::Level::Warning << "setsockopt(TCP_NODELAY) failed: " << m_conn_handler->LastError() << std::endl;
+		m_logger << Logger::Level::Warning << "setsockopt(TCP_NODELAY) failed: " << Connection::Handler::Instance().LastError() << std::endl;
 	}
 #endif
 	m_status = Connection::Status::Connected;

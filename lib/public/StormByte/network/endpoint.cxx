@@ -4,8 +4,8 @@
 
 using namespace StormByte::Network;
 
-EndPoint::EndPoint(const Connection::Protocol& protocol, std::shared_ptr<Connection::Handler> handler, Logger::ThreadedLog logger) noexcept:
-m_protocol(protocol), m_handler(handler), m_logger(logger), m_status(Connection::Status::Disconnected), m_socket(nullptr) {}
+EndPoint::EndPoint(const Connection::Protocol& protocol, Logger::ThreadedLog logger) noexcept:
+m_protocol(protocol), m_logger(logger), m_status(Connection::Status::Disconnected), m_socket(nullptr) {}
 
 EndPoint::~EndPoint() noexcept {
 	Disconnect();

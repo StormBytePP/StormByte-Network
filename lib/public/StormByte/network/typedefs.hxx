@@ -15,21 +15,25 @@
  * @namespace Network
  * @brief The namespace containing all the network related classes.
  */
-namespace StormByte::Network {
+namespace StormByte::Network {																		///< The connection info class (forward declaration).
+	class Packet;																					///< The packet class (forward declaration).
+	namespace Socket {
+		class Socket;																				///< The socket class (forward declaration).
+		class Client;																				///< The client socket class (forward declaration).
+	}
 	namespace Connection {
-		class Handler;																													///< The connection handler class (forward declaration).																												///< The connection info class (forward declaration).
-	}																																	///< The connection info class (forward declaration).
-	class Packet;																														///< The packet class (forward declaration).
-	namespace Socket {	
-		class Socket;																													///< The socket class (forward declaration).																							
-		class Client;																													///< The client socket class (forward declaration).
-	}																																	///< The client socket class (forward declaration).
-	using ExpectedBuffer = StormByte::Expected<Buffer::FIFO, ConnectionError>;														///< The expected buffer type.
-	using ExpectedVoid = StormByte::Expected<void, ConnectionError>;																	///< The expected void type.
-	using ExpectedClient = StormByte::Expected<Socket::Client, ConnectionError>;														///< The expected client type.
-	using ExpectedReadResult = StormByte::Expected<Connection::Read::Result, ConnectionClosed>;											///< The expected read result type.										///< The expected handler type.
-	using SharedConsumerBuffer = std::shared_ptr<Buffer::Consumer>;																	///< The shared consumer buffer type.
-	using SharedProducerBuffer = std::shared_ptr<Buffer::Producer>;																	///< The shared producer buffer type.
-	using ExpectedPacket = StormByte::Expected<std::shared_ptr<Packet>, PacketError>;													///< The expected packet type.
-	using PacketReaderFunction = std::function<ExpectedBuffer(const size_t&)>;															///< The packet reader function type.
+		#ifdef LINUX
+			using HandlerType = int; 																///< The type of the socket.
+		#else
+			using HandlerType = SOCKET; 															///< The type of the socket.
+		#endif
+	}
+	using ExpectedBuffer = StormByte::Expected<Buffer::FIFO, ConnectionError>;						///< The expected buffer type.
+	using ExpectedVoid = StormByte::Expected<void, ConnectionError>;								///< The expected void type.
+	using ExpectedClient = StormByte::Expected<Socket::Client, ConnectionError>;					///< The expected client type.
+	using ExpectedReadResult = StormByte::Expected<Connection::Read::Result, ConnectionClosed>;		///< The expected read result type.
+	using SharedConsumerBuffer = std::shared_ptr<Buffer::Consumer>;									///< The shared consumer buffer type.
+	using SharedProducerBuffer = std::shared_ptr<Buffer::Producer>;									///< The shared producer buffer type.
+	using ExpectedPacket = StormByte::Expected<std::shared_ptr<Packet>, PacketError>;				///< The expected packet type.
+	using PacketReaderFunction = std::function<ExpectedBuffer(const size_t&)>;						///< The packet reader function type.
 }

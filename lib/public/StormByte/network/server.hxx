@@ -18,9 +18,9 @@ namespace StormByte::Network {
 			/**
 			 * @brief Constructor.
 			 * @param protocol The protocol to use.
-			 * @param handler The handler to use.
+			 * @param logger The logger to use.
 			 */
-			Server(Connection::Protocol protocol, std::shared_ptr<Connection::Handler> handler, Logger::ThreadedLog logger) noexcept;
+			Server(Connection::Protocol protocol, Logger::ThreadedLog logger) noexcept;
 
 			/**
 			 * @brief Copy constructor (deleted).
@@ -109,7 +109,7 @@ namespace StormByte::Network {
 			std::mutex m_clients_mutex;														///< The mutex to protect clients vector.
 			std::vector<Socket::Client> m_clients;											///< The clients.
 			std::mutex m_msg_threads_mutex;													///< The mutex to protect message threads.
-			std::unordered_map<Connection::Handler::Type, std::thread> m_msg_threads;		///< The threads to handle client messages.
+			std::unordered_map<Connection::HandlerType, std::thread> m_msg_threads;		///< The threads to handle client messages.
 
 			/**
 			 * @brief The function to disconnect all clients.

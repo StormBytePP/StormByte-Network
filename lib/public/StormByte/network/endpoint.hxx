@@ -2,7 +2,6 @@
 
 #include <StormByte/buffer/pipeline.hxx>
 #include <StormByte/logger/threaded_log.hxx>
-#include <StormByte/network/connection/handler.hxx>
 #include <StormByte/network/packet.hxx>
 #include <StormByte/network/typedefs.hxx>
 
@@ -20,12 +19,11 @@ namespace StormByte::Network {
 	class STORMBYTE_NETWORK_PUBLIC EndPoint {
 		public:
 			/**
-			 * @brief Constructs an EndPoint with the specified protocol, handler, and logger.
+			 * @brief Constructs an EndPoint with the specified protocol and logger.
 			 * @param protocol The protocol to use (e.g., IPv4, IPv6).
-			 * @param handler A shared pointer to the connection handler.
 			 * @param logger A shared pointer to the logger instance.
 			 */
-			EndPoint(const Connection::Protocol& protocol, std::shared_ptr<Connection::Handler> handler, Logger::ThreadedLog logger) noexcept;
+			EndPoint(const Connection::Protocol& protocol, Logger::ThreadedLog logger) noexcept;
 
 			/**
 			 * @brief Deleted copy constructor to prevent copying.
@@ -79,7 +77,6 @@ namespace StormByte::Network {
 
 		protected:
 			Connection::Protocol m_protocol;									///< The protocol used by the endpoint (e.g., IPv4, IPv6).
-			std::shared_ptr<Connection::Handler> m_handler;						///< Shared pointer to the connection handler.
 			Logger::ThreadedLog m_logger;										///< The logger instance.
 			std::atomic<Connection::Status> m_status;							///< The current connection status of the endpoint.
 			Socket::Socket* m_socket;											///< Unique pointer to the socket instance.

@@ -1,3 +1,4 @@
+#include <StormByte/network/connection/handler.hxx>
 #include <StormByte/network/socket/server.hxx>
 
 #ifdef LINUX
@@ -13,8 +14,8 @@
 
 using namespace StormByte::Network;
 
-Socket::Server::Server(const Connection::Protocol& protocol, std::shared_ptr<const Connection::Handler> handler, Logger::ThreadedLog logger) noexcept:
-Socket(protocol, handler, logger) {}
+Socket::Server::Server(const Connection::Protocol& protocol, Logger::ThreadedLog logger) noexcept:
+Socket(protocol, logger) {}
 
 ExpectedVoid Socket::Server::Listen(const std::string& hostname, const unsigned short& port) noexcept {
 	if (Connection::IsConnected(m_status))
@@ -26,7 +27,7 @@ ExpectedVoid Socket::Server::Listen(const std::string& hostname, const unsigned 
 	if (!expected_socket)
 		return StormByte::Unexpected(expected_socket.error());
 
-	m_handle = std::make_unique<Connection::Handler::Type>(expected_socket.value());
+	m_handle = std::make_unique<Connection::HandlerType>(expected_socket.value());
 
 	// Set SO_REUSEADDR to allow reuse of the address
 	int opt = 1;
@@ -34,15 +35,15 @@ ExpectedVoid Socket::Server::Listen(const std::string& hostname, const unsigned 
 		m_status = Connection::Status::Disconnected;
 		m_handle.reset();
 		return StormByte::Unexpected<ConnectionError>("Failed to set socket options: {} (error code: {})",
-													m_conn_handler->LastError(),
-													m_conn_handler->LastErrorCode());
+													Connection::Handler::Instance().LastError(),
+													Connection::Handler::Instance().LastErrorCode());
 	}
 
-	auto expected_connection_info = Connection::Info::FromHost(hostname, port, m_protocol, m_conn_handler);
+	auto expected_connection_info = Connection::Info::FromHost(hostname, port, m_protocol);
 	if (!expected_connection_info)
 		return StormByte::Unexpected<ConnectionError>("Failed to resolve hostname: {} (error code: {})",
-													m_conn_handler->LastError(),
-													m_conn_handler->LastErrorCode());
+													Connection::Handler::Instance().LastError(),
+													Connection::Handler::Instance().LastErrorCode());
 
 	m_conn_info = std::make_unique<Connection::Info>(std::move(expected_connection_info.value()));
 
@@ -51,8 +52,8 @@ ExpectedVoid Socket::Server::Listen(const std::string& hostname, const unsigned 
 		m_status = Connection::Status::Disconnected;
 		m_handle.reset();
 		return StormByte::Unexpected<ConnectionError>("Failed to bind socket: {} (error code: {})",
-													m_conn_handler->LastError(),
-													m_conn_handler->LastErrorCode()
+													Connection::Handler::Instance().LastError(),
+													Connection::Handler::Instance().LastErrorCode()
 		);
 	}
 
@@ -61,8 +62,8 @@ ExpectedVoid Socket::Server::Listen(const std::string& hostname, const unsigned 
 		m_status = Connection::Status::Disconnected;
 		m_handle.reset();
 		return StormByte::Unexpected<ConnectionError>("Failed to listen on socket: {} (error code: {})",
-													m_conn_handler->LastError(),
-													m_conn_handler->LastErrorCode()
+													Connection::Handler::Instance().LastError(),
+													Connection::Handler::Instance().LastErrorCode()
 		);
 	}
 
@@ -89,7 +90,7 @@ ExpectedClient Socket::Server::Accept() noexcept {
 		return StormByte::Unexpected<ConnectionError>("Error during select.");
 	}
 
-	Connection::Handler::Type client_handle = ::accept(*m_handle, nullptr, nullptr);
+	Connection::HandlerType client_handle = ::accept(*m_handle, nullptr, nullptr);
 	if (client_handle == -1) {
 		return StormByte::Unexpected<ConnectionError>("Failed to accept client connection.");
 	}
@@ -97,8 +98,8 @@ ExpectedClient Socket::Server::Accept() noexcept {
 	// Store the raw accepted handle so the Server may forcefully disconnect it later
 	m_active_clients.push_back(client_handle);
 
-	Client client_socket(m_protocol, m_conn_handler, m_logger);
-	client_socket.m_handle = std::make_unique<Connection::Handler::Type>(client_handle);
+	Client client_socket(m_protocol, m_logger);
+	client_socket.m_handle = std::make_unique<Connection::HandlerType>(client_handle);
 	client_socket.InitializeAfterConnect();
 
 	return client_socket;

@@ -5,7 +5,6 @@
 #include <StormByte/network/connection/handler.hxx>
 #include <StormByte/network/connection/info.hxx>
 #include <StormByte/network/connection/protocol.hxx>
-#include <StormByte/network/connection/rw.hxx>
 #include <StormByte/network/connection/status.hxx>
 #include <StormByte/network/exception.hxx>
 #include <StormByte/network/typedefs.hxx>
@@ -29,14 +28,13 @@ namespace StormByte::Network::Socket {
 
 		constexpr const Connection::Status& Status() const noexcept { return m_status; }
 		constexpr const unsigned long& MTU() const noexcept { return m_mtu; }
-		inline const Connection::Handler::Type& Handle() const noexcept { return *m_handle; }
+		inline const Connection::HandlerType& Handle() const noexcept { return *m_handle; }
 		ExpectedReadResult WaitForData(const long long& usecs = 0) noexcept;
 
 	protected:
 		Connection::Protocol m_protocol;
 		Connection::Status m_status;
-		std::unique_ptr<const Connection::Handler::Type> m_handle;
-		std::shared_ptr<const Connection::Handler> m_conn_handler;
+		std::unique_ptr<const Connection::HandlerType> m_handle;
 		std::unique_ptr<Connection::Info> m_conn_info;
 		unsigned long m_mtu;
 		Logger::ThreadedLog m_logger;
@@ -46,8 +44,8 @@ namespace StormByte::Network::Socket {
 		int m_effective_send_buf = 65536;
 		int m_effective_recv_buf = 65536;
 
-		Socket(const Connection::Protocol& protocol, std::shared_ptr<const Connection::Handler> handler, Logger::ThreadedLog logger) noexcept;
-		Expected<Connection::Handler::Type, ConnectionError> CreateSocket() noexcept;
+		Socket(const Connection::Protocol& protocol, Logger::ThreadedLog logger) noexcept;
+		Expected<Connection::HandlerType, ConnectionError> CreateSocket() noexcept;
 		void InitializeAfterConnect() noexcept;
 
 	private:

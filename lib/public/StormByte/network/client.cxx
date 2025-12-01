@@ -3,15 +3,15 @@
 
 using namespace StormByte::Network;
 
-Client::Client(const Connection::Protocol& protocol, std::shared_ptr<Connection::Handler> handler, Logger::ThreadedLog logger) noexcept:
-EndPoint(protocol, handler, logger) {}
+Client::Client(const Connection::Protocol& protocol, Logger::ThreadedLog logger) noexcept:
+EndPoint(protocol, logger) {}
 
 ExpectedVoid Client::Connect(const std::string& hostname, const unsigned short& port) noexcept {
 	if (Connection::IsConnected(m_status))
 		return StormByte::Unexpected<ConnectionError>("Client is already connected");
 
 	try {
-		m_socket = new Socket::Client(m_protocol, m_handler, m_logger);
+		m_socket = new Socket::Client(m_protocol, m_logger);
 	}
 	catch (const std::bad_alloc& e) {
 		return StormByte::Unexpected<ConnectionError>("Can not create connection: {}", e.what());
