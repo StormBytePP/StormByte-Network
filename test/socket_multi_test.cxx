@@ -42,7 +42,7 @@ int TestSocketMulti() {
 
     // Server thread
     std::thread server_thread([&]() -> int {
-        Socket::Server server(Connection::Protocol::IPv4, logger);
+        Socket::Server server(Protocol::IPv4, logger);
         auto listen_res = server.Listen(HOST, PORT);
         ASSERT_TRUE(fn_name, listen_res.has_value());
 
@@ -124,7 +124,7 @@ int TestSocketMulti() {
 
         auto worker = [i, &clients_finished, &send_data]() -> int {
             const std::string fn_name_inner = "TestSocketMulti::Client";
-            Socket::Client client(Connection::Protocol::IPv4, logger);
+            Socket::Client client(Protocol::IPv4, logger);
             auto connect_res = client.Connect(HOST, PORT);
             ASSERT_TRUE(fn_name_inner, connect_res.has_value());
             // Send `send_data` in CHUNK_SIZE slices

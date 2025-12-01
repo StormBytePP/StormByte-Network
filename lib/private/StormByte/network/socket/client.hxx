@@ -1,7 +1,6 @@
 #pragma once
 
 #include <StormByte/buffer/consumer.hxx>
-#include <StormByte/network/packet.hxx>
 #include <StormByte/network/socket/socket.hxx>
 #include <StormByte/network/typedefs.hxx>
 
@@ -79,15 +78,22 @@ namespace StormByte::Network::Socket {
 		ExpectedBuffer 													Receive(const std::size_t& size) noexcept;
 
 		/**
-		 * @brief Function to send data to the socket using a Packet.
-		 * @param packet The packet to send.
+		 * @brief Function to send data to the socket using a FIFO buffer.
+		 * @param buffer The buffer containing the data to send.
 		 * @return The expected result of the operation.
 		 */
-		ExpectedVoid 													Send(const Packet& packet) noexcept;
+		ExpectedVoid 													Send(const Buffer::FIFO& buffer) noexcept;
 
 		/**
-		 * @brief Function to send data to the socket using a std::span of bytes.
-		 * @param data A view of the data to send.
+		 * @brief Function to send data to the socket using a byte vector
+		 * @param buffer The vector containing the data to send.
+		 * @return The expected result of the operation.
+		 */
+		ExpectedVoid 													Send(const std::vector<std::byte>& buffer) noexcept;
+
+		/**
+		 * @brief Function to send data to the socket using a byte span.
+		 * @param data The span containing the data to send.
 		 * @return The expected result of the operation.
 		 */
 		ExpectedVoid 													Send(std::span<const std::byte> data) noexcept;

@@ -35,7 +35,7 @@ namespace StormByte::Network {
 			/**
 			 * @brief Destructor.
 			 */
-			virtual ~Packet() noexcept									= default;
+			virtual ~Packet() noexcept									= 0;
 
 			/**
 			 * @brief Copy assignment operator.
@@ -58,23 +58,17 @@ namespace StormByte::Network {
 			const unsigned short&										Opcode() const noexcept;
 
 			/**
-			 * @brief Reads a packet instance using the provided functions.
-			 * @param pif The packet instance function.
-			 * @param reader The function to read the packet data.
-			 * @return An expected packet or an error.
-			 */
-			//static ExpectedPacket										Read(const PacketInstanceFunction& pif, PacketReaderFunction reader) noexcept;
-
-			/**
-			 * @brief Serializes the packet.
+			 * @brief Serializes the packet into a FIFO buffer.
 			 * 
-			 * Override this function in derived classes to produce a `Buffer::Consumer` with custom data.
-			 * Ensure the base class `Serialize` function is called to include the opcode in the buffer and
-			 * that you set the Consumer buffer to ReadOnly when finished so readers can detect EoF.
+			 * @return A FIFO buffer containing the serialized packet data.
 			 */
-			virtual Buffer::Consumer									Serialize() const noexcept;
+			inline Buffer::FIFO											Serialize() const noexcept {
+				return DoSerialize();
+			}
 
 		protected:
+			const unsigned short m_opcode;								///< The opcode of the packet.
+
 			/**
 			 * @brief Constructs a Packet with the specified opcode.
 			 * @param opcode The opcode of the packet.
@@ -82,13 +76,11 @@ namespace StormByte::Network {
 			Packet(const unsigned short& opcode) noexcept;
 
 			/**
-			 * @brief Deserializes the packet.
-			 * @param reader The function to read the packet data.
-			 * @return An expected result or an error.
+			 * @brief Serializes the packet.
+			 * 
+			 * Override this function in derived classes to produce a byte vector with custom data.
+			 * Ensure the base class `Serialize` function is called to include the opcode in the buffer
 			 */
-			virtual Expected<void, PacketError>							Deserialize(PacketReaderFunction reader) noexcept = 0;
-
-		private:
-			const unsigned short m_opcode;								///< The opcode of the packet.
+			virtual Buffer::FIFO										DoSerialize() const noexcept;
 	};
 }

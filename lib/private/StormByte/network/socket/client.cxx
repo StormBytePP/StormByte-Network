@@ -72,6 +72,19 @@ ExpectedVoid Socket::Client::Connect(const std::string& hostname, const unsigned
 	return {};
 }
 
+ExpectedVoid Socket::Client::Send(const Buffer::FIFO& buffer) noexcept {
+	auto expected_data = buffer.Read(0);
+	if (!expected_data) {
+		return StormByte::Unexpected<ConnectionError>(expected_data.error()->what());
+	}
+	auto& data_vec = expected_data.value();
+	return Send(data_vec);
+}
+
+ExpectedVoid Socket::Client::Send(const std::vector<std::byte>& buffer) noexcept {
+	return Send(std::span<const std::byte>(buffer.data(), buffer.size()));
+}
+
 ExpectedVoid Socket::Client::Send(std::span<const std::byte> data) noexcept {
 	if (m_status != Connection::Status::Connected) {
 		return StormByte::Unexpected<ConnectionError>("Failed to send: Client is not connected");
@@ -167,12 +180,6 @@ ExpectedVoid Socket::Client::Send(std::span<const std::byte> data) noexcept {
 	return {};
 }
 
-ExpectedVoid Socket::Client::Send(const Packet& packet) noexcept {
-	m_logger << Logger::Level::LowLevel << "Sending packet with opcode: " << packet.Opcode() << std::endl;
-
-	return Send(packet.Serialize());
-}
-
 ExpectedVoid Socket::Client::Send(Buffer::Consumer data) noexcept {
 	if (m_status != Connection::Status::Connected) {
 		return StormByte::Unexpected<ConnectionError>("Failed to send: Client is not connected");
@@ -197,7 +204,7 @@ ExpectedVoid Socket::Client::Send(Buffer::Consumer data) noexcept {
 			return StormByte::Unexpected<ConnectionError>(expected_data.error()->what());
 		}
 		auto& data_vec = expected_data.value();
-		auto expected_send = Send(std::span<const std::byte>(data_vec.data(), data_vec.size()));
+		auto expected_send = Send(data_vec);
 		if (!expected_send) {
 			return StormByte::Unexpected<ConnectionError>(expected_send.error()->what());
 		}
