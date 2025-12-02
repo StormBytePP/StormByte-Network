@@ -143,23 +143,7 @@ namespace StormByte::Network {
 			 */
 			Buffer::Consumer									Process(const Packet& packet) const noexcept;
 
-			/**
-			 * @brief Configure input and output buffer pipelines.
-			 *
-			 * Pipelines are applied by `Process()` and may perform
-			 * transformations such as compression, encryption, checksumming,
-			 * or framing adjustments. Both pipelines are copied.
-			 *
-			 * @param in_pipeline Pipeline applied to incoming data.
-			 * @param out_pipeline Pipeline applied before sending data.
-			 */
-			inline void SetPipeline(const Buffer::Pipeline& in_pipeline, const Buffer::Pipeline& out_pipeline) noexcept {
-				m_in_pipeline = in_pipeline;
-				m_out_pipeline = out_pipeline;
-			}
-
 		protected:
-			Buffer::Pipeline m_in_pipeline, m_out_pipeline;		///< Pre/post-processing pipelines
 			mutable Logger::ThreadedLog m_log;					///< Logger for diagnostics
 			std::list<unsigned short> m_opcodes_skip_pipeline;	///< List of opcodes that should skip the pipeline processing
 
