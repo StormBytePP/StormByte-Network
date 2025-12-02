@@ -130,8 +130,9 @@ namespace Test {
 						}
 						return std::make_shared<Packets::AnswerRandomNumber>(*expected_number);
 					}
+					default:
+						return StormByte::Unexpected<Network::PacketError>("Codec::DoEncode: unknown packet opcode ({})", opcode);
 				}
-				
 			}
 	};
 
