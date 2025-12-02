@@ -5,7 +5,7 @@ using namespace StormByte::Network;
 
 Codec::Codec(const Logger::ThreadedLog& log) noexcept: m_log(log) {}
 
-ExpectedPacket Codec::Encode(const Buffer::Consumer& consumer, const Buffer::Pipeline& pipeline) const noexcept {
+ExpectedPacket Codec::Encode(const Buffer::Consumer& consumer, std::shared_ptr<Buffer::Pipeline> pipeline) const noexcept {
 	// Expected format: [opcode (2 bytes)] [size (8 bytes)] [packet data...]
 	// Read opcode
 	auto opcode_bytes_expected = consumer.Read(sizeof(unsigned short));
@@ -31,10 +31,10 @@ ExpectedPacket Codec::Encode(const Buffer::Consumer& consumer, const Buffer::Pip
 	}
 	const std::size_t& size = *size_expected;
 
-	return DoEncode(opcode, size, pipeline.Process(consumer, Buffer::ExecutionMode::Sync, m_log));
+	return DoEncode(opcode, size, pipeline->Process(consumer, Buffer::ExecutionMode::Async, m_log));
 }
 
-ExpectedConsumer Codec::Process(const Packet& packet, const Buffer::Pipeline& pipeline) const noexcept {
+ExpectedConsumer Codec::Process(const Packet& packet, std::shared_ptr<Buffer::Pipeline> pipeline) const noexcept {
 	// Out format: [opcode (2 bytes)] [size (8 bytes)] [packet data...]
 	Buffer::Producer final_producer;
 
@@ -65,7 +65,7 @@ ExpectedConsumer Codec::Process(const Packet& packet, const Buffer::Pipeline& pi
 	{
 		Buffer::Producer packet_data_producer;
 		packet_data_producer.Write(*packet_data_expected);
-		Buffer::Consumer processed_packet_data = pipeline.Process(packet_data_producer.Consumer(), Buffer::ExecutionMode::Sync, m_log);
+		Buffer::Consumer processed_packet_data = pipeline->Process(packet_data_producer.Consumer(), Buffer::ExecutionMode::Async, m_log);
 		auto data = processed_packet_data.ExtractUntilEoF();
 		auto data_expected = data.Extract();
 		if (!data_expected) {

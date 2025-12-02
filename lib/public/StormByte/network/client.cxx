@@ -11,7 +11,7 @@ ExpectedVoid Client::Connect(const std::string& hostname, const unsigned short& 
 		return StormByte::Unexpected<ConnectionError>("Client is already connected");
 
 	try {
-		std::unique_ptr<Socket::Socket> self_socket = std::make_unique<Socket::Client>(m_protocol, m_logger);
+		std::shared_ptr<Socket::Socket> self_socket = std::make_shared<Socket::Client>(m_protocol, m_logger);
 		m_self_uuid = self_socket->UUID();
 		m_client_pmap.emplace(m_self_uuid, std::move(self_socket));
 

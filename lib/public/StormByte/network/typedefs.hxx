@@ -45,6 +45,6 @@ namespace StormByte::Network {																		///< The connection info class (
 	using ExpectedObject = StormByte::Expected<std::shared_ptr<Object>, PacketError>;				///< The expected object type.
 	using PacketReaderFunction = std::function<ExpectedBuffer(const size_t&)>;						///< The packet reader function type.
 	using ExpectedConsumer = StormByte::Expected<Buffer::Consumer, Exception>;						///< The expected consumer type.
-	using SocketUUIDPMap = std::unordered_map<std::string, std::unique_ptr<Socket::Socket>>;        ///< The client map type (owns sockets).
-	using PipelineUUIDPMap = std::unordered_map<std::string, std::unique_ptr<Buffer::Pipeline>>;	///< The pipeline map type.
+	using SocketUUIDPMap = std::unordered_map<std::string, std::shared_ptr<Socket::Socket>>;        ///< The client map type (owns sockets).
+	using PipelineUUIDPMap = std::unordered_map<std::string, std::shared_ptr<Buffer::Pipeline>>;	///< The pipeline map type.
 }

@@ -116,7 +116,7 @@ namespace StormByte::Network {
 			 * @param consumer Source of raw input bytes.
 			 * @return Shared pointer to constructed `Packet` (or nullptr on failure).
 			 */
-			ExpectedPacket										Encode(const Buffer::Consumer& consumer, const Buffer::Pipeline& pipeline) const noexcept;
+			ExpectedPacket										Encode(const Buffer::Consumer& consumer, std::shared_ptr<Buffer::Pipeline> pipeline) const noexcept;
 
 			/**
 			 * @brief Decode a `Packet` into a domain `Object`.
@@ -144,7 +144,7 @@ namespace StormByte::Network {
 			 * @param pipeline The pipeline to apply.
 			 * @return Buffer::Consumer of bytes ready for sending on the wire.
 			 */
-			ExpectedConsumer									Process(const Packet& packet, const Buffer::Pipeline& pipeline) const noexcept;
+			ExpectedConsumer									Process(const Packet& packet, std::shared_ptr<Buffer::Pipeline> pipeline) const noexcept;
 
 		protected:
 			mutable Logger::ThreadedLog m_log;					///< Logger for diagnostics

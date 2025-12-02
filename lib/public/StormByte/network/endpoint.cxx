@@ -30,9 +30,13 @@ Connection::Status EndPoint::Status() const noexcept {
 }
 
 ExpectedPacket EndPoint::Receive(const std::string& client_uuid) noexcept {
+	return Receive(std::static_pointer_cast<Socket::Client>(GetSocketByUUID(client_uuid)));
+}
+
+ExpectedPacket EndPoint::Receive(std::shared_ptr<Socket::Client> client) noexcept {
 	// Create the socket reader function to encapsulate sockets away from final user
-	Buffer::ExternalReadFunction read_func = [client_uuid, this](const std::size_t& size) noexcept -> Buffer::ExpectedData<Buffer::ReadError> {
-		auto expected_data = static_cast<Socket::Client*>(GetSocketByUUID(client_uuid))->Receive(size, m_timeout);
+	Buffer::ExternalReadFunction read_func = [client, this](const std::size_t& size) noexcept -> Buffer::ExpectedData<Buffer::ReadError> {
+		auto expected_data = client->Receive(size, m_timeout);
 		if (!expected_data) {
 			return StormByte::Unexpected<Buffer::ReadError>(expected_data.error()->what());
 		}
@@ -51,38 +55,42 @@ ExpectedPacket EndPoint::Receive(const std::string& client_uuid) noexcept {
 	Buffer::Producer producer(forwarder);
 
 	// Delegate packet creation to codec
-	return m_codec->Encode(producer.Consumer(), *GetInPipelineByUUID(client_uuid));
+	return m_codec->Encode(producer.Consumer(), GetInPipelineByUUID(client->UUID()));
 }
 
 ExpectedVoid EndPoint::Send(const std::string& client_uuid, const Packet& packet) noexcept {
-	auto processed_data = m_codec->Process(packet, *GetInPipelineByUUID(client_uuid));
+	return Send(std::static_pointer_cast<Socket::Client>(GetSocketByUUID(client_uuid)), packet);
+}
+
+ExpectedVoid EndPoint::Send(std::shared_ptr<Socket::Client> client, const Packet& packet) noexcept {
+	auto processed_data = m_codec->Process(packet, GetInPipelineByUUID(client->UUID()));
 	if (!processed_data) {
 		Disconnect();
 		return StormByte::Unexpected<ConnectionError>(processed_data.error()->what());
 	}
-	return static_cast<Socket::Client*>(GetSocketByUUID(client_uuid))->Send(processed_data->ExtractUntilEoF());
+	return client->Send(processed_data->ExtractUntilEoF());
 }
 
-Socket::Socket* EndPoint::GetSocketByUUID(const std::string& uuid) noexcept {
+std::shared_ptr<Socket::Socket> EndPoint::GetSocketByUUID(const std::string& uuid) noexcept {
 	auto it = m_client_pmap.find(uuid);
 	if (it != m_client_pmap.end()) {
-		return it->second.get();
+		return it->second;
 	}
 	return nullptr;
 }
 
-StormByte::Buffer::Pipeline* EndPoint::GetInPipelineByUUID(const std::string& uuid) noexcept {
+std::shared_ptr<StormByte::Buffer::Pipeline> EndPoint::GetInPipelineByUUID(const std::string& uuid) noexcept {
 	auto it = m_in_pipeline_pmap.find(uuid);
 	if (it != m_in_pipeline_pmap.end()) {
-		return it->second.get();
+		return it->second;
 	}
 	return nullptr;
 }
 
-StormByte::Buffer::Pipeline* EndPoint::GetOutPipelineByUUID(const std::string& uuid) noexcept {
+std::shared_ptr<StormByte::Buffer::Pipeline> EndPoint::GetOutPipelineByUUID(const std::string& uuid) noexcept {
 	auto it = m_out_pipeline_pmap.find(uuid);
 	if (it != m_out_pipeline_pmap.end()) {
-		return it->second.get();
+		return it->second;
 	}
 	return nullptr;
 }

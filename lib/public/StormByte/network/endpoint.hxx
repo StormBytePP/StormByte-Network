@@ -98,6 +98,13 @@ namespace StormByte::Network {
 			ExpectedPacket														Receive(const std::string& client_uuid) noexcept;
 
 			/**
+			 * @brief Receives a packet from a client identified by UUID.
+			 * @param client The client to receive the packet from.
+			 * @return An expected packet or error.
+			 */
+			ExpectedPacket														Receive(std::shared_ptr<Socket::Client> client) noexcept;
+
+			/**
 			 * @brief Sends a packet to a client identified by UUID.
 			 * @param client_uuid The UUID of the client to send the packet to.
 			 * @param packet The packet to send.
@@ -106,24 +113,32 @@ namespace StormByte::Network {
 			ExpectedVoid 														Send(const std::string& client_uuid, const Packet& packet) noexcept;
 
 			/**
+			 * @brief Sends a packet to a client identified by UUID.
+			 * @param client The client to send the packet to.
+			 * @param packet The packet to send.
+			 * @return An expected void or error.
+			 */
+			ExpectedVoid 														Send(std::shared_ptr<Socket::Client> client, const Packet& packet) noexcept;
+
+			/**
 			 * @brief Retrieves a socket by its UUID.
 			 * @param uuid The UUID of the socket to retrieve.
 			 * @return A pointer to the socket, or nullptr if not found.
 			 */
-			virtual Socket::Socket*												GetSocketByUUID(const std::string& uuid) noexcept;
+			virtual std::shared_ptr<Socket::Socket>								GetSocketByUUID(const std::string& uuid) noexcept;
 
 			/**
 			 * @brief Retrieves the input pipeline associated with a UUID.
 			 * @param uuid The UUID of the pipeline to retrieve.
 			 * @return A pointer to the input pipeline, or nullptr if not found.
 			 */
-			virtual Buffer::Pipeline*											GetInPipelineByUUID(const std::string& uuid) noexcept;
+			virtual std::shared_ptr<Buffer::Pipeline>							GetInPipelineByUUID(const std::string& uuid) noexcept;
 
 			/**
 			 * @brief Retrieves the output pipeline associated with a UUID.
 			 * @param uuid The UUID of the pipeline to retrieve.
 			 * @return A pointer to the output pipeline, or nullptr if not found.
 			 */
-			virtual Buffer::Pipeline*											GetOutPipelineByUUID(const std::string& uuid) noexcept;
+			virtual std::shared_ptr<Buffer::Pipeline>							GetOutPipelineByUUID(const std::string& uuid) noexcept;
 	};
 }
