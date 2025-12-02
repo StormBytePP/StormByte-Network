@@ -68,17 +68,20 @@ void Socket::Disconnect() noexcept {
 		return;
 
 	m_status = Connection::Status::Disconnecting;
-	// Do a shutdown but do not close to give time for TCP FIN to be sent and processed
-	#ifdef LINUX
-	shutdown(*m_handle, SHUT_RDWR);
-	StormByte::System::Sleep(std::chrono::milliseconds(100)); // Allow time for TCP FIN to be sent
-	close(*m_handle);
-	#else
-	shutdown(*m_handle, SD_BOTH);
-	StormByte::System::Sleep(std::chrono::milliseconds(100)); // Allow time for TCP FIN to be sent
-	closesocket(*m_handle);
-	#endif
-	m_handle = nullptr;
+
+	if (m_handle && *m_handle > 0) {
+		#ifdef LINUX
+		shutdown(*m_handle, SHUT_RDWR);
+		StormByte::System::Sleep(std::chrono::milliseconds(100)); // Allow time for TCP FIN to be sent
+		close(*m_handle);
+		*m_handle = -1;
+		#else
+		shutdown(*m_handle, SD_BOTH);
+		StormByte::System::Sleep(std::chrono::milliseconds(100)); // Allow time for TCP FIN to be sent
+		closesocket(*m_handle);
+		*m_handle = INVALID_SOCKET;
+		#endif
+	}
 
 	m_status = Connection::Status::Disconnected;
 	m_logger << Logger::Level::LowLevel << "Disconnected socket " << m_UUID << std::endl;

@@ -134,7 +134,7 @@ namespace StormByte::Network::Socket {
 		protected:
 			Protocol m_protocol;                             ///< Protocol family/config
 			Connection::Status m_status;                     ///< Current connection status
-			std::unique_ptr<const Connection::HandlerType> m_handle; ///< Owned connection handler
+			std::shared_ptr<Connection::HandlerType> m_handle; ///< Owned connection handler
 			std::unique_ptr<Connection::Info> m_conn_info;  ///< Optional connection metadata
 			unsigned long m_mtu;                            ///< Active MTU value
 			Logger::ThreadedLog m_logger;                   ///< Logger used for socket diagnostics

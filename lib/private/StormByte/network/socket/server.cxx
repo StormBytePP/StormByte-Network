@@ -112,46 +112,33 @@ ExpectedClient Socket::Server::Accept() noexcept {
 	}
 
 	// Store the raw accepted handle so the Server may forcefully disconnect it later
-	m_active_clients.push_back(client_handle);
+	auto shared_handle = std::make_shared<Connection::HandlerType>(client_handle);
+	m_active_clients.push_back(shared_handle);
 
 	Client client_socket(m_protocol, m_logger);
-	client_socket.m_handle = std::make_unique<Connection::HandlerType>(client_handle);
+	client_socket.m_handle = shared_handle;
 	client_socket.InitializeAfterConnect();
 
 	return client_socket;
 }
 
 void Socket::Server::Disconnect() noexcept {
-	if (!Connection::IsConnected(m_status))
-		return;
-
-	m_status = Connection::Status::Disconnecting;
 	// Forcefully shutdown/close any active accepted client sockets
 	for (auto& client_handle : m_active_clients) {
-		if (client_handle == -1) continue;
+		if (client_handle || *client_handle > 0) continue;
 		#ifdef WINDOWS
-		shutdown(client_handle, SD_BOTH);
+		shutdown(*client_handle, SD_BOTH);
 		StormByte::System::Sleep(std::chrono::milliseconds(100)); // Allow time for TCP FIN to be sent
-		closesocket(client_handle);
+		closesocket(*client_handle);
+		*client_handle = INVALID_SOCKET;
 		#else
-		::shutdown(client_handle, SHUT_RDWR);
+		::shutdown(*client_handle, SHUT_RDWR);
 		StormByte::System::Sleep(std::chrono::milliseconds(100)); // Allow time for TCP FIN to be sent
-		::close(client_handle);
+		::close(*client_handle);
+		*client_handle = -1;
 		#endif
 	}
 	m_active_clients.clear();
 
-	#ifdef LINUX
-	shutdown(*m_handle, SHUT_RDWR);
-	StormByte::System::Sleep(std::chrono::milliseconds(100)); // Allow time for TCP FIN to be sent
-	close(*m_handle);
-	#else
-	shutdown(*m_handle, SD_BOTH);
-	StormByte::System::Sleep(std::chrono::milliseconds(100)); // Allow time for TCP FIN to be sent
-	closesocket(*m_handle);
-	#endif
-	m_handle = nullptr;
-
-	m_status = Connection::Status::Disconnected;
-	m_logger << Logger::Level::LowLevel << "Disconnected socket " << m_UUID << std::endl;
+	Socket::Disconnect();
 }
