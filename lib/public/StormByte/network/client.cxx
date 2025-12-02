@@ -11,18 +11,22 @@ ExpectedVoid Client::Connect(const std::string& hostname, const unsigned short& 
 		return StormByte::Unexpected<ConnectionError>("Client is already connected");
 
 	try {
-		m_self_socket = new Socket::Client(m_protocol, m_logger);
+		std::unique_ptr<Socket::Socket> self_socket = std::make_unique<Socket::Client>(m_protocol, m_logger);
+		m_self_uuid = self_socket->UUID();
+		m_client_pmap.emplace(m_self_uuid, std::move(self_socket));
+
+		// Default pipelines
+		m_in_pipeline_pmap.emplace(m_self_uuid, std::make_unique<Buffer::Pipeline>());
+		m_out_pipeline_pmap.emplace(m_self_uuid, std::make_unique<Buffer::Pipeline>());
 	}
 	catch (const std::bad_alloc& e) {
-		m_self_socket = nullptr;
 		return StormByte::Unexpected<ConnectionError>("Can not create connection: {}", e.what());
 	}
 
 	m_status = Connection::Status::Connecting;
-	auto expected_connect = static_cast<Socket::Client&>(*m_self_socket).Connect(hostname, port);
+	auto expected_connect = static_cast<Socket::Client&>(*m_client_pmap.at(m_self_uuid)).Connect(hostname, port);
 	if (!expected_connect) {
-		delete m_self_socket;
-		m_self_socket = nullptr;
+		m_client_pmap.erase(m_self_uuid);
 		m_status = Connection::Status::Disconnected;
 		return StormByte::Unexpected(expected_connect.error());
 	}
@@ -31,9 +35,9 @@ ExpectedVoid Client::Connect(const std::string& hostname, const unsigned short& 
 }
 
 ExpectedPacket Client::Receive() noexcept {
-	return EndPoint::Receive(static_cast<Socket::Client&>(*m_self_socket), m_in_pipeline);
+	return EndPoint::Receive(static_cast<Socket::Client&>(*m_client_pmap.at(m_self_uuid)));
 }
 
 ExpectedVoid Client::Send(const Packet& packet) noexcept {
-	return EndPoint::Send(static_cast<Socket::Client&>(*m_self_socket), packet, m_out_pipeline);
+	return EndPoint::Send(static_cast<Socket::Client&>(*m_client_pmap.at(m_self_uuid)), packet);
 }

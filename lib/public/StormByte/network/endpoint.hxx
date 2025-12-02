@@ -6,7 +6,7 @@
 #include <StormByte/network/typedefs.hxx>
 
 #include <atomic>
-#include <map>
+#include <unordered_map>
 #include <memory>
 
 /**
@@ -80,19 +80,22 @@ namespace StormByte::Network {
 			Connection::Status 													Status() const noexcept;
 
 		protected:
-			Socket::Socket* m_self_socket;										///< Pointer to the socket instance of this endpoint (can't use std::unique_ptr as we don't include the header as its private).
+			std::string m_self_uuid;											///< The UUID associated with this endpoint.
 			enum Protocol m_protocol;											///< The protocol used by the endpoint (e.g., IPv4, IPv6).
 			std::shared_ptr<Codec> m_codec;										///< The codec instance used for encoding/decoding packets.
 			const unsigned short m_timeout;										///< The read timeout in seconds.
 			Logger::ThreadedLog m_logger;										///< The logger instance.
 			std::atomic<Connection::Status> m_status;							///< The current connection status of the endpoint.
+			SocketUUIDPMap m_client_pmap; 										///< Map of all sockets including self.
+			PipelineUUIDPMap m_in_pipeline_pmap;								///< Map of in pipelines associated with clients.
+			PipelineUUIDPMap m_out_pipeline_pmap;								///< Map of out pipelines associated with clients.
 
 			/**
 			 * @brief Receives a packet from the specified socket.
 			 * @param socket The socket to receive the packet from.
 			 * @return A shared pointer to the received packet (nullptr if error).
 			 */
-			ExpectedPacket														Receive(Socket::Client& socket, const Buffer::Pipeline& pipeline) noexcept;
+			ExpectedPacket														Receive(Socket::Client& socket) noexcept;
 
 			/**
 			 * @brief Sends a packet through the specified socket.
@@ -100,6 +103,27 @@ namespace StormByte::Network {
 			 * @param packet The packet to send.
 			 * @return An expected void or error.
 			 */
-			ExpectedVoid 														Send(Socket::Client& socket, const Packet& packet, const Buffer::Pipeline& pipeline) noexcept;
+			ExpectedVoid 														Send(Socket::Client& socket, const Packet& packet) noexcept;
+
+			/**
+			 * @brief Retrieves a socket by its UUID.
+			 * @param uuid The UUID of the socket to retrieve.
+			 * @return A pointer to the socket, or nullptr if not found.
+			 */
+			virtual Socket::Socket*												GetSocketByUUID(const std::string& uuid) noexcept;
+
+			/**
+			 * @brief Retrieves the input pipeline associated with a UUID.
+			 * @param uuid The UUID of the pipeline to retrieve.
+			 * @return A pointer to the input pipeline, or nullptr if not found.
+			 */
+			virtual Buffer::Pipeline*											GetInPipelineByUUID(const std::string& uuid) noexcept;
+
+			/**
+			 * @brief Retrieves the output pipeline associated with a UUID.
+			 * @param uuid The UUID of the pipeline to retrieve.
+			 * @return A pointer to the output pipeline, or nullptr if not found.
+			 */
+			virtual Buffer::Pipeline*											GetOutPipelineByUUID(const std::string& uuid) noexcept;
 	};
 }

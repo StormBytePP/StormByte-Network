@@ -7,7 +7,7 @@ using namespace StormByte::Network;
 
 EndPoint::EndPoint(const enum Protocol& protocol, const Codec& codec, const unsigned short& timeout, const Logger::ThreadedLog& logger) noexcept:
 m_protocol(protocol), m_codec(codec.Clone()), m_timeout(timeout), m_logger(logger), m_status(Connection::Status::Disconnected),
-m_self_socket(nullptr) {}
+m_self_uuid() {}
 
 EndPoint::~EndPoint() noexcept {
 	Disconnect();
@@ -15,10 +15,9 @@ EndPoint::~EndPoint() noexcept {
 
 void EndPoint::Disconnect() noexcept {
 	m_status.store(Connection::Status::Disconnecting);
-	if (m_self_socket) {
-		delete m_self_socket;
-		m_self_socket = nullptr;
-	}
+	m_client_pmap.erase(m_self_uuid);
+	m_in_pipeline_pmap.erase(m_self_uuid);
+	m_out_pipeline_pmap.erase(m_self_uuid);
 	m_status.store(Connection::Status::Disconnected);
 }
 
@@ -30,7 +29,7 @@ Connection::Status EndPoint::Status() const noexcept {
 	return m_status.load();
 }
 
-ExpectedPacket EndPoint::Receive(Socket::Client& socket, const Buffer::Pipeline& pipeline) noexcept {
+ExpectedPacket EndPoint::Receive(Socket::Client& socket) noexcept {
 	// Create the socket reader function to encapsulate sockets away from final user
 	Buffer::ExternalReadFunction read_func = [&socket, this](const std::size_t& size) noexcept -> Buffer::ExpectedData<Buffer::ReadError> {
 		auto expected_data = socket.Receive(size, m_timeout);
@@ -52,14 +51,38 @@ ExpectedPacket EndPoint::Receive(Socket::Client& socket, const Buffer::Pipeline&
 	Buffer::Producer producer(forwarder);
 
 	// Delegate packet creation to codec
-	return m_codec->Encode(producer.Consumer(), pipeline);
+	return m_codec->Encode(producer.Consumer(), *GetInPipelineByUUID(socket.UUID()));
 }
 
-ExpectedVoid EndPoint::Send(Socket::Client& socket, const Packet& packet, const Buffer::Pipeline& pipeline) noexcept {
-	auto processed_data = m_codec->Process(packet, pipeline);
+ExpectedVoid EndPoint::Send(Socket::Client& socket, const Packet& packet) noexcept {
+	auto processed_data = m_codec->Process(packet, *GetInPipelineByUUID(socket.UUID()));
 	if (!processed_data) {
 		Disconnect();
 		return StormByte::Unexpected<ConnectionError>(processed_data.error()->what());
 	}
 	return socket.Send(processed_data->ExtractUntilEoF());
+}
+
+Socket::Socket* EndPoint::GetSocketByUUID(const std::string& uuid) noexcept {
+	auto it = m_client_pmap.find(uuid);
+	if (it != m_client_pmap.end()) {
+		return it->second.get();
+	}
+	return nullptr;
+}
+
+StormByte::Buffer::Pipeline* EndPoint::GetInPipelineByUUID(const std::string& uuid) noexcept {
+	auto it = m_in_pipeline_pmap.find(uuid);
+	if (it != m_in_pipeline_pmap.end()) {
+		return it->second.get();
+	}
+	return nullptr;
+}
+
+StormByte::Buffer::Pipeline* EndPoint::GetOutPipelineByUUID(const std::string& uuid) noexcept {
+	auto it = m_out_pipeline_pmap.find(uuid);
+	if (it != m_out_pipeline_pmap.end()) {
+		return it->second.get();
+	}
+	return nullptr;
 }
