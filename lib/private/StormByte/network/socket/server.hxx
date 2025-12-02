@@ -67,7 +67,12 @@ namespace StormByte::Network::Socket {
 			/**
 			 * @brief Disconnect the server and any active clients.
 			 */
-			void Disconnect() noexcept override;
+			void 															Disconnect() noexcept override;
+
+			/**
+			 * @brief Disconnect a client by its UUID.
+			 */
+			void 															DisconnectClient(const std::string& client_uuid) noexcept;
 
 		private:
 			std::vector<std::shared_ptr<Client>> m_active_clients;			///< Active accepted client handles

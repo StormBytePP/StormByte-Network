@@ -13,11 +13,13 @@ EndPoint::~EndPoint() noexcept {
 }
 
 void EndPoint::Disconnect() noexcept {
+	m_logger << Logger::Level::LowLevel << "EndPoint::Disconnect: begin (uuid=" << m_self_uuid << ")" << std::endl;
 	m_status.store(Connection::Status::Disconnecting);
 	m_client_pmap.erase(m_self_uuid);
 	m_in_pipeline_pmap.erase(m_self_uuid);
 	m_out_pipeline_pmap.erase(m_self_uuid);
 	m_status.store(Connection::Status::Disconnected);
+	m_logger << Logger::Level::LowLevel << "EndPoint::Disconnect: end (uuid=" << m_self_uuid << ")" << std::endl;
 }
 
 const Protocol& EndPoint::Protocol() const noexcept {
@@ -29,19 +31,23 @@ Connection::Status EndPoint::Status() const noexcept {
 }
 
 ExpectedPacket EndPoint::Receive(const std::string& client_uuid) noexcept {
+	m_logger << Logger::Level::LowLevel << "EndPoint::Receive: by uuid begin (uuid=" << client_uuid << ")" << std::endl;
 	return Receive(std::static_pointer_cast<Socket::Client>(GetSocketByUUID(client_uuid)));
 }
 
 ExpectedPacket EndPoint::Receive(std::shared_ptr<Socket::Client> client) noexcept {
+	m_logger << Logger::Level::LowLevel << "EndPoint::Receive: begin (uuid=" << (client ? client->UUID() : std::string("<null>")) << ")" << std::endl;
 	// Create the socket reader function to encapsulate sockets away from final user
 	Buffer::ExternalReadFunction read_func = [client, this](const std::size_t& size) noexcept -> Buffer::ExpectedData<Buffer::ReadError> {
 		auto expected_data = client->Receive(size, m_timeout);
 		if (!expected_data) {
+			m_logger << Logger::Level::LowLevel << "EndPoint::Receive: socket Receive failed (uuid=" << client->UUID() << ") error=" << expected_data.error()->what() << std::endl;
 			return StormByte::Unexpected<Buffer::ReadError>(expected_data.error()->what());
 		}
 		Buffer::FIFO& buffer = expected_data.value();
 		auto data_vec_expected = buffer.Read(size);
 		if (!data_vec_expected) {
+			m_logger << Logger::Level::LowLevel << "EndPoint::Receive: buffer.Read failed (uuid=" << client->UUID() << ") error=" << data_vec_expected.error()->what() << std::endl;
 			return StormByte::Unexpected<Buffer::ReadError>(data_vec_expected.error()->what());
 		}
 		return data_vec_expected.value();
@@ -54,7 +60,13 @@ ExpectedPacket EndPoint::Receive(std::shared_ptr<Socket::Client> client) noexcep
 	Buffer::Producer producer(forwarder);
 
 	// Delegate packet creation to codec
-	return m_codec->Encode(producer.Consumer(), GetInPipelineByUUID(client->UUID()));
+	auto pkt = m_codec->Encode(producer.Consumer(), GetInPipelineByUUID(client->UUID()));
+	if (!pkt) {
+		m_logger << Logger::Level::LowLevel << "EndPoint::Receive: codec Encode failed (uuid=" << client->UUID() << ") error=" << pkt.error()->what() << std::endl;
+		return pkt;
+	}
+	m_logger << Logger::Level::LowLevel << "EndPoint::Receive: decoded packet opcode=" << pkt.value()->Opcode() << " (uuid=" << client->UUID() << ")" << std::endl;
+	return pkt;
 }
 
 ExpectedVoid EndPoint::Send(const std::string& client_uuid, const Packet& packet) noexcept {
@@ -62,12 +74,25 @@ ExpectedVoid EndPoint::Send(const std::string& client_uuid, const Packet& packet
 }
 
 ExpectedVoid EndPoint::Send(std::shared_ptr<Socket::Client> client, const Packet& packet) noexcept {
-	auto processed_data = m_codec->Process(packet, GetInPipelineByUUID(client->UUID()));
+	// Use the output pipeline when sending data, not the input pipeline
+	auto processed_data = m_codec->Process(packet, GetOutPipelineByUUID(client->UUID()));
 	if (!processed_data) {
+		m_logger << Logger::Level::LowLevel << "EndPoint::Send: codec Process failed (uuid=" << client->UUID() << ") error=" << processed_data.error()->what() << std::endl;
 		Disconnect();
 		return StormByte::Unexpected<ConnectionError>(processed_data.error()->what());
 	}
-	return client->Send(processed_data->ExtractUntilEoF());
+	// Extract ready-to-send bytes and log for diagnostics
+	auto out_fifo = processed_data->ExtractUntilEoF();
+	m_logger << Logger::Level::LowLevel << "Endpoint::Send: sending "
+			<< Logger::humanreadable_bytes << out_fifo.Size() << Logger::nohumanreadable
+			<< " to client UUID " << client->UUID() << std::endl;
+	auto send_res = client->Send(out_fifo);
+	if (!send_res) {
+		m_logger << Logger::Level::LowLevel << "Endpoint::Send: client Send failed (uuid=" << client->UUID() << ") error=" << send_res.error()->what() << std::endl;
+		return send_res;
+	}
+	m_logger << Logger::Level::LowLevel << "Endpoint::Send: send completed (uuid=" << client->UUID() << ")" << std::endl;
+	return {};
 }
 
 std::shared_ptr<Socket::Socket> EndPoint::GetSocketByUUID(const std::string& uuid) noexcept {

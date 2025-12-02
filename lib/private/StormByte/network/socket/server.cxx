@@ -128,3 +128,14 @@ void Socket::Server::Disconnect() noexcept {
 
 	Socket::Disconnect();
 }
+
+void Socket::Server::DisconnectClient(const std::string& client_uuid) noexcept {
+	auto it = std::find_if(m_active_clients.begin(), m_active_clients.end(),
+		[&client_uuid](const std::shared_ptr<Client>& client) {
+			return client && client->UUID() == client_uuid;
+		});
+	if (it != m_active_clients.end()) {
+		(*it)->Disconnect();
+		m_active_clients.erase(it);
+	}
+}

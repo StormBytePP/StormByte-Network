@@ -70,7 +70,12 @@ namespace StormByte::Network {
 
 		protected:
 			Buffer::Pipeline m_in_pipeline, m_out_pipeline;					///< Input and output pipelines for processing data.
-
+		
+			/**
+			 * @brief Access the client logger for diagnostics in derived classes.
+			 */
+			inline Logger::ThreadedLog& Log() noexcept { return m_logger; }
+		
 			/**
 			 * @brief The function to receive data from the server.
 			 * @return The expected buffer or error.

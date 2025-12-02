@@ -18,6 +18,7 @@ ExpectedPacket Codec::Encode(const Buffer::Consumer& consumer, std::shared_ptr<B
 		return StormByte::Unexpected<PacketError>("Codec::Encode: failed to deserialize opcode ({})", opcode_expected.error()->what());
 	}
 	const unsigned short& opcode = *opcode_expected;
+	m_log << Logger::Level::LowLevel << "Codec::Encode: parsed opcode=" << opcode << std::endl;
 
 	// Read size
 	auto size_bytes_expected = consumer.Read(sizeof(std::size_t));
@@ -30,8 +31,17 @@ ExpectedPacket Codec::Encode(const Buffer::Consumer& consumer, std::shared_ptr<B
 		return StormByte::Unexpected<PacketError>("Codec::Encode: failed to deserialize size ({})", size_expected.error()->what());
 	}
 	const std::size_t& size = *size_expected;
+	m_log << Logger::Level::LowLevel << "Codec::Encode: payload size=" << Logger::humanreadable_bytes << size << Logger::nohumanreadable << std::endl;
 
-	return DoEncode(opcode, size, pipeline->Process(consumer, Buffer::ExecutionMode::Async, m_log));
+	Buffer::Consumer processed = pipeline->Process(consumer, Buffer::ExecutionMode::Async, m_log);
+	m_log << Logger::Level::LowLevel << "Codec::Encode: pipeline processed consumer, delegating DoEncode" << std::endl;
+	auto result = DoEncode(opcode, size, processed);
+	if (result) {
+		m_log << Logger::Level::LowLevel << "Codec::Encode: DoEncode succeeded, returning packet opcode=" << result.value()->Opcode() << std::endl;
+	} else {
+		m_log << Logger::Level::LowLevel << "Codec::Encode: DoEncode failed error=" << result.error()->what() << std::endl;
+	}
+	return result;
 }
 
 ExpectedConsumer Codec::Process(const Packet& packet, std::shared_ptr<Buffer::Pipeline> pipeline) const noexcept {
@@ -40,6 +50,7 @@ ExpectedConsumer Codec::Process(const Packet& packet, std::shared_ptr<Buffer::Pi
 
 	// Get all packet data
 	Buffer::FIFO packet_buffer = packet.Serialize();
+	m_log << Logger::Level::LowLevel << "Codec::Process: serialize packet opcode=" << packet.Opcode() << std::endl;
 
 	// Get opcode data
 	auto opcode_bytes_expected = packet_buffer.Extract(sizeof(unsigned short));
@@ -54,6 +65,7 @@ ExpectedConsumer Codec::Process(const Packet& packet, std::shared_ptr<Buffer::Pi
 
 	// Write opcode to final producer
 	(void)final_producer.Write(opcode_bytes);
+	m_log << Logger::Level::LowLevel << "Codec::Process: wrote opcode to output" << std::endl;
 
 	// Get packet data (may be empty)
 	std::vector<std::byte> packet_data;
@@ -71,16 +83,20 @@ ExpectedConsumer Codec::Process(const Packet& packet, std::shared_ptr<Buffer::Pi
 			return StormByte::Unexpected<PacketError>("Codec::Process: failed to extract processed packet data after pipeline ({})", data_expected.error()->what());
 		}
 		packet_data = std::move(data_expected.value());
+		m_log << Logger::Level::LowLevel << "Codec::Process: payload after pipeline size=" << Logger::humanreadable_bytes << packet_data.size() << Logger::nohumanreadable << std::endl;
 	}
 
 	// Write size of packet data
 	auto size_bytes_data = Serializable<std::size_t>(packet_data.size()).Serialize();
 	(void)final_producer.Write(size_bytes_data);
+	m_log << Logger::Level::LowLevel << "Codec::Process: wrote payload size=" << Logger::humanreadable_bytes << packet_data.size() << Logger::nohumanreadable << std::endl;
 
 	// Write packet data
 	(void)final_producer.Write(packet_data);
+	m_log << Logger::Level::LowLevel << "Codec::Process: wrote payload bytes" << std::endl;
 
 	// Close and return
 	final_producer.Close();
+	m_log << Logger::Level::LowLevel << "Codec::Process: final consumer ready" << std::endl;
 	return final_producer.Consumer();
 }

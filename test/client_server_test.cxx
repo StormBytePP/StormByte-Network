@@ -14,16 +14,15 @@
 using namespace StormByte;
 using namespace StormByte::Network;
 
-int TestRequestNameList();
-int TestRequestRandomNumber();
-
 namespace Test {
 	namespace Packets {
 		enum class Opcode: unsigned short {
 			C_MSG_ASKNAMELIST,
 			S_MSG_RESPONDNAMELIST,
 			C_MSG_ASKRANDOMNUMBER,
-			S_MSG_RESPONDRANDOMNUMBER
+			S_MSG_RESPONDRANDOMNUMBER,
+			C_MSG_SENDLARGEDATA,
+			S_MSG_REPLYLARGEDATASIZE
 		};
 
 		class Generic: public Network::Packet {
@@ -79,6 +78,40 @@ namespace Test {
 			private:
 				int m_number;
 		};
+
+		class LargeData: public Generic {
+			public:
+				LargeData(const std::size_t& size): Generic(Opcode::C_MSG_SENDLARGEDATA), m_size(size) {}
+				Buffer::FIFO DoSerialize() const noexcept override {
+					return StormByte::Serializable<std::string>(GetLargeData()).Serialize();
+				}
+
+				std::string GetLargeData() const noexcept {
+					return std::string(m_size, 'A');
+				}
+
+				std::size_t GetSize() const noexcept {
+					return m_size;
+				}
+
+			private:
+				std::size_t m_size;
+			};
+
+			class AnswerLargeDataSize: public Generic {
+			public:
+				AnswerLargeDataSize(const std::size_t& size): Generic(Opcode::S_MSG_REPLYLARGEDATASIZE), m_size(size) {}
+				Buffer::FIFO DoSerialize() const noexcept override {
+					return StormByte::Serializable<std::size_t>(m_size).Serialize();
+				}
+
+				std::size_t GetSize() const noexcept {
+					return m_size;
+				}
+
+			private:
+				std::size_t m_size;
+		};
 	}
 
 	class Codec: public Network::Codec {
@@ -131,6 +164,36 @@ namespace Test {
 						}
 						return std::make_shared<Packets::AnswerRandomNumber>(*expected_number);
 					}
+					case Packets::Opcode::C_MSG_SENDLARGEDATA: {
+						// Don't deserialize the full string - just consume the bytes and use the size
+						// The size already tells us how big the data was; no need to reconstruct the entire string
+						auto expected_data = consumer.Read(size);
+						if (!expected_data) {
+							return StormByte::Unexpected<Network::PacketError>("Codec::DoEncode: failed to read LargeData data ({})", expected_data.error()->what());
+						}
+						// The serialized string format is: [size(8 bytes)][string_data]
+						// We need to extract the size from the first 8 bytes to know the actual string length
+						if (expected_data->size() < sizeof(std::size_t)) {
+							return StormByte::Unexpected<Network::PacketError>("Codec::DoEncode: LargeData payload too small for size field");
+						}
+						std::vector<std::byte> size_bytes(expected_data->begin(), expected_data->begin() + sizeof(std::size_t));
+						auto size_expected = StormByte::Serializable<std::size_t>::Deserialize(size_bytes);
+						if (!size_expected) {
+							return StormByte::Unexpected<Network::PacketError>("Codec::DoEncode: failed to deserialize LargeData size ({})", size_expected.error()->what());
+						}
+						return std::make_shared<Packets::LargeData>(*size_expected);
+					}
+					case Packets::Opcode::S_MSG_REPLYLARGEDATASIZE: {
+						auto expected_data = consumer.Read(size);
+						if (!expected_data) {
+							return StormByte::Unexpected<Network::PacketError>("Codec::DoEncode: failed to read AnswerLargeDataSize data ({})", expected_data.error()->what());
+						}
+						auto expected_size = StormByte::Serializable<std::size_t>::Deserialize(expected_data.value());
+						if (!expected_size) {
+							return StormByte::Unexpected<Network::PacketError>("Codec::DoEncode: failed to deserialize AnswerLargeDataSize size ({})", expected_size.error()->what());
+						}
+						return std::make_shared<Packets::AnswerLargeDataSize>(*expected_size);
+					}
 					default:
 						return StormByte::Unexpected<Network::PacketError>("Codec::DoEncode: unknown packet opcode ({})", opcode);
 				}
@@ -139,6 +202,7 @@ namespace Test {
 
 	using ExpectedNameList = StormByte::Expected<std::vector<std::string>, StormByte::Network::Exception>;
 	using ExpectedRandomNumber = StormByte::Expected<int, StormByte::Network::Exception>;
+	using ExpectedLargeDataSize = StormByte::Expected<std::size_t, StormByte::Network::Exception>;
 
 	class Client: public Network::Client {
 		public:
@@ -186,6 +250,30 @@ namespace Test {
 				}
 				auto answer_packet = std::static_pointer_cast<Packets::AnswerRandomNumber>(received_packet);
 				return answer_packet->GetNumber();
+			}
+
+			ExpectedLargeDataSize RequestLargeDataSize(const std::size_t& size) noexcept {
+				this->Log() << Logger::Level::LowLevel << "Client: sending C_MSG_SENDLARGEDATA size=" << Logger::humanreadable_bytes << size << Logger::nohumanreadable << std::endl;
+				// Send request
+				Packets::LargeData request_packet(size);
+				auto send_expected = Send(request_packet);
+				if (!send_expected) {
+					return StormByte::Unexpected<Network::Exception>("Client::RequestLargeDataSize: failed to send LargeData packet ({})", send_expected.error()->what());
+				}
+
+				this->Log() << Logger::Level::LowLevel << "Client: waiting for S_MSG_REPLYLARGEDATASIZE" << std::endl;
+				// Receive response
+				auto receive_expected = Receive();
+				if (!receive_expected) {
+					return StormByte::Unexpected<Network::Exception>("Client::RequestLargeDataSize: failed to receive AnswerLargeDataSize packet ({})", receive_expected.error()->what());
+				}
+				auto& received_packet = receive_expected.value();
+				if (received_packet->Opcode() != static_cast<unsigned short>(Packets::Opcode::S_MSG_REPLYLARGEDATASIZE)) {
+					return StormByte::Unexpected<Network::Exception>("Client::RequestLargeDataSize: received unexpected packet opcode ({})", received_packet->Opcode());
+				}
+				auto answer_packet = std::static_pointer_cast<Packets::AnswerLargeDataSize>(received_packet);
+				this->Log() << Logger::Level::LowLevel << "Client: received S_MSG_REPLYLARGEDATASIZE size=" << Logger::humanreadable_bytes << answer_packet->GetSize() << Logger::nohumanreadable << std::endl;
+				return answer_packet->GetSize();
 			}
 	};
 
@@ -243,6 +331,18 @@ namespace Test {
 						}
 						break;
 					}
+					case Packets::Opcode::C_MSG_SENDLARGEDATA: {
+						auto large_data_packet = static_cast<const Packets::LargeData&>(packet);
+						std::size_t data_size = large_data_packet.GetSize();
+						this->Log() << Logger::Level::LowLevel << "Server: received C_MSG_SENDLARGEDATA size=" << Logger::humanreadable_bytes << data_size << Logger::nohumanreadable << std::endl;
+						Packets::AnswerLargeDataSize answer_packet(data_size);
+						auto send_expected = Send(client_uuid, answer_packet);
+						if (!send_expected) {
+							return StormByte::Unexpected<Network::PacketError>("Server::ProcessClientPacket: failed to send AnswerLargeDataSize packet ({})", send_expected.error()->what());
+						}
+						this->Log() << Logger::Level::LowLevel << "Server: sent S_MSG_REPLYLARGEDATASIZE to client=" << client_uuid << std::endl;
+						break;
+					}
 					default:
 						return StormByte::Unexpected<Network::PacketError>("Server::ProcessClientPacket: received unknown packet opcode ({})", packet.Opcode());
 				}
@@ -251,8 +351,9 @@ namespace Test {
 	};
 }
 
-Logger::ThreadedLog logger(std::cout, Logger::Level::Info, "[%L] [T%i] %T:");
+Logger::ThreadedLog logger(std::cout, Logger::Level::LowLevel, "[%L] [T%i] %T:");
 constexpr const unsigned short timeout = 5;
+constexpr const std::size_t large_data_size = 1 * 1024 * 1024; // 1 MB
 
 int TestRequestNameList() {
 	const std::string fn_name = "TestRequestNameList";
@@ -328,10 +429,42 @@ int TestRequestRandomNumber() {
 	RETURN_TEST(fn_name, 0);
 }
 
+int TestRequestLargeDataSize() {
+	const std::string fn_name = "TestRequestLargeDataSize";
+
+	const char* HOST = "127.0.0.1";
+	const unsigned short PORT = 7080;
+
+	Test::Server server(Protocol::IPv4, timeout, logger);
+	auto listen_res = server.Connect(HOST, PORT);
+	ASSERT_TRUE(fn_name, listen_res.has_value());
+
+	// Small delay to ensure server is listening
+	std::this_thread::sleep_for(std::chrono::milliseconds(100));
+
+	Test::Client client(Protocol::IPv4, timeout, logger);
+	auto connect_res = client.Connect(HOST, PORT);
+	ASSERT_TRUE(fn_name, connect_res.has_value());
+
+	auto size_expected = client.RequestLargeDataSize(large_data_size);
+	if (!size_expected) {
+		logger << Logger::Level::Error << fn_name << ": RequestLargeDataSize failed: " << size_expected.error()->what() << std::endl;
+		RETURN_TEST(fn_name, 1);
+	}
+	std::size_t size = size_expected.value();
+	ASSERT_EQUAL(fn_name, size, large_data_size);
+	logger << Logger::Level::Info << fn_name << ": Received large data size: " << size << std::endl;
+
+	client.Disconnect();
+	server.Disconnect();
+	RETURN_TEST(fn_name, 0);
+}
+
 int main() {
 	int result = 0;
 	result += TestRequestNameList();
 	result += TestRequestRandomNumber();
+	result += TestRequestLargeDataSize();
 
 	if (result == 0) {
 		std::cout << "All tests passed!" << std::endl;

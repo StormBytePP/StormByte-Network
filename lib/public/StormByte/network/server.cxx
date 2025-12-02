@@ -12,6 +12,7 @@ Server::~Server() noexcept {
 }
 
 ExpectedVoid Server::Connect(const std::string& host, const unsigned short& port) noexcept {
+	m_logger << Logger::Level::LowLevel << "Server::Connect: begin host=" << host << ":" << port << std::endl;
 	if (Connection::IsConnected(m_status))
 		return StormByte::Unexpected<ConnectionError>("Server is already connected");
 
@@ -32,12 +33,14 @@ ExpectedVoid Server::Connect(const std::string& host, const unsigned short& port
 	}
 	auto expected_listen = listen_sock->Listen(host, port);
 	if (!expected_listen) {
+		m_logger << Logger::Level::LowLevel << "Server::Connect: Listen failed error=" << expected_listen.error()->what() << std::endl;
 		m_status = Connection::Status::Disconnected;
 		return StormByte::Unexpected(expected_listen.error());
 	}
 	m_accept_thread = std::thread(&Server::AcceptClients, this);
 	m_logger << Logger::Level::LowLevel << "Server started and listening on " << host << ":" << port << std::endl;
 	m_status.store(Connection::Status::Connected);
+	m_logger << Logger::Level::LowLevel << "Server::Connect: end uuid=" << m_self_uuid << std::endl;
 	return {};
 }
 
@@ -46,7 +49,7 @@ void Server::Disconnect() noexcept {
 		return;
 		
 	m_status.store(Connection::Status::Disconnecting);
-
+	m_logger << Logger::Level::LowLevel << "Server::Disconnect: joining accept thread" << std::endl;
 	// Stop accepting new clients first
 	if (m_accept_thread.joinable()) m_accept_thread.join();
 
@@ -58,6 +61,7 @@ void Server::Disconnect() noexcept {
 			if (kv.first != m_self_uuid) client_uuids.push_back(kv.first);
 		}
 	}
+	m_logger << Logger::Level::LowLevel << "Server::Disconnect: disconnecting " << client_uuids.size() << " clients" << std::endl;
 	for (const auto& uuid : client_uuids) {
 		DisconnectClient(uuid);
 	}
@@ -127,12 +131,12 @@ void Server::AcceptClients() noexcept {
 					m_in_pipeline_pmap.emplace(client_uuid, in_pipeline);
 					m_out_pipeline_pmap.emplace(client_uuid, out_pipeline);
 				}
+				m_logger << Logger::Level::LowLevel << "AcceptClients: accepted client uuid=" << server_socket->UUID() << std::endl;
 				break;
 			}
 
 			case Connection::Read::Result::Timeout:
 				// No incoming connection within timeout; continue waiting
-				m_logger << Logger::Level::LowLevel << "Accept wait timed out, continuing" << std::endl;
 				std::this_thread::yield();
 				continue;
 			case Connection::Read::Result::Closed:
@@ -164,26 +168,37 @@ void Server::HandleClientCommunication(const std::string& client_uuid) noexcept 
 
 		switch(expected_wait.value()) {
 			case Connection::Read::Result::Success: {
-				if (client->HasShutdownRequest()) {
-					m_logger << Logger::Level::LowLevel << "Client has requested shutdown, disconnecting..." << std::endl;
+				m_logger << Logger::Level::LowLevel << "HandleClientCommunication: data ready for client=" << client_uuid << ", calling Receive" << std::endl;
+				// Always try to receive/process first to ensure we reply even if peer plans to close
+				auto expected_packet = Receive(client_uuid); // Uses codec to transform data to a packet
+				if (!expected_packet) {
+					// Check if this is a normal connection closure (peer disconnected) vs a real error
+					std::string error_msg = expected_packet.error()->what();
+					if (error_msg.find("Insufficient data to read") != std::string::npos ||
+					    error_msg.find("Connection closed") != std::string::npos) {
+						m_logger << Logger::Level::LowLevel << "HandleClientCommunication: client " << client_uuid << " disconnected" << std::endl;
+					} else {
+						m_logger << Logger::Level::Error << expected_packet.error()->what() << std::endl;
+					}
 					goto end;
 					break;
 				}
-				else {
-					auto expected_packet = Receive(client_uuid); // Uses codec to transform data to a packet
-					if (!expected_packet) {
-						m_logger << Logger::Level::Error << expected_packet.error()->what() << std::endl;
-						goto end;
-						break;
-					}
+				m_logger << Logger::Level::LowLevel << "HandleClientCommunication: received packet opcode=" << expected_packet.value()->Opcode() << " from client=" << client_uuid << std::endl;
 
-					auto expected_processed_packet = ProcessClientPacket(client_uuid, *expected_packet.value());
-					if (!expected_processed_packet) {
-						m_logger << Logger::Level::Error << expected_processed_packet.error()->what() << std::endl;
-						goto end;
-						break;
-					}
+				auto expected_processed_packet = ProcessClientPacket(client_uuid, *expected_packet.value());
+				if (!expected_processed_packet) {
+					m_logger << Logger::Level::Error << expected_processed_packet.error()->what() << std::endl;
+					goto end;
+					break;
 				}
+				m_logger << Logger::Level::LowLevel << "HandleClientCommunication: processed packet successfully for client=" << client_uuid << std::endl;
+
+				// After processing, honour shutdown if requested
+				if (client->HasShutdownRequest()) {
+					m_logger << Logger::Level::LowLevel << "Client has requested shutdown, disconnecting..." << std::endl;
+					goto end;
+				}
+				break; // Must break here to avoid falling through!
 			}
 
 			case Connection::Read::Result::Timeout:
@@ -206,14 +221,16 @@ StormByte::Buffer::Pipeline Server::CreateClientOutputPipeline(const std::string
 }
 
 void Server::DisconnectClient(const std::string& client_uuid) noexcept {
+	auto self = GetSocketByUUID(m_self_uuid);
 	std::lock_guard<std::mutex> lock(m_clients_mutex);
 	// Do not use GetSocketByUUID here to avoid double locking
 	auto it = m_client_pmap.find(client_uuid);
 	if (it != m_client_pmap.end()) {
-		it->second->Disconnect();
+		std::static_pointer_cast<Socket::Server>(self)->DisconnectClient(client_uuid);
 		m_client_pmap.erase(it);
 		m_in_pipeline_pmap.erase(client_uuid);
 		m_out_pipeline_pmap.erase(client_uuid);
+		m_logger << Logger::Level::LowLevel << "Disconnected client uuid=" << client_uuid << std::endl;
 	}
 }
 

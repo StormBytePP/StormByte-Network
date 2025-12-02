@@ -70,6 +70,10 @@ namespace StormByte::Network {
 
 		protected:
 			/**
+			 * @brief Access the server logger for diagnostics in derived classes.
+			 */
+			inline Logger::ThreadedLog& Log() noexcept { return m_logger; }
+			/**
 			 * @brief The function to process a client packet and returns a reply.
 			 * 
 			 * This function is called when a client sends a packet to the server
