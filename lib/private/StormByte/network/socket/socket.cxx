@@ -75,6 +75,7 @@ void Socket::Disconnect() noexcept {
 	close(*m_handle);
 	#else
 	shutdown(*m_handle, SD_BOTH);
+	StormByte::System::Sleep(std::chrono::milliseconds(100)); // Allow time for TCP FIN to be sent
 	closesocket(*m_handle);
 	#endif
 	m_handle = nullptr;

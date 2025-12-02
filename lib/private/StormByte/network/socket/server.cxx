@@ -1,5 +1,6 @@
 #include <StormByte/network/connection/handler.hxx>
 #include <StormByte/network/socket/server.hxx>
+#include <StormByte/system.hxx>
 
 #ifdef LINUX
 #include <netinet/in.h>
@@ -110,6 +111,9 @@ ExpectedClient Socket::Server::Accept() noexcept {
 		return StormByte::Unexpected<ConnectionError>("Failed to accept client connection.");
 	}
 
+	// Store the raw accepted handle so the Server may forcefully disconnect it later
+	m_active_clients.push_back(client_handle);
+
 	Client client_socket(m_protocol, m_logger);
 	client_socket.m_handle = std::make_unique<Connection::HandlerType>(client_handle);
 	client_socket.InitializeAfterConnect();
@@ -117,3 +121,37 @@ ExpectedClient Socket::Server::Accept() noexcept {
 	return client_socket;
 }
 
+void Socket::Server::Disconnect() noexcept {
+	if (!Connection::IsConnected(m_status))
+		return;
+
+	m_status = Connection::Status::Disconnecting;
+	// Forcefully shutdown/close any active accepted client sockets
+	for (auto& client_handle : m_active_clients) {
+		if (client_handle == -1) continue;
+		#ifdef WINDOWS
+		shutdown(client_handle, SD_BOTH);
+		StormByte::System::Sleep(std::chrono::milliseconds(100)); // Allow time for TCP FIN to be sent
+		closesocket(client_handle);
+		#else
+		::shutdown(client_handle, SHUT_RDWR);
+		StormByte::System::Sleep(std::chrono::milliseconds(100)); // Allow time for TCP FIN to be sent
+		::close(client_handle);
+		#endif
+	}
+	m_active_clients.clear();
+
+	#ifdef LINUX
+	shutdown(*m_handle, SHUT_RDWR);
+	StormByte::System::Sleep(std::chrono::milliseconds(100)); // Allow time for TCP FIN to be sent
+	close(*m_handle);
+	#else
+	shutdown(*m_handle, SD_BOTH);
+	StormByte::System::Sleep(std::chrono::milliseconds(100)); // Allow time for TCP FIN to be sent
+	closesocket(*m_handle);
+	#endif
+	m_handle = nullptr;
+
+	m_status = Connection::Status::Disconnected;
+	m_logger << Logger::Level::LowLevel << "Disconnected socket " << m_UUID << std::endl;
+}
