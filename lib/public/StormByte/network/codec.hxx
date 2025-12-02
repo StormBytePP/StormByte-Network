@@ -3,7 +3,7 @@
 #include <StormByte/buffer/pipeline.hxx>
 #include <StormByte/clonable.hxx>
 #include <StormByte/logger/threaded_log.hxx>
-#include <StormByte/network/object.hxx>
+
 #include <StormByte/network/packet.hxx>
 
 #include <list>
@@ -119,20 +119,6 @@ namespace StormByte::Network {
 			ExpectedPacket										Encode(const Buffer::Consumer& consumer, std::shared_ptr<Buffer::Pipeline> pipeline) const noexcept;
 
 			/**
-			 * @brief Decode a `Packet` into a domain `Object`.
-			 *
-			 * Translate the protocol-level `Packet` into a typed object the
-			 * application can operate on. Implementations should return a
-			 * `std::shared_ptr<Object>` pointing to a concrete subclass.
-			 *
-			 * @param packet The packet to decode.
-			 * @return Shared pointer to decoded `Object` (or nullptr on failure).
-			 */
-			inline ExpectedObject 								Decode(const Packet& packet) const noexcept {
-				return DoDecode(packet);
-			}
-
-			/**
 			 * @brief Turn a `Packet` into raw bytes applying output pipeline.
 			 *
 			 * This helper applies any configured `m_out_pipeline` stages and
@@ -174,22 +160,5 @@ namespace StormByte::Network {
 			 *         or `nullptr` on parse/error.
 			 */
 			virtual ExpectedPacket								DoEncode(const unsigned short& opcode, const std::size_t& size, const Buffer::Consumer& consumer) const noexcept = 0;
-
-			/**
-			 * @brief Construct a domain `Object` from a decoded `Packet`.
-			 *
-			 * Translate a protocol-level `Packet` into an application-level
-			 * `Object`. Implementations should examine the packet contents and
-			 * return a `std::shared_ptr<Object>` pointing to a concrete derived
-			 * type. Return `nullptr` to indicate an error or an unknown/unsupported
-			 * packet.
-			 *
-			 * This function is `noexcept` by API contract; do not throw from
-			 * implementations.
-			 *
-			 * @param packet Decoded packet to convert.
-			 * @return `std::shared_ptr<Object>` to the created object, or `nullptr`.
-			 */
-			virtual ExpectedObject								DoDecode(const Packet& packet) const noexcept = 0;
 	};
 }

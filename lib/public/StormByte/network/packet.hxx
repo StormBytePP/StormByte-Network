@@ -58,7 +58,7 @@ namespace StormByte::Network {
 			 * type; a concrete definition exists in the implementation file to
 			 * ensure proper destruction of derived objects.
 			 */
-			virtual ~Packet() noexcept									= 0;
+			virtual ~Packet() noexcept									= default;
 
 			/**
 			 * @brief Copy assignment operator.
@@ -96,9 +96,7 @@ namespace StormByte::Network {
 			 *
 			 * @return A `Buffer::FIFO` containing the serialized packet.
 			 */
-			inline Buffer::FIFO											Serialize() const noexcept {
-				return DoSerialize();
-			}
+			Buffer::FIFO												Serialize() const noexcept;
 
 		protected:
 			const unsigned short m_opcode;								///< The opcode of the packet.
@@ -117,14 +115,10 @@ namespace StormByte::Network {
 			 * @brief Protected serialization hook.
 			 *
 			 * Derived classes override this to produce the on-the-wire byte
-			 * representation. The base implementation serializes the packet's
-			 * opcode and returns a buffer containing only that opcode; derived
-			 * implementations should typically call `Packet::DoSerialize()` to
-			 * obtain the opcode buffer and then append their payload before
-			 * returning the combined buffer.
+			 * representation. Do not include opcode here
 			 *
 			 * @return A `Buffer::FIFO` with the serialized packet bytes.
 			 */
-			virtual Buffer::FIFO										DoSerialize() const noexcept;
+			virtual Buffer::FIFO										DoSerialize() const noexcept = 0;
 	};
 }

@@ -75,13 +75,17 @@ namespace StormByte::Network {
 			 * @brief The function to receive data from the server.
 			 * @return The expected buffer or error.
 			 */
-			ExpectedPacket													Receive() noexcept;
+			inline ExpectedPacket											Receive() noexcept {
+				return EndPoint::Receive(m_self_uuid);
+			}
 
 			/**
 			 * @brief The function to send data to the server.
 			 * @param packet The packet to send.
 			 * @return The expected void or error.
 			 */
-			ExpectedVoid													Send(const Packet& packet) noexcept;
+			inline ExpectedVoid												Send(const Packet& packet) noexcept {
+				return EndPoint::Send(m_self_uuid, packet);
+			}
 	};
 }

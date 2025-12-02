@@ -15,7 +15,9 @@
 using namespace StormByte::Network;
 
 Socket::Server::Server(const Protocol& protocol, Logger::ThreadedLog logger) noexcept:
-Socket(protocol, logger) {}
+Socket(protocol, logger) {
+	m_logger << Logger::Level::LowLevel << "Created server socket with UUID: " << m_UUID << std::endl;
+}
 
 ExpectedVoid Socket::Server::Listen(const std::string& hostname, const unsigned short& port) noexcept {
 	if (Connection::IsConnected(m_status))
@@ -27,6 +29,7 @@ ExpectedVoid Socket::Server::Listen(const std::string& hostname, const unsigned 
 	if (!expected_socket)
 		return StormByte::Unexpected(expected_socket.error());
 
+	EnsureIsClosed();
 	m_handle = std::make_unique<Connection::HandlerType>(expected_socket.value());
 
 	// Set SO_REUSEADDR to allow reuse of the address

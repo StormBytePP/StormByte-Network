@@ -39,11 +39,3 @@ void Client::Disconnect() noexcept {
 	EndPoint::Disconnect();
 	m_logger << Logger::Level::LowLevel << "Client disconnected successfully." << std::endl;
 }
-
-ExpectedPacket Client::Receive() noexcept {
-	return EndPoint::Receive(m_self_uuid);
-}
-
-ExpectedVoid Client::Send(const Packet& packet) noexcept {
-	return EndPoint::Send(m_self_uuid, packet);
-}

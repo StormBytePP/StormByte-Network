@@ -22,7 +22,6 @@
  * @brief The namespace containing all the network related classes.
  */
 namespace StormByte::Network {																		///< The connection info class (forward declaration).
-	class Object;																					///< The object class (forward declaration).
 	class Packet;																					///< The packet class (forward declaration).
 	namespace Socket {
 		class Socket;																				///< The socket class (forward declaration).
@@ -42,7 +41,6 @@ namespace StormByte::Network {																		///< The connection info class (
 	using SharedConsumerBuffer = std::shared_ptr<Buffer::Consumer>;									///< The shared consumer buffer type.
 	using SharedProducerBuffer = std::shared_ptr<Buffer::Producer>;									///< The shared producer buffer type.
 	using ExpectedPacket = StormByte::Expected<std::shared_ptr<Packet>, PacketError>;				///< The expected packet type.
-	using ExpectedObject = StormByte::Expected<std::shared_ptr<Object>, PacketError>;				///< The expected object type.
 	using PacketReaderFunction = std::function<ExpectedBuffer(const size_t&)>;						///< The packet reader function type.
 	using ExpectedConsumer = StormByte::Expected<Buffer::Consumer, Exception>;						///< The expected consumer type.
 	using SocketUUIDPMap = std::unordered_map<std::string, std::shared_ptr<Socket::Socket>>;        ///< The client map type (owns sockets).

@@ -95,6 +95,16 @@ namespace StormByte::Network {
 			 */
 			virtual Buffer::Pipeline												CreateClientOutputPipeline(const std::string& client_uuid) noexcept;
 
+			/**
+			 * @brief Sends a packet to a client identified by UUID.
+			 * @param client_uuid The UUID of the client to send the packet to.
+			 * @param packet The packet to send.
+			 * @return The expected result of the operation.
+			 */
+			inline ExpectedVoid 													Send(const std::string& client_uuid, const Packet& packet) noexcept {
+				return EndPoint::Send(client_uuid, packet);
+			}
+
 		private:
 			std::thread m_accept_thread;											///< The thread for accepting clients.
 			std::mutex m_clients_mutex;												///< The mutex to protect clients vector.

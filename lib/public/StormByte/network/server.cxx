@@ -67,7 +67,7 @@ void Server::Disconnect() noexcept {
 			if (kv.first != m_self_uuid) clients_snapshot.push_back(kv.second);
 		}
 	}
-	for (auto& s : clients_snapshot) if (s) s->Disconnect();
+	for (auto& s : clients_snapshot) if (s && s->UUID() != m_self_uuid) s->Disconnect();
 
 	// Ensure all client threads are joined and cleared
 	{
@@ -197,6 +197,14 @@ void Server::HandleClientCommunication(const std::string& client_uuid) noexcept 
 		m_out_pipeline_pmap.erase(client_uuid);
 	}
 	m_logger << Logger::Level::LowLevel << "Stopping handle client messages thread" << std::endl;
+}
+
+StormByte::Buffer::Pipeline Server::CreateClientInputPipeline(const std::string& client_uuid) noexcept {
+	return Buffer::Pipeline();
+}
+
+StormByte::Buffer::Pipeline Server::CreateClientOutputPipeline(const std::string& client_uuid) noexcept {
+	return Buffer::Pipeline();
 }
 
 std::shared_ptr<Socket::Socket> Server::GetSocketByUUID(const std::string& uuid) noexcept {

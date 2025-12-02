@@ -56,13 +56,13 @@ ExpectedConsumer Codec::Process(const Packet& packet, std::shared_ptr<Buffer::Pi
 	// Write opcode to final producer
 	final_producer.Write(opcode_bytes);
 
-	// Get packet data
-	auto packet_data_expected = packet_buffer.Extract();
-	if (!packet_data_expected) {
-		return StormByte::Unexpected<PacketError>("Codec::Process: failed to extract packet data from packet serialization ({})", packet_data_expected.error()->what());
-	}
+	// Get packet data (may be empty)
 	std::vector<std::byte> packet_data;
-	{
+	if (packet_buffer.Size() > 0) {
+		auto packet_data_expected = packet_buffer.Extract();
+		if (!packet_data_expected) {
+			return StormByte::Unexpected<PacketError>("Codec::Process: failed to extract packet data from packet serialization ({})", packet_data_expected.error()->what());
+		}
 		Buffer::Producer packet_data_producer;
 		packet_data_producer.Write(*packet_data_expected);
 		Buffer::Consumer processed_packet_data = pipeline->Process(packet_data_producer.Consumer(), Buffer::ExecutionMode::Async, m_log);

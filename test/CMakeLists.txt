@@ -5,4 +5,9 @@ if(ENABLE_TEST AND NOT STORMBYTE_AS_DEPENDENCY)
 	# add_executable(SocketMultiTest socket_multi_test.cxx)
 	# target_link_libraries(SocketMultiTest StormByte::Network)
 	# add_test(NAME SocketMultiTest COMMAND SocketMultiTest)
+
+	# Client/Server interaction test
+	add_executable(ClientServerTest client_server_test.cxx)
+	target_link_libraries(ClientServerTest StormByte::Network)
+	add_test(NAME ClientServerTest COMMAND ClientServerTest)
 endif()

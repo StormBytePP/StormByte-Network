@@ -27,7 +27,9 @@ using namespace StormByte::Logger;
 using namespace StormByte::Network;
 
 Socket::Client::Client(const Protocol& protocol, Logger::ThreadedLog logger) noexcept
-:Socket(protocol, logger) {}
+:Socket(protocol, logger) {
+	m_logger << Logger::Level::LowLevel << "Created client socket with UUID: " << m_UUID << std::endl;
+}
 
 ExpectedVoid Socket::Client::Connect(const std::string& hostname, const unsigned short& port) noexcept {
 	m_logger << Logger::Level::LowLevel << "Connecting to " << hostname << ":" << port << std::endl;
@@ -45,6 +47,7 @@ ExpectedVoid Socket::Client::Connect(const std::string& hostname, const unsigned
 		return StormByte::Unexpected(expected_socket.error());
 	}
 
+	EnsureIsClosed();
 	m_handle = std::make_unique<Connection::HandlerType>(expected_socket.value());
 
 	auto expected_conn_info = Connection::Info::FromHost(hostname, port, m_protocol);

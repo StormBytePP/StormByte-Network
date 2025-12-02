@@ -161,7 +161,7 @@ namespace StormByte::Network::Socket {
 			 * platform-dependent socket calls and returns an `Expected` to avoid
 			 * exceptions in the networking layer.
 			 */
-			Expected<Connection::HandlerType, ConnectionError> CreateSocket() noexcept;
+			Expected<Connection::HandlerType, ConnectionError> 	CreateSocket() noexcept;
 
 			/**
 			 * @brief Perform initialization that requires a connected socket.
@@ -170,7 +170,15 @@ namespace StormByte::Network::Socket {
 			 * (effective buffer sizes, MTU, etc.) and to apply runtime socket
 			 * options. This method is noexcept.
 			 */
-			void InitializeAfterConnect() noexcept;
+			void 												InitializeAfterConnect() noexcept;
+
+			/**
+			 * @brief Ensures the socket is closed.
+			 *
+			 * Internal helper to close and release the underlying socket
+			 * handle. This enabled handle to be closed as late as possible
+			 */
+			void 												EnsureIsClosed() noexcept;
 
 		private:
 			constexpr static const unsigned short DEFAULT_MTU = 1500;

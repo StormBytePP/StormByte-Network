@@ -1,5 +1,6 @@
 #include <StormByte/network/connection/handler.hxx>
 #include <StormByte/network/socket/socket.hxx>
+#include <StormByte/system.hxx>
 #include <StormByte/uuid.hxx>
 
 #ifdef LINUX
@@ -31,9 +32,7 @@ using namespace StormByte::Network::Socket;
 Socket::Socket(const Protocol& protocol, Logger::ThreadedLog logger) noexcept:
 m_protocol(protocol), m_status(Connection::Status::Disconnected),
 m_handle(nullptr), m_conn_info(nullptr), m_mtu(DEFAULT_MTU), m_logger(logger),
-m_UUID(StormByte::GenerateUUIDv4()) {
-	m_logger << Logger::Level::LowLevel << "Created socket with UUID: " << m_UUID << std::endl;
-}
+m_UUID(StormByte::GenerateUUIDv4()) {}
 
 Socket::Socket(Socket&& other) noexcept:
 m_protocol(other.m_protocol), m_status(other.m_status),
@@ -44,6 +43,7 @@ m_mtu(other.m_mtu), m_logger(other.m_logger), m_UUID(std::move(other.m_UUID)) {
 
 Socket::~Socket() noexcept {
 	Disconnect();
+	EnsureIsClosed();
 }
 
 Socket& Socket::operator=(Socket&& other) noexcept {
@@ -61,22 +61,23 @@ Socket& Socket::operator=(Socket&& other) noexcept {
 }
 
 void Socket::Disconnect() noexcept {
-	if (m_status == Connection::Status::Disconnected)
+	if (!Connection::IsConnected(m_status))
 		return;
 
 	m_status = Connection::Status::Disconnecting;
+	// Do a shutdown but do not close to give time for TCP FIN to be sent and processed
 	#ifdef LINUX
 	shutdown(*m_handle, SHUT_RDWR);
+	StormByte::System::Sleep(std::chrono::milliseconds(100)); // Allow time for TCP FIN to be sent
 	close(*m_handle);
 	#else
 	shutdown(*m_handle, SD_BOTH);
 	closesocket(*m_handle);
 	#endif
-	m_handle.reset();
 	m_handle = nullptr;
 
 	m_status = Connection::Status::Disconnected;
-	m_logger << Logger::Level::LowLevel << "Disconnected socket" << std::endl;
+	m_logger << Logger::Level::LowLevel << "Disconnected socket " << m_UUID << std::endl;
 }
 
 StormByte::Network::ExpectedReadResult Socket::WaitForData(const long long& usecs) noexcept {
@@ -428,4 +429,16 @@ void Socket::SetNonBlocking() noexcept {
 	int flags = fcntl(*m_handle, F_GETFL, 0);
 	fcntl(*m_handle, F_SETFL, flags | O_NONBLOCK);
 	#endif
+}
+
+void Socket::EnsureIsClosed() noexcept {
+	if (!m_handle)
+		return;
+
+	#ifdef LINUX
+	close(*m_handle);
+	#else
+	closesocket(*m_handle);
+	#endif
+	m_handle = nullptr;
 }
