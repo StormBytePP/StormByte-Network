@@ -110,9 +110,6 @@ ExpectedClient Socket::Server::Accept() noexcept {
 		return StormByte::Unexpected<ConnectionError>("Failed to accept client connection.");
 	}
 
-	// Store the raw accepted handle so the Server may forcefully disconnect it later
-	m_active_clients.push_back(client_handle);
-
 	Client client_socket(m_protocol, m_logger);
 	client_socket.m_handle = std::make_unique<Connection::HandlerType>(client_handle);
 	client_socket.InitializeAfterConnect();
@@ -120,20 +117,3 @@ ExpectedClient Socket::Server::Accept() noexcept {
 	return client_socket;
 }
 
-void Socket::Server::Disconnect() noexcept {
-	// Forcefully shutdown/close any active accepted client sockets
-	for (auto& client_handle : m_active_clients) {
-		if (client_handle == -1) continue;
-		#ifdef WINDOWS
-		shutdown(client_handle, SD_BOTH);
-		closesocket(client_handle);
-		#else
-		::shutdown(client_handle, SHUT_RDWR);
-		::close(client_handle);
-		#endif
-	}
-	m_active_clients.clear();
-
-	// Then perform regular Socket disconnect (listening socket)
-	Socket::Disconnect();
-}

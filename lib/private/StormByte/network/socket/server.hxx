@@ -63,13 +63,5 @@ namespace StormByte::Network::Socket {
 			 * @return The expected result of the operation.
 			 */
 			ExpectedClient													Accept() noexcept;
-
-			/**
-			 * @brief Disconnect the server and any active clients.
-			 */
-			void Disconnect() noexcept override;
-
-		private:
-			std::vector<Connection::HandlerType> m_active_clients; 		///< Active accepted client handles
 	};
 }
