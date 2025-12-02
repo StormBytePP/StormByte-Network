@@ -91,19 +91,19 @@ namespace StormByte::Network {
 			PipelineUUIDPMap m_out_pipeline_pmap;								///< Map of out pipelines associated with clients.
 
 			/**
-			 * @brief Receives a packet from the specified socket.
-			 * @param socket The socket to receive the packet from.
-			 * @return A shared pointer to the received packet (nullptr if error).
+			 * @brief Receives a packet from a client identified by UUID.
+			 * @param client_uuid The UUID of the client to receive the packet from.
+			 * @return An expected packet or error.
 			 */
-			ExpectedPacket														Receive(Socket::Client& socket) noexcept;
+			ExpectedPacket														Receive(const std::string& client_uuid) noexcept;
 
 			/**
-			 * @brief Sends a packet through the specified socket.
-			 * @param socket The socket to send the packet through.
+			 * @brief Sends a packet to a client identified by UUID.
+			 * @param client_uuid The UUID of the client to send the packet to.
 			 * @param packet The packet to send.
 			 * @return An expected void or error.
 			 */
-			ExpectedVoid 														Send(Socket::Client& socket, const Packet& packet) noexcept;
+			ExpectedVoid 														Send(const std::string& client_uuid, const Packet& packet) noexcept;
 
 			/**
 			 * @brief Retrieves a socket by its UUID.

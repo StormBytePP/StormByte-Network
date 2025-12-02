@@ -29,10 +29,10 @@ Connection::Status EndPoint::Status() const noexcept {
 	return m_status.load();
 }
 
-ExpectedPacket EndPoint::Receive(Socket::Client& socket) noexcept {
+ExpectedPacket EndPoint::Receive(const std::string& client_uuid) noexcept {
 	// Create the socket reader function to encapsulate sockets away from final user
-	Buffer::ExternalReadFunction read_func = [&socket, this](const std::size_t& size) noexcept -> Buffer::ExpectedData<Buffer::ReadError> {
-		auto expected_data = socket.Receive(size, m_timeout);
+	Buffer::ExternalReadFunction read_func = [client_uuid, this](const std::size_t& size) noexcept -> Buffer::ExpectedData<Buffer::ReadError> {
+		auto expected_data = static_cast<Socket::Client*>(GetSocketByUUID(client_uuid))->Receive(size, m_timeout);
 		if (!expected_data) {
 			return StormByte::Unexpected<Buffer::ReadError>(expected_data.error()->what());
 		}
@@ -51,16 +51,16 @@ ExpectedPacket EndPoint::Receive(Socket::Client& socket) noexcept {
 	Buffer::Producer producer(forwarder);
 
 	// Delegate packet creation to codec
-	return m_codec->Encode(producer.Consumer(), *GetInPipelineByUUID(socket.UUID()));
+	return m_codec->Encode(producer.Consumer(), *GetInPipelineByUUID(client_uuid));
 }
 
-ExpectedVoid EndPoint::Send(Socket::Client& socket, const Packet& packet) noexcept {
-	auto processed_data = m_codec->Process(packet, *GetInPipelineByUUID(socket.UUID()));
+ExpectedVoid EndPoint::Send(const std::string& client_uuid, const Packet& packet) noexcept {
+	auto processed_data = m_codec->Process(packet, *GetInPipelineByUUID(client_uuid));
 	if (!processed_data) {
 		Disconnect();
 		return StormByte::Unexpected<ConnectionError>(processed_data.error()->what());
 	}
-	return socket.Send(processed_data->ExtractUntilEoF());
+	return static_cast<Socket::Client*>(GetSocketByUUID(client_uuid))->Send(processed_data->ExtractUntilEoF());
 }
 
 Socket::Socket* EndPoint::GetSocketByUUID(const std::string& uuid) noexcept {
