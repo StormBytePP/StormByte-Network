@@ -33,7 +33,7 @@ ExpectedPacket Codec::Encode(const Buffer::Consumer& consumer) const noexcept {
 
 	// If opcode is not in skip list we process it through pipeline otherwise we use as is
 	if (std::find(m_opcodes_skip_pipeline.begin(), m_opcodes_skip_pipeline.end(), opcode) == m_opcodes_skip_pipeline.end())
-		return DoEncode(opcode, size, m_in_pipeline.Process(consumer, Buffer::ExecutionMode::Sync, m_log));
+		return DoEncode(opcode, size, m_in_pipeline.Process(consumer, Buffer::ExecutionMode::Async, m_log));
 	else
 		return DoEncode(opcode, size, consumer);
 }
@@ -79,7 +79,7 @@ StormByte::Buffer::Consumer Codec::Process(const Packet& packet) const noexcept 
 		packet_data_for_pipeline.Write(packet_data);
 		packet_data_for_pipeline.Close();
 		// Process packet data through out pipeline
-		auto processed_data = m_out_pipeline.Process(packet_data_for_pipeline.Consumer(), Buffer::ExecutionMode::Sync, m_log);
+		auto processed_data = m_out_pipeline.Process(packet_data_for_pipeline.Consumer(), Buffer::ExecutionMode::Async, m_log);
 		// Overwrite packet_data with processed data
 		Buffer::FIFO packet_processed_data = processed_data.ReadUntilEoF();
 		auto packet_processed_data_expected = packet_processed_data.Extract();
