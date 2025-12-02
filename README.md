@@ -29,213 +29,354 @@ StormByte is a comprehensive, cross-platform C++ library aimed at easing system 
 
 #### Overview
 
-The `Network` module of StormByte provides an intuitive API to manage networking tasks. It includes classes and methods for working with sockets and asynchronous data handling.
+The **StormByte Network** module provides a robust, cross-platform C++ library for building client-server applications. It abstracts away platform-specific socket handling (Linux and Windows) and provides a high-level, type-safe packet-based communication system. The library uses modern C++ features including `Expected` types for error handling, move semantics, and RAII for resource management.
 
 #### Features
-- **Socket Abstraction**: Unified interface for handling TCP/IP sockets.
-- **Error Handling**: Provides detailed error messages for network operations.
-- **Cross-Platform**: Works seamlessly on both Linux and Windows.
-- **Data Transmission**: Supports partial and large data transmission.
-- **Timeouts and Disconnections**: Handles timeout scenarios and detects client/server disconnections.
+
+- **Cross-platform socket abstraction**: Works seamlessly on both Linux and Windows
+- **Type-safe packet communication**: Define custom packet types with automatic serialization
+- **Codec system**: Extensible encoding/decoding framework for wire protocols
+- **Asynchronous event handling**: Non-blocking I/O with configurable timeouts
+- **Connection management**: Automatic client tracking and lifecycle management for servers
+- **Pipeline support**: Optional preprocessing/postprocessing (compression, encryption)
+- **Thread-safe logging**: Integrated with StormByte Logger for diagnostics
+- **UUID-based client identification**: Each connection is uniquely identified
+- **MTU discovery**: Automatic path MTU detection for optimal packet sizing
+- **Error handling**: Uses `Expected<T, E>` pattern to avoid exceptions in performance-critical paths
+
+#### Architecture
+
+The library is built around three main base classes that you extend to implement your application logic:
+
+1. **`Packet`** - Base class for all network messages. Each packet has an opcode (message type identifier) and serializes its data.
+2. **`Codec`** - Handles encoding/decoding between raw bytes and `Packet` objects. This is where you define your wire protocol.
+3. **`Server` / `Client`** - High-level connection endpoints. Override `ProcessClientPacket()` in Server or use `Send()`/`Receive()` in Client to handle communication.
 
 #### Examples
 
-##### Creating custom Packets
-In order to ease the client/server communication, user can create their own Packets to be sent/received from client to server (and viceversa). In order to do so, users need to inherit from `StormByte::Network::Packet` class and focus only on 2 methods:
+##### Basic Packet Definition
 
-* Constructors:
-	* A no parameter constructor to be able to empty initialize it
-	* The second constructor can take whatever argument is needed and must initialize the derived instance
-* Override `Serialize` and `Deserialize` function members to be able to construct and output the Packet.
-
-This way, instead of sending raw messages over network you send/receive Packets instances, for example, a Packet which represents
-a std::string could be implemented as follows:
+First, define your packet types by inheriting from `Network::Packet`:
 
 ```cpp
 #include <StormByte/network/packet.hxx>
 
-enum class OpCodes: unsigned short {
-	TestMessage = 1,
-};
+namespace MyApp {
+    // Define opcodes for your protocol
+    enum class Opcode : unsigned short {
+        REQUEST_NAME_LIST,
+        RESPONSE_NAME_LIST,
+        REQUEST_DATA,
+        RESPONSE_DATA
+    };
 
-class TestMessagePacket: public StormByte::Network::Packet {
-	public:
-		TestMessagePacket() noexcept:
-		Packet(static_cast<unsigned short>(OpCodes::TestMessage)) {}
+    // Base packet class with opcode
+    class BasePacket : public StormByte::Network::Packet {
+    public:
+        BasePacket(Opcode opcode) 
+            : Network::Packet(static_cast<unsigned short>(opcode)) {}
+    };
 
-		TestMessagePacket(const std::string& msg) noexcept:
-		Packet(static_cast<unsigned short>(OpCodes::TestMessage)), m_msg(msg) {}
+    // Request packet - asks server for a list of names
+    class RequestNameList : public BasePacket {
+    public:
+        RequestNameList(std::size_t count) 
+            : BasePacket(Opcode::REQUEST_NAME_LIST)
+            , m_count(count) {}
+        
+        // Serialize packet data to bytes
+        Buffer::FIFO DoSerialize() const noexcept override {
+            return StormByte::Serializable<std::size_t>(m_count).Serialize();
+        }
 
-		~TestMessagePacket() noexcept override = default;
+    private:
+        std::size_t m_count;
+    };
 
-		const std::string& Message() const noexcept {
-			return m_msg;
-		}
+    // Response packet - returns list of names from server
+    class ResponseNameList : public BasePacket {
+    public:
+        ResponseNameList(const std::vector<std::string>& names)
+            : BasePacket(Opcode::RESPONSE_NAME_LIST)
+            , m_names(names) {}
+        
+        Buffer::FIFO DoSerialize() const noexcept override {
+            return StormByte::Serializable<std::vector<std::string>>(m_names).Serialize();
+        }
+        
+        const std::vector<std::string>& GetNames() const { return m_names; }
 
-	private:
-		std::string m_msg;
-
-		Expected<void, Network::PacketError> Deserialize(StormByte::Network::PacketReaderFunction reader) noexcept override {
-			// Opcode is already read in the constructor
-
-			// Read the size of the message
-			Buffer::Simple buffer;
-			auto expected_size_buffer = reader(sizeof(std::size_t));
-			if (!expected_size_buffer) {
-				return StormByte::Unexpected<Network::PacketError>("Failed to read message size");
-			}
-			auto expected_size_serial = Serializable<std::size_t>::Deserialize(expected_size_buffer.value());
-			if (!expected_size_serial) {
-				return StormByte::Unexpected<Network::PacketError>("Failed to deserialize message size");
-			}
-			buffer << expected_size_serial.value();
-			auto str_buffer = reader(expected_size_serial.value());
-			if (!str_buffer) {
-				return StormByte::Unexpected<Network::PacketError>("Failed to read message");
-			}
-			buffer << str_buffer.value();
-			auto string_serial = Serializable<std::string>::Deserialize(buffer);
-			if (!string_serial) {
-				return StormByte::Unexpected<Network::PacketError>("Failed to deserialize message");
-			}
-			m_msg = string_serial.value();
-
-			return {};
-		}
-
-		Buffer::Consumer Serialize() const noexcept override {
-			Buffer::Producer buffer(Packet::Serialize());
-			Serializable<std::string> string_serial(m_msg);
-			buffer << string_serial.Serialize();
-			buffer << Buffer::Status::ReadOnly;
-			return buffer.Consumer();
-		}
-};
+    private:
+        std::vector<std::string> m_names;
+    };
+}
 ```
 
-##### Creating a Custom Server
+**Why inherit from `Packet`?** The `Packet` base class provides the fundamental wire protocol structure. By overriding `DoSerialize()`, you define how your packet's data is converted to bytes for network transmission. The framework handles framing, buffering, and transport automatically.
 
-The `Server` class can be extended to define custom behavior for handling client messages. Below is an example of a simple echo server:
+##### Implementing a Codec
+
+The `Codec` class is responsible for decoding received bytes into your packet types:
+
+```cpp
+#include <StormByte/network/codec.hxx>
+
+namespace MyApp {
+    class MyCodec : public StormByte::Network::Codec {
+    public:
+        MyCodec(const Logger::ThreadedLog& log) noexcept 
+            : Network::Codec(log) {}
+        
+        // Required: Create a copy of this codec
+        PointerType Clone() const override {
+            return MakePointer<MyCodec>(*this);
+        }
+        
+        // Required: Move this codec
+        PointerType Move() override {
+            return MakePointer<MyCodec>(std::move(*this));
+        }
+        
+        // Decode raw bytes into a Packet object
+        Network::ExpectedPacket DoEncode(
+            const unsigned short& opcode,
+            const std::size_t& size,
+            const StormByte::Buffer::Consumer& consumer
+        ) const noexcept override {
+            switch (static_cast<Opcode>(opcode)) {
+                case Opcode::REQUEST_NAME_LIST: {
+                    // Read 'size' bytes from the consumer
+                    auto data = consumer.Read(size);
+                    if (!data) {
+                        return StormByte::Unexpected<Network::PacketError>(
+                            "Failed to read packet data");
+                    }
+                    
+                    // Deserialize the count
+                    auto count = StormByte::Serializable<std::size_t>::Deserialize(
+                        data.value());
+                    if (!count) {
+                        return StormByte::Unexpected<Network::PacketError>(
+                            "Failed to deserialize count");
+                    }
+                    
+                    return std::make_shared<RequestNameList>(*count);
+                }
+                
+                case Opcode::RESPONSE_NAME_LIST: {
+                    auto data = consumer.Read(size);
+                    if (!data) {
+                        return StormByte::Unexpected<Network::PacketError>(
+                            "Failed to read packet data");
+                    }
+                    
+                    auto names = StormByte::Serializable<std::vector<std::string>>::
+                        Deserialize(data.value());
+                    if (!names) {
+                        return StormByte::Unexpected<Network::PacketError>(
+                            "Failed to deserialize names");
+                    }
+                    
+                    return std::make_shared<ResponseNameList>(*names);
+                }
+                
+                default:
+                    return StormByte::Unexpected<Network::PacketError>(
+                        "Unknown opcode");
+            }
+        }
+    };
+}
+```
+
+**Why inherit from `Codec`?** The `Codec` acts as a factory that converts raw network bytes into strongly-typed `Packet` objects. This separation allows you to define your wire protocol (how opcodes map to packet types, how data is framed) independently from the transport layer. The framework handles reading the correct number of bytes and calls your `DoEncode()` method to construct the appropriate packet type.
+
+##### Implementing a Server
+
+The `Server` class processes incoming client packets:
 
 ```cpp
 #include <StormByte/network/server.hxx>
 
-class TestServer : public StormByte::Network::Server {
-	public:
-		TestServer(StormByte::Network::Connection::Protocol protocol, std::shared_ptr<StormByte::Network::Connection::Handler> handler, std::shared_ptr<Logger> logger) noexcept
-		: StormByte::Network::Server(protocol, handler, logger) {}
-
-	private:
-		StormByte::Expected<void, StormByte::Network::PacketError> ProcessClientPacket(
-			StormByte::Network::Socket::Client& client,
-			const StormByte::Network::Packet& packet) noexcept override {
-			// Echo the received message back to the client
-			auto expected_send = Send(client, packet);
-			if (!expected_send) {
-				return StormByte::Unexpected<StormByte::Network::PacketError>(expected_send.error()->what());
-			}
-			return {};
-		}
-};
+namespace MyApp {
+    class MyServer : public StormByte::Network::Server {
+    public:
+        MyServer(
+            const Network::Protocol& protocol,
+            unsigned short timeout,
+            const Logger::ThreadedLog& logger
+        ) noexcept 
+            : Network::Server(protocol, MyCodec(logger), timeout, logger) {}
+        
+    private:
+        // Override this to handle incoming packets from clients
+        Expected<void, Network::PacketError> ProcessClientPacket(
+            const std::string& client_uuid,
+            const Network::Packet& packet
+        ) noexcept override {
+            switch (static_cast<Opcode>(packet.Opcode())) {
+                case Opcode::REQUEST_NAME_LIST: {
+                    // Cast to the specific packet type
+                    auto& request = static_cast<const RequestNameList&>(packet);
+                    
+                    // Extract the count from the packet
+                    auto serialized = request.DoSerialize();
+                    auto extracted = serialized.Extract();
+                    if (!extracted) {
+                        return StormByte::Unexpected<Network::PacketError>(
+                            "Failed to extract request data");
+                    }
+                    
+                    auto count = StormByte::Serializable<std::size_t>::
+                        Deserialize(extracted.value());
+                    if (!count) {
+                        return StormByte::Unexpected<Network::PacketError>(
+                            "Failed to deserialize count");
+                    }
+                    
+                    // Generate the requested names
+                    std::vector<std::string> names;
+                    for (std::size_t i = 0; i < *count; ++i) {
+                        names.push_back("Name_" + std::to_string(i + 1));
+                    }
+                    
+                    // Send response back to the client
+                    ResponseNameList response(names);
+                    auto result = Send(client_uuid, response);
+                    if (!result) {
+                        return StormByte::Unexpected<Network::PacketError>(
+                            "Failed to send response");
+                    }
+                    break;
+                }
+                
+                default:
+                    return StormByte::Unexpected<Network::PacketError>(
+                        "Unknown packet type");
+            }
+            return {};
+        }
+    };
+}
 ```
 
-##### Creating a Custom Client
-The Client class can be extended to define custom behavior for sending and receiving messages. Below is an example of a client that sends a test message to the server:
+**Why inherit from `Server`?** The `Server` base class handles all the complex socket management: listening for connections, accepting clients, managing multiple concurrent connections, and dispatching received packets. By overriding `ProcessClientPacket()`, you implement your application's business logic while the framework handles all network I/O, buffering, and client lifecycle management. Each client is identified by a UUID, allowing you to maintain per-client state and send targeted responses.
+
+##### Implementing a Client
+
+The `Client` class sends requests and receives responses:
 
 ```cpp
 #include <StormByte/network/client.hxx>
 
-class TestClient: public StormByte::Network::Client {
-	public:
-		TestClient(const StormByte::Network::Connection::Protocol& protocol, std::shared_ptr<StormByte::Network::Connection::Handler> handler, std::shared_ptr<Logger> logger) noexcept
-		:Client(protocol, handler, logger) {}
-
-		Network::ExpectedVoid SendTestMessage(const std::string& message) {
-			TestMessagePacket packet(message);
-			return Send(packet);
-		}
-
-		StormByte::Expected<std::string, StormByte::Network::PacketError> ReceiveTestMessage() {
-			auto expected_packet = Receive();
-			if (!expected_packet) {
-				return StormByte::Unexpected(expected_packet.error());
-			}
-			auto test_message_packet = std::dynamic_pointer_cast<TestMessagePacket>(expected_packet.value());
-			if (!test_message_packet) {
-				return StormByte::Unexpected<StormByte::Network::PacketError>("Failed to cast packet");
-			}
-			return test_message_packet->Message();
-		}
-};
-```
-
-##### Usage Example
-Providing the previous class definitions, a simple Client/Server communication where the server just echoes the same packet back to the client can be implemented as follows:
-
-```cpp
-#include <iostream>
-#include <thread>
-
-int main() {
-	bool server_ready = false;
-	bool server_completed = false;
-	bool client_completed = false;
-
-	// Start server thread
-	std::thread server_thread([&]() -> int {
-		TestServer server(Network::Connection::Protocol::IPv4, handler, logger);
-		if (!server.Connect(host, port).has_value())
-			return 1;
-
-		server_ready = true;
-
-		// Wait for the server to process clients
-		std::this_thread::sleep_for(std::chrono::seconds(5));
-
-		server.Disconnect();
-		server_completed = true;
-		return 0;
-	});
-
-	// Wait until the server is ready
-	while (!server_ready) {
-		std::this_thread::sleep_for(std::chrono::milliseconds(100));
-	}
-
-	// Start client thread
-	std::thread client_thread([&]() -> int {
-		TestClient client(Network::Connection::Protocol::IPv4, handler, logger);
-		if (!client.Connect(host, port).has_value())
-			return 1;
-
-		// Send a test message
-		const std::string test_message = "Hello, Server!";
-		auto expected_send = client.SendTestMessage(test_message);
-		if (!expected_send) {
-			std::cerr << "Send packet failed: " << expected_send.error()->what() << std::endl;
-			return 1;
-		}
-
-		auto expected_receive = client.ReceiveTestMessage();
-		if (!expected_receive) {
-			std::cerr << "Receive packet failed: " << expected_receive.error()->what() << std::endl;
-			return 1;
-		}
-
-		if (test_message == expected_receive.value())
-			std::cout << "Message sent and echoed back successfully!" << std::endl;
-		else
-			std::err << "Received message do not match to sent message!" << std::endl;
-
-		client.Disconnect();
-		client_completed = true;
-		return 0;
-	});
-
-	// Join threads
-	server_thread.join();
-	client_thread.join();
-
-	return 0;
+namespace MyApp {
+    class MyClient : public StormByte::Network::Client {
+    public:
+        MyClient(
+            const Network::Protocol& protocol,
+            unsigned short timeout,
+            const Logger::ThreadedLog& logger
+        ) noexcept 
+            : Network::Client(protocol, MyCodec(logger), timeout, logger) {}
+        
+        // Custom method to request names from server
+        Expected<std::vector<std::string>, Network::Exception> 
+        RequestNames(std::size_t count) noexcept {
+            // Create and send request
+            RequestNameList request(count);
+            auto send_result = Send(request);
+            if (!send_result) {
+                return StormByte::Unexpected<Network::Exception>(
+                    "Failed to send request");
+            }
+            
+            // Wait for response
+            auto receive_result = Receive();
+            if (!receive_result) {
+                return StormByte::Unexpected<Network::Exception>(
+                    "Failed to receive response");
+            }
+            
+            // Verify it's the right packet type
+            auto& packet = receive_result.value();
+            if (packet->Opcode() != static_cast<unsigned short>(Opcode::RESPONSE_NAME_LIST)) {
+                return StormByte::Unexpected<Network::Exception>(
+                    "Unexpected response opcode");
+            }
+            
+            // Cast and extract data
+            auto response = std::static_pointer_cast<ResponseNameList>(packet);
+            return response->GetNames();
+        }
+    };
 }
 ```
+
+**Why inherit from `Client`?** The `Client` base class provides connection management and synchronous/asynchronous communication primitives. By inheriting from it, you gain access to `Send()` and `Receive()` methods that handle all the low-level details of packet framing, buffering, and network I/O. You add domain-specific methods (like `RequestNames()`) that compose these primitives into meaningful application-level operations, keeping your business logic clean and testable.
+
+##### Putting It All Together
+
+```cpp
+#include <StormByte/logger/threaded_log.hxx>
+#include <iostream>
+
+int main() {
+    // Create a logger
+    Logger::ThreadedLog logger(std::cout, Logger::Level::Info, "[%L] %T:");
+    
+    // Create and start server
+    MyApp::MyServer server(Network::Protocol::IPv4, 5, logger);
+    auto listen_result = server.Connect("127.0.0.1", 8080);
+    if (!listen_result) {
+        std::cerr << "Server failed to start: " 
+                  << listen_result.error()->what() << std::endl;
+        return 1;
+    }
+    
+    // Create and connect client
+    MyApp::MyClient client(Network::Protocol::IPv4, 5, logger);
+    auto connect_result = client.Connect("127.0.0.1", 8080);
+    if (!connect_result) {
+        std::cerr << "Client failed to connect: " 
+                  << connect_result.error()->what() << std::endl;
+        return 1;
+    }
+    
+    // Request 5 names from server
+    auto names_result = client.RequestNames(5);
+    if (!names_result) {
+        std::cerr << "Request failed: " 
+                  << names_result.error()->what() << std::endl;
+        return 1;
+    }
+    
+    // Print received names
+    for (const auto& name : names_result.value()) {
+        std::cout << "Received: " << name << std::endl;
+    }
+    
+    // Cleanup
+    client.Disconnect();
+    server.Disconnect();
+    
+    return 0;
+}
+```
+
+#### Key Concepts
+
+- **Packet**: Represents a single message with an opcode and payload. Override `DoSerialize()` to define how your data becomes bytes.
+  
+- **Codec**: Translates between raw bytes and Packet objects. Override `DoEncode()` to define your wire protocol and create the appropriate Packet instances based on opcode.
+
+- **Server**: Listens for connections and processes client packets. Override `ProcessClientPacket()` to implement your server-side logic and use `Send(client_uuid, packet)` to respond to specific clients.
+
+- **Client**: Connects to a server and exchanges packets. Use `Send(packet)` to send requests and `Receive()` to get responses synchronously.
+
+## Contributing
+
+Contributions are welcome! Please fork the repository and submit pull requests for any enhancements or bug fixes.
+
+## License
+
+This project is licensed under GPL v3 License - see the [LICENSE](LICENSE) file for details.
