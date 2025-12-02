@@ -66,11 +66,11 @@ namespace StormByte::Network {
 			/**
 			 * @brief The function to disconnect the client.
 			 */
-			using EndPoint::Disconnect;
+			void															Disconnect() noexcept override;
 
 		protected:
 			Buffer::Pipeline m_in_pipeline, m_out_pipeline;					///< Input and output pipelines for processing data.
-			
+
 			/**
 			 * @brief The function to receive data from the server.
 			 * @return The expected buffer or error.

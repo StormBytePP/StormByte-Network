@@ -30,8 +30,14 @@ ExpectedVoid Client::Connect(const std::string& hostname, const unsigned short& 
 		m_status = Connection::Status::Disconnected;
 		return StormByte::Unexpected(expected_connect.error());
 	}
+	m_logger << Logger::Level::LowLevel << "Client connected successfully." << std::endl;
 	m_status = Connection::Status::Connected;
 	return {};
+}
+
+void Client::Disconnect() noexcept {
+	EndPoint::Disconnect();
+	m_logger << Logger::Level::LowLevel << "Client disconnected successfully." << std::endl;
 }
 
 ExpectedPacket Client::Receive() noexcept {
