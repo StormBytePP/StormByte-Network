@@ -111,6 +111,14 @@ namespace StormByte::Network::Socket {
 			inline const Connection::HandlerType& Handle() const noexcept { return *m_handle; }
 
 			/**
+			 * @brief Access the UUID associated with the socket.
+			 *
+			 * Returns a constant reference to the UUID string assigned to this
+			 * socket instance.
+			 */
+			inline const std::string& UUID() const noexcept { return m_UUID; }
+
+			/**
 			 * @brief Poll the socket for incoming data.
 			 *
 			 * Waits up to `usecs` microseconds for data to become available and
@@ -166,6 +174,7 @@ namespace StormByte::Network::Socket {
 
 		private:
 			constexpr static const unsigned short DEFAULT_MTU = 1500;
+			std::string m_UUID;									///< UUID associated with the socket
 
 			/**
 			 * @brief Query the path MTU for the connected peer.

@@ -66,16 +66,26 @@ namespace StormByte::Network::Socket {
 
 			/**
 			 * @brief The function to receive data from the socket.
-			 * @return The expected result of the operation.
-			 */
-			ExpectedBuffer													Receive() noexcept;
-
-			/**
-			 * @brief The function to receive data from the socket.
 			 * @param size The size of the data to receive.
 			 * @return The expected result of the operation.
 			 */
-			ExpectedBuffer 													Receive(const std::size_t& size) noexcept;
+			/**
+			 * @brief Receive data (blocking) — kept for compatibility.
+			 *
+			 * This overload is a convenience wrapper that forwards to the
+			 * timeout-enabled variant with `timeout_seconds == 0` (disable
+			 * timeout, wait forever).
+			 */
+			ExpectedBuffer 													Receive(const std::size_t& size = 0) noexcept;
+
+			/**
+			 * @brief Receive data with a timeout.
+			 *
+			 * @param size Maximum number of bytes to receive (0 = unlimited).
+			 * @param timeout_seconds Timeout in seconds (0 = wait forever).
+			 * @return ExpectedBuffer with the received data or an error on timeout/failure.
+			 */
+			ExpectedBuffer 													Receive(const std::size_t& size, const unsigned short& timeout_seconds) noexcept;
 
 			/**
 			 * @brief Function to send data to the socket using a FIFO buffer.

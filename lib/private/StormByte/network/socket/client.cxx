@@ -249,11 +249,11 @@ bool Socket::Client::HasShutdownRequest() noexcept {
 	return false;
 }
 
-ExpectedBuffer Socket::Client::Receive() noexcept {
-	return Receive(0);
+ExpectedBuffer Socket::Client::Receive(const std::size_t& max_size) noexcept {
+	return Receive(max_size, 0);
 }
 
-ExpectedBuffer Socket::Client::Receive(const std::size_t& max_size) noexcept {
+ExpectedBuffer Socket::Client::Receive(const std::size_t& max_size, const unsigned short& timeout_seconds) noexcept {
 	m_logger << Logger::Level::LowLevel << "Starting to read data with max_size: " << humanreadable_bytes << max_size << nohumanreadable << std::endl;
 
 	if (!m_handle) {
@@ -262,6 +262,8 @@ ExpectedBuffer Socket::Client::Receive(const std::size_t& max_size) noexcept {
 
 	Buffer::FIFO buffer;
 	std::size_t total_bytes_read = 0;
+
+	const auto start_time = std::chrono::steady_clock::now();
 
 	while (true) {
 		// Determine read buffer size based on effective recv buffer, fallback to BUFFER_SIZE
@@ -276,9 +278,9 @@ ExpectedBuffer Socket::Client::Receive(const std::size_t& max_size) noexcept {
 		// Use a heap buffer so we don't stack-allocate very large arrays
 		std::vector<char> internal_buffer(bytes_to_read);
 #ifdef LINUX
-	const ssize_t valread = recv(*m_handle, internal_buffer.data(), bytes_to_read, 0);
+		const ssize_t valread = recv(*m_handle, internal_buffer.data(), bytes_to_read, 0);
 #else
-	const int valread = recv(*m_handle, internal_buffer.data(), bytes_to_read, 0);
+		const int valread = recv(*m_handle, internal_buffer.data(), bytes_to_read, 0);
 #endif
 
 		if (valread > 0) {
@@ -296,12 +298,28 @@ ExpectedBuffer Socket::Client::Receive(const std::size_t& max_size) noexcept {
 #ifdef WINDOWS
 			if (Connection::Handler::Instance().LastErrorCode() == WSAEWOULDBLOCK) {
 				// On Windows, fall through to a short wait using select via WaitForData
+				// Check timeout before waiting
+				if (timeout_seconds > 0) {
+					auto now = std::chrono::steady_clock::now();
+					if (std::chrono::duration_cast<std::chrono::seconds>(now - start_time).count() >= timeout_seconds) {
+						m_logger << Logger::Level::LowLevel << "Receive timed out after " << timeout_seconds << " seconds" << std::endl;
+						return StormByte::Unexpected<ConnectionError>("Receive timed out");
+					}
+				}
 				auto wait_res = WaitForData(100000); // 100ms
 				if (!wait_res) {
 					// Treat as connection closed/error
 					break;
 				}
 				if (wait_res.value() == Connection::Read::Result::Timeout) {
+					// If timeout_seconds is enabled and we've reached it, return error
+					if (timeout_seconds > 0) {
+						auto now = std::chrono::steady_clock::now();
+						if (std::chrono::duration_cast<std::chrono::seconds>(now - start_time).count() >= timeout_seconds) {
+							m_logger << Logger::Level::LowLevel << "Receive timed out after " << timeout_seconds << " seconds" << std::endl;
+							return StormByte::Unexpected<ConnectionError>("Receive timed out");
+						}
+					}
 					if (max_size == 0 && total_bytes_read > 0) {
 						break;
 					}
@@ -310,12 +328,28 @@ ExpectedBuffer Socket::Client::Receive(const std::size_t& max_size) noexcept {
 #else
 			if (Connection::Handler::Instance().LastErrorCode() == EAGAIN || Connection::Handler::Instance().LastErrorCode() == EWOULDBLOCK) {
 				// Socket would block: wait efficiently for data instead of busy-looping and logging repeatedly
+				// Check timeout before waiting
+				if (timeout_seconds > 0) {
+					auto now = std::chrono::steady_clock::now();
+					if (std::chrono::duration_cast<std::chrono::seconds>(now - start_time).count() >= timeout_seconds) {
+						m_logger << Logger::Level::LowLevel << "Receive timed out after " << timeout_seconds << " seconds" << std::endl;
+						return StormByte::Unexpected<ConnectionError>("Receive timed out");
+					}
+				}
 				auto wait_res = WaitForData(100000); // 100ms
 				if (!wait_res) {
 					// Connection closed or error
 					break;
 				}
 				if (wait_res.value() == Connection::Read::Result::Timeout) {
+					// If timeout_seconds is enabled and we've reached it, return error
+					if (timeout_seconds > 0) {
+						auto now = std::chrono::steady_clock::now();
+						if (std::chrono::duration_cast<std::chrono::seconds>(now - start_time).count() >= timeout_seconds) {
+							m_logger << Logger::Level::LowLevel << "Receive timed out after " << timeout_seconds << " seconds" << std::endl;
+							return StormByte::Unexpected<ConnectionError>("Receive timed out");
+						}
+					}
 					if (max_size == 0 && total_bytes_read > 0) {
 						break;
 					}

@@ -1,5 +1,6 @@
 #include <StormByte/network/connection/handler.hxx>
 #include <StormByte/network/socket/socket.hxx>
+#include <StormByte/uuid.hxx>
 
 #ifdef LINUX
 #include <netinet/in.h>
@@ -29,12 +30,15 @@ using namespace StormByte::Network::Socket;
 
 Socket::Socket(const Protocol& protocol, Logger::ThreadedLog logger) noexcept:
 m_protocol(protocol), m_status(Connection::Status::Disconnected),
-m_handle(nullptr), m_conn_info(nullptr), m_mtu(DEFAULT_MTU), m_logger(logger) {}
+m_handle(nullptr), m_conn_info(nullptr), m_mtu(DEFAULT_MTU), m_logger(logger),
+m_UUID(StormByte::GenerateUUIDv4()) {
+	m_logger << Logger::Level::LowLevel << "Created socket with UUID: " << m_UUID << std::endl;
+}
 
 Socket::Socket(Socket&& other) noexcept:
 m_protocol(other.m_protocol), m_status(other.m_status),
 m_handle(std::move(other.m_handle)), m_conn_info(std::move(other.m_conn_info)),
-m_mtu(other.m_mtu), m_logger(other.m_logger) {
+m_mtu(other.m_mtu), m_logger(other.m_logger), m_UUID(std::move(other.m_UUID)) {
 	other.m_status = Connection::Status::Disconnected;
 }
 
@@ -50,6 +54,7 @@ Socket& Socket::operator=(Socket&& other) noexcept {
 		m_conn_info = std::move(other.m_conn_info);
 		m_mtu = other.m_mtu;
 		m_logger = std::move(other.m_logger);
+		m_UUID = std::move(other.m_UUID);
 		other.m_status = Connection::Status::Disconnected;
 	}
 	return *this;

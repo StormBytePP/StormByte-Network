@@ -187,9 +187,89 @@ int TestSocketMulti() {
     RETURN_TEST(fn_name, failures.load() ? 1 : 0);
 }
 
+int TestReceiveTimeout() {
+    const std::string fn_name = "TestReceiveTimeout";
+    const std::string send_data(1024, 'T'); // 1 KiB payload
+
+    Socket::Server server(Protocol::IPv4, logger);
+    auto listen_res = server.Listen(HOST, PORT);
+    ASSERT_TRUE(fn_name, listen_res.has_value());
+
+    // Server accept + handler thread
+    std::thread server_thread([&]() -> int {
+        auto expected_client = server.Accept();
+        ASSERT_TRUE(fn_name, expected_client.has_value());
+
+        Socket::Client client_socket = std::move(expected_client.value());
+
+        // Read exact payload
+        auto recv_res = client_socket.Receive(send_data.size());
+        ASSERT_TRUE(fn_name, recv_res.has_value());
+
+        Buffer::FIFO buffer = std::move(recv_res.value());
+        auto expected_data = buffer.Extract();
+        ASSERT_TRUE(fn_name, expected_data.has_value());
+
+        // Echo back
+        auto &vec = expected_data.value();
+        auto span = std::span<const std::byte>(reinterpret_cast<const std::byte*>(vec.data()), vec.size());
+        auto send_res = client_socket.Send(span);
+        ASSERT_TRUE(fn_name, send_res.has_value());
+
+        // Attempt to receive more bytes with 1 second timeout -> expect timeout (no data)
+        auto extra = client_socket.Receive(10, 1);
+        ASSERT_FALSE(fn_name, extra.has_value());
+
+        client_socket.Disconnect();
+        return 0;
+    });
+
+    // Small delay to ensure server is listening
+    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+
+    // Client side
+    Socket::Client client(Protocol::IPv4, logger);
+    auto connect_res = client.Connect(HOST, PORT);
+    ASSERT_TRUE(fn_name, connect_res.has_value());
+
+    // Send payload
+    auto span = std::span<const std::byte>(reinterpret_cast<const std::byte*>(send_data.data()), send_data.size());
+    auto send_res = client.Send(span);
+    ASSERT_TRUE(fn_name, send_res.has_value());
+
+    // Receive echoed payload
+    std::string received;
+    received.reserve(send_data.size());
+    while (received.size() < send_data.size()) {
+        auto recv_buf_res = client.Receive(send_data.size() - received.size());
+        ASSERT_TRUE(fn_name, recv_buf_res.has_value());
+
+        Buffer::FIFO buffer = std::move(recv_buf_res.value());
+        auto expected_data = buffer.Extract();
+        ASSERT_TRUE(fn_name, expected_data.has_value());
+
+        auto vec = expected_data.value();
+        received.append(reinterpret_cast<const char*>(vec.data()), vec.size());
+    }
+
+    ASSERT_TRUE(fn_name, received == send_data);
+
+    // Now attempt an extra receive with 1 second timeout - expect timeout (no more data)
+    auto extra_recv = client.Receive(10, 1);
+    ASSERT_FALSE(fn_name, extra_recv.has_value());
+
+    client.Disconnect();
+
+    if (server_thread.joinable()) server_thread.join();
+
+    RETURN_TEST(fn_name, 0);
+}
+
 int main() {
     int result = 0;
     result += TestSocketMulti();
+    result += TestReceiveTimeout();
+
     if (result == 0) {
         std::cout << "All tests passed!" << std::endl;
     } else {
