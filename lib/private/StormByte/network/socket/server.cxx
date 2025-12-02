@@ -30,8 +30,7 @@ ExpectedVoid Socket::Server::Listen(const std::string& hostname, const unsigned 
 	if (!expected_socket)
 		return StormByte::Unexpected(expected_socket.error());
 
-	EnsureIsClosed();
-	m_handle = std::make_unique<Connection::HandlerType>(expected_socket.value());
+	m_handle = expected_socket.value();
 
 	// Set address reuse/exclusive options
 	int opt = 1;
@@ -39,18 +38,18 @@ ExpectedVoid Socket::Server::Listen(const std::string& hostname, const unsigned 
 	// On Windows, prefer SO_EXCLUSIVEADDRUSE to avoid TIME_WAIT binding issues
 	{
 		BOOL exclusive = TRUE;
-		if (setsockopt(*m_handle, SOL_SOCKET, SO_EXCLUSIVEADDRUSE, reinterpret_cast<const char*>(&exclusive), sizeof(exclusive)) == SOCKET_ERROR) {
+		if (setsockopt(m_handle, SOL_SOCKET, SO_EXCLUSIVEADDRUSE, reinterpret_cast<const char*>(&exclusive), sizeof(exclusive)) == SOCKET_ERROR) {
 			m_status = Connection::Status::Disconnected;
-			m_handle.reset();
+			m_handle = -1;
 			return StormByte::Unexpected<ConnectionError>("Failed to set SO_EXCLUSIVEADDRUSE: {} (error code: {})",
 													Connection::Handler::Instance().LastError(),
 													Connection::Handler::Instance().LastErrorCode());
 		}
 	}
 #else
-	if (setsockopt(*m_handle, SOL_SOCKET, SO_REUSEADDR, reinterpret_cast<const char*>(&opt), sizeof(opt)) < 0) {
+	if (setsockopt(m_handle, SOL_SOCKET, SO_REUSEADDR, reinterpret_cast<const char*>(&opt), sizeof(opt)) < 0) {
 		m_status = Connection::Status::Disconnected;
-		m_handle.reset();
+		m_handle = -1;
 		return StormByte::Unexpected<ConnectionError>("Failed to set socket options: {} (error code: {})",
 													Connection::Handler::Instance().LastError(),
 													Connection::Handler::Instance().LastErrorCode());
@@ -63,20 +62,20 @@ ExpectedVoid Socket::Server::Listen(const std::string& hostname, const unsigned 
 
 	m_conn_info = std::make_unique<Connection::Info>(std::move(expected_connection_info.value()));
 
-	auto bind_result = ::bind(*m_handle, m_conn_info->SockAddr().get(), sizeof(*m_conn_info->SockAddr()));
+	auto bind_result = ::bind(m_handle, m_conn_info->SockAddr().get(), sizeof(*m_conn_info->SockAddr()));
 	if (bind_result == -1) {
 		m_status = Connection::Status::Disconnected;
-		m_handle.reset();
+		m_handle = -1;
 		return StormByte::Unexpected<ConnectionError>("Failed to bind socket: {} (error code: {})",
 													Connection::Handler::Instance().LastError(),
 													Connection::Handler::Instance().LastErrorCode()
 		);
 	}
 
-	auto listen_result = ::listen(*m_handle, SOMAXCONN);
+	auto listen_result = ::listen(m_handle, SOMAXCONN);
 	if (listen_result == -1) {
 		m_status = Connection::Status::Disconnected;
-		m_handle.reset();
+		m_handle = -1;
 		return StormByte::Unexpected<ConnectionError>("Failed to listen on socket: {} (error code: {})",
 													Connection::Handler::Instance().LastError(),
 													Connection::Handler::Instance().LastErrorCode()
@@ -96,47 +95,34 @@ ExpectedClient Socket::Server::Accept() noexcept {
 
 	fd_set read_fds;
 	FD_ZERO(&read_fds);
-	FD_SET(*m_handle, &read_fds);
+	FD_SET(m_handle, &read_fds);
 
 	struct timeval timeout = {0, 200000}; // 200ms timeout
-	int select_result = select(*m_handle + 1, &read_fds, nullptr, nullptr, &timeout);
+	int select_result = select(m_handle + 1, &read_fds, nullptr, nullptr, &timeout);
 	if (select_result == 0) {
 		return StormByte::Unexpected<ConnectionError>("Timeout occurred while waiting to accept connection.");
 	} else if (select_result < 0) {
 		return StormByte::Unexpected<ConnectionError>("Error during select.");
 	}
 
-	Connection::HandlerType client_handle = ::accept(*m_handle, nullptr, nullptr);
+	Connection::HandlerType client_handle = ::accept(m_handle, nullptr, nullptr);
 	if (client_handle == -1) {
 		return StormByte::Unexpected<ConnectionError>("Failed to accept client connection.");
 	}
 
-	// Store the raw accepted handle so the Server may forcefully disconnect it later
-	auto shared_handle = std::make_shared<Connection::HandlerType>(client_handle);
-	m_active_clients.push_back(shared_handle);
-
 	Client client_socket(m_protocol, m_logger);
-	client_socket.m_handle = shared_handle;
+	client_socket.m_handle = client_handle;
 	client_socket.InitializeAfterConnect();
 
-	return client_socket;
+	m_active_clients.push_back(std::make_shared<Client>(std::move(client_socket)));
+	return m_active_clients.back();
 }
 
 void Socket::Server::Disconnect() noexcept {
 	// Forcefully shutdown/close any active accepted client sockets
-	for (auto& client_handle : m_active_clients) {
-		if (client_handle || *client_handle > 0) continue;
-		#ifdef WINDOWS
-		shutdown(*client_handle, SD_BOTH);
-		StormByte::System::Sleep(std::chrono::milliseconds(100)); // Allow time for TCP FIN to be sent
-		closesocket(*client_handle);
-		*client_handle = INVALID_SOCKET;
-		#else
-		::shutdown(*client_handle, SHUT_RDWR);
-		StormByte::System::Sleep(std::chrono::milliseconds(100)); // Allow time for TCP FIN to be sent
-		::close(*client_handle);
-		*client_handle = -1;
-		#endif
+	for (auto& client : m_active_clients) {
+		if (!client) continue;
+		client->Disconnect();
 	}
 	m_active_clients.clear();
 

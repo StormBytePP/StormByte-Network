@@ -70,6 +70,6 @@ namespace StormByte::Network::Socket {
 			void Disconnect() noexcept override;
 
 		private:
-			std::vector<std::shared_ptr<Connection::HandlerType>> m_active_clients; 			///< Active accepted client handles
+			std::vector<std::shared_ptr<Client>> m_active_clients;			///< Active accepted client handles
 	};
 }

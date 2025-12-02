@@ -47,27 +47,20 @@ void Server::Disconnect() noexcept {
 		
 	m_status.store(Connection::Status::Disconnecting);
 
-	// Disconnect our listening socket so pending operations fail. Snapshot under lock
-	std::shared_ptr<Socket::Socket> listen_sock;
-	{
-		std::lock_guard<std::mutex> lock(m_clients_mutex);
-		auto it = m_client_pmap.find(m_self_uuid);
-		if (it != m_client_pmap.end()) listen_sock = it->second;
-	}
-	if (listen_sock) listen_sock->Disconnect();
-
 	// Stop accepting new clients first
 	if (m_accept_thread.joinable()) m_accept_thread.join();
 
-	// Snapshot current clients under lock and disconnect them outside the lock
-	std::vector<std::shared_ptr<Socket::Socket>> clients_snapshot;
+	// Snapshot UUID list and disconnect clients outside lock
+	std::vector<std::string> client_uuids;
 	{
 		std::lock_guard<std::mutex> lock(m_clients_mutex);
-		for (auto& kv : m_client_pmap) {
-			if (kv.first != m_self_uuid) clients_snapshot.push_back(kv.second);
+		for (const auto& kv : m_client_pmap) {
+			if (kv.first != m_self_uuid) client_uuids.push_back(kv.first);
 		}
 	}
-	for (auto& s : clients_snapshot) if (s && s->UUID() != m_self_uuid) s->Disconnect();
+	for (const auto& uuid : client_uuids) {
+		DisconnectClient(uuid);
+	}
 
 	// Ensure all client threads are joined and cleared
 	{
@@ -78,7 +71,14 @@ void Server::Disconnect() noexcept {
 		m_handle_msg_threads.clear();
 	}
 
-	// Remove all clients (under lock)
+	// Disconnect our listening socket
+	{
+		std::lock_guard<std::mutex> lock(m_clients_mutex);
+		auto it = m_client_pmap.find(m_self_uuid);
+		if (it != m_client_pmap.end()) it->second->Disconnect();
+	}
+
+	// Not needed but remove all entries
 	{
 		std::lock_guard<std::mutex> lock(m_clients_mutex);
 		m_client_pmap.clear();
@@ -114,15 +114,15 @@ void Server::AcceptClients() noexcept {
 				}
 
 				{
-					const std::string client_uuid = expected_client->UUID();
+					const std::string client_uuid = expected_client.value()->UUID();
 
 					// Create client and pipelines outside the clients mutex to avoid long holds
-					auto client_shared = std::make_shared<Socket::Client>(std::move(expected_client.value()));
+					auto client_shared = std::move(*expected_client);
 					auto in_pipeline = std::make_shared<Buffer::Pipeline>(CreateClientInputPipeline(client_uuid));
 					auto out_pipeline = std::make_shared<Buffer::Pipeline>(CreateClientOutputPipeline(client_uuid));
 
 					std::lock_guard<std::mutex> lock(m_clients_mutex);
-					m_client_pmap.emplace(client_uuid, std::static_pointer_cast<Socket::Socket>(client_shared));
+					m_client_pmap.emplace(client_uuid, client_shared);
 					m_handle_msg_threads.insert({client_uuid, std::thread(&Server::HandleClientCommunication, this, client_uuid)});
 					m_in_pipeline_pmap.emplace(client_uuid, in_pipeline);
 					m_out_pipeline_pmap.emplace(client_uuid, out_pipeline);
@@ -133,6 +133,7 @@ void Server::AcceptClients() noexcept {
 			case Connection::Read::Result::Timeout:
 				// No incoming connection within timeout; continue waiting
 				m_logger << Logger::Level::LowLevel << "Accept wait timed out, continuing" << std::endl;
+				std::this_thread::yield();
 				continue;
 			case Connection::Read::Result::Closed:
 				// Listening socket was closed or became invalid — stop accepting
@@ -165,21 +166,21 @@ void Server::HandleClientCommunication(const std::string& client_uuid) noexcept 
 			case Connection::Read::Result::Success: {
 				if (client->HasShutdownRequest()) {
 					m_logger << Logger::Level::LowLevel << "Client has requested shutdown, disconnecting..." << std::endl;
-					client->Disconnect();
+					goto end;
 					break;
 				}
 				else {
 					auto expected_packet = Receive(client_uuid); // Uses codec to transform data to a packet
 					if (!expected_packet) {
 						m_logger << Logger::Level::Error << expected_packet.error()->what() << std::endl;
-						client->Disconnect();
+						goto end;
 						break;
 					}
 
 					auto expected_processed_packet = ProcessClientPacket(client_uuid, *expected_packet.value());
 					if (!expected_processed_packet) {
 						m_logger << Logger::Level::Error << expected_processed_packet.error()->what() << std::endl;
-						client->Disconnect();
+						goto end;
 						break;
 					}
 				}
@@ -190,12 +191,9 @@ void Server::HandleClientCommunication(const std::string& client_uuid) noexcept 
 				continue;
 		}
 	}
-	{
-		std::lock_guard<std::mutex> lock(m_clients_mutex);
-		m_client_pmap.erase(client_uuid);
-		m_in_pipeline_pmap.erase(client_uuid);
-		m_out_pipeline_pmap.erase(client_uuid);
-	}
+	
+	end:
+	DisconnectClient(client_uuid);
 	m_logger << Logger::Level::LowLevel << "Stopping handle client messages thread" << std::endl;
 }
 
@@ -205,6 +203,18 @@ StormByte::Buffer::Pipeline Server::CreateClientInputPipeline(const std::string&
 
 StormByte::Buffer::Pipeline Server::CreateClientOutputPipeline(const std::string&) noexcept {
 	return Buffer::Pipeline();
+}
+
+void Server::DisconnectClient(const std::string& client_uuid) noexcept {
+	std::lock_guard<std::mutex> lock(m_clients_mutex);
+	// Do not use GetSocketByUUID here to avoid double locking
+	auto it = m_client_pmap.find(client_uuid);
+	if (it != m_client_pmap.end()) {
+		it->second->Disconnect();
+		m_client_pmap.erase(it);
+		m_in_pipeline_pmap.erase(client_uuid);
+		m_out_pipeline_pmap.erase(client_uuid);
+	}
 }
 
 std::shared_ptr<Socket::Socket> Server::GetSocketByUUID(const std::string& uuid) noexcept {

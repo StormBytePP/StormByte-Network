@@ -108,7 +108,7 @@ namespace StormByte::Network::Socket {
 			 * instance. The returned reference is valid while the `Socket` is
 			 * alive and holds the handler.
 			 */
-			inline const Connection::HandlerType& Handle() const noexcept { return *m_handle; }
+			inline const Connection::HandlerType& Handle() const noexcept { return m_handle; }
 
 			/**
 			 * @brief Access the UUID associated with the socket.
@@ -132,12 +132,12 @@ namespace StormByte::Network::Socket {
 			ExpectedReadResult WaitForData(const long long& usecs = 0) noexcept;
 
 		protected:
-			Protocol m_protocol;                             ///< Protocol family/config
-			Connection::Status m_status;                     ///< Current connection status
-			std::shared_ptr<Connection::HandlerType> m_handle; ///< Owned connection handler
-			std::unique_ptr<Connection::Info> m_conn_info;  ///< Optional connection metadata
-			unsigned long m_mtu;                            ///< Active MTU value
-			Logger::ThreadedLog m_logger;                   ///< Logger used for socket diagnostics
+			Protocol m_protocol;							///< Protocol family/config
+			Connection::Status m_status;					///< Current connection status
+			Connection::HandlerType m_handle;				///< Owned connection handler
+			std::unique_ptr<Connection::Info> m_conn_info;	///< Optional connection metadata
+			unsigned long m_mtu;							///< Active MTU value
+			Logger::ThreadedLog m_logger;					///< Logger used for socket diagnostics
 
 			// Effective socket buffer sizes as reported by the OS (bytes).
 			// Initialized to a sensible default; updated in InitializeAfterConnect().

@@ -31,7 +31,7 @@ using namespace StormByte::Network::Socket;
 
 Socket::Socket(const Protocol& protocol, Logger::ThreadedLog logger) noexcept:
 m_protocol(protocol), m_status(Connection::Status::Disconnected),
-m_handle(nullptr), m_conn_info(nullptr), m_mtu(DEFAULT_MTU), m_logger(logger),
+m_handle(-1), m_conn_info(nullptr), m_mtu(DEFAULT_MTU), m_logger(logger),
 m_UUID(StormByte::GenerateUUIDv4()) {
 	// Ensure platform networking is initialized (e.g., WSAStartup on Windows)
 	(void)StormByte::Network::Connection::Handler::Instance();
@@ -46,7 +46,6 @@ m_mtu(other.m_mtu), m_logger(other.m_logger), m_UUID(std::move(other.m_UUID)) {
 
 Socket::~Socket() noexcept {
 	Disconnect();
-	EnsureIsClosed();
 }
 
 Socket& Socket::operator=(Socket&& other) noexcept {
@@ -69,17 +68,17 @@ void Socket::Disconnect() noexcept {
 
 	m_status = Connection::Status::Disconnecting;
 
-	if (m_handle && *m_handle > 0) {
+	if (m_handle > 0) {
 		#ifdef LINUX
-		shutdown(*m_handle, SHUT_RDWR);
+		shutdown(m_handle, SHUT_RDWR);
 		StormByte::System::Sleep(std::chrono::milliseconds(100)); // Allow time for TCP FIN to be sent
-		close(*m_handle);
-		*m_handle = -1;
+		close(m_handle);
+		m_handle = -1;
 		#else
-		shutdown(*m_handle, SD_BOTH);
+		shutdown(m_handle, SD_BOTH);
 		StormByte::System::Sleep(std::chrono::milliseconds(100)); // Allow time for TCP FIN to be sent
-		closesocket(*m_handle);
-		*m_handle = INVALID_SOCKET;
+		closesocket(m_handle);
+		m_handle = INVALID_SOCKET;
 		#endif
 	}
 
@@ -140,9 +139,9 @@ StormByte::Network::ExpectedReadResult Socket::WaitForData(const long long& usec
 
 		struct epoll_event ev;
 		ev.events = EPOLLIN | EPOLLPRI;
-		ev.data.fd = *m_handle;
+		ev.data.fd = m_handle;
 
-		if (epoll_ctl(epfd, EPOLL_CTL_ADD, *m_handle, &ev) == -1) {
+		if (epoll_ctl(epfd, EPOLL_CTL_ADD, m_handle, &ev) == -1) {
 			close(epfd);
 			return StormByte::Unexpected<ConnectionClosed>("Failed to add fd to epoll");
 		}
@@ -150,7 +149,7 @@ StormByte::Network::ExpectedReadResult Socket::WaitForData(const long long& usec
 		struct epoll_event events[1];
 		int nfds = epoll_wait(epfd, events, 1, timeout_ms);
 		// Clean up epoll registration and fd
-		epoll_ctl(epfd, EPOLL_CTL_DEL, *m_handle, nullptr);
+		epoll_ctl(epfd, EPOLL_CTL_DEL, m_handle, nullptr);
 		close(epfd);
 
 		if (nfds > 0) {
@@ -184,7 +183,7 @@ StormByte::Network::ExpectedReadResult Socket::WaitForData(const long long& usec
 
 		// Request notification for read/close/accept events on the socket
 		long mask = FD_READ | FD_CLOSE | FD_ACCEPT;
-		if (WSAEventSelect(*m_handle, ev, mask) == SOCKET_ERROR) {
+		if (WSAEventSelect(m_handle, ev, mask) == SOCKET_ERROR) {
 			WSACloseEvent(ev);
 			return StormByte::Unexpected<ConnectionClosed>("WSAEventSelect failed");
 		}
@@ -192,7 +191,7 @@ StormByte::Network::ExpectedReadResult Socket::WaitForData(const long long& usec
 		DWORD wait_res = WSAWaitForMultipleEvents(1, &ev, FALSE, (timeout_ms < 0 ? WSA_INFINITE : static_cast<DWORD>(timeout_ms)), FALSE);
 
 		// Disable event notification and clean up
-		WSAEventSelect(*m_handle, NULL, 0);
+		WSAEventSelect(m_handle, NULL, 0);
 		WSACloseEvent(ev);
 
 		if (wait_res == WSA_WAIT_TIMEOUT) {
@@ -268,11 +267,11 @@ void Socket::InitializeAfterConnect() noexcept {
 	if (sys_wmem_max > send_buf) send_buf = sys_wmem_max;
 	if (sys_rmem_max > recv_buf) recv_buf = sys_rmem_max;
 
-	rc = setsockopt(*m_handle, SOL_SOCKET, SO_SNDBUF, &send_buf, sizeof(send_buf));
+	rc = setsockopt(m_handle, SOL_SOCKET, SO_SNDBUF, &send_buf, sizeof(send_buf));
 	if (rc != 0) {
 		m_logger << Logger::Level::Warning << "setsockopt(SO_SNDBUF) failed: " << Connection::Handler::Instance().LastError() << std::endl;
 	}
-	rc = setsockopt(*m_handle, SOL_SOCKET, SO_RCVBUF, &recv_buf, sizeof(recv_buf));
+	rc = setsockopt(m_handle, SOL_SOCKET, SO_RCVBUF, &recv_buf, sizeof(recv_buf));
 	if (rc != 0) {
 		m_logger << Logger::Level::Warning << "setsockopt(SO_RCVBUF) failed: " << Connection::Handler::Instance().LastError() << std::endl;
 	}
@@ -284,20 +283,20 @@ void Socket::InitializeAfterConnect() noexcept {
 	int try_send = WINDOWS_DESIRED_MAX;
 	int try_recv = WINDOWS_DESIRED_MAX;
 
-	rc = setsockopt(*m_handle, SOL_SOCKET, SO_SNDBUF, reinterpret_cast<const char*>(&try_send), sizeof(try_send));
+	rc = setsockopt(m_handle, SOL_SOCKET, SO_SNDBUF, reinterpret_cast<const char*>(&try_send), sizeof(try_send));
 	if (rc != 0) {
 		m_logger << Logger::Level::Warning << "setsockopt(SO_SNDBUF) attempt failed: " << Connection::Handler::Instance().LastError() << std::endl;
 		// Fall back to requested default
-		rc = setsockopt(*m_handle, SOL_SOCKET, SO_SNDBUF, reinterpret_cast<const char*>(&desired_buf), sizeof(desired_buf));
+		rc = setsockopt(m_handle, SOL_SOCKET, SO_SNDBUF, reinterpret_cast<const char*>(&desired_buf), sizeof(desired_buf));
 		if (rc != 0) {
 			m_logger << Logger::Level::Warning << "setsockopt(SO_SNDBUF) fallback failed: " << Connection::Handler::Instance().LastError() << std::endl;
 		}
 	}
 
-	rc = setsockopt(*m_handle, SOL_SOCKET, SO_RCVBUF, reinterpret_cast<const char*>(&try_recv), sizeof(try_recv));
+	rc = setsockopt(m_handle, SOL_SOCKET, SO_RCVBUF, reinterpret_cast<const char*>(&try_recv), sizeof(try_recv));
 	if (rc != 0) {
 		m_logger << Logger::Level::Warning << "setsockopt(SO_RCVBUF) attempt failed: " << Connection::Handler::Instance().LastError() << std::endl;
-		rc = setsockopt(*m_handle, SOL_SOCKET, SO_RCVBUF, reinterpret_cast<const char*>(&desired_buf), sizeof(desired_buf));
+		rc = setsockopt(m_handle, SOL_SOCKET, SO_RCVBUF, reinterpret_cast<const char*>(&desired_buf), sizeof(desired_buf));
 		if (rc != 0) {
 			m_logger << Logger::Level::Warning << "setsockopt(SO_RCVBUF) fallback failed: " << Connection::Handler::Instance().LastError() << std::endl;
 		}
@@ -308,12 +307,12 @@ void Socket::InitializeAfterConnect() noexcept {
 	int effective = 0;
 #ifdef WINDOWS
 	int optlen = sizeof(effective);
-	if (getsockopt(*m_handle, SOL_SOCKET, SO_SNDBUF, reinterpret_cast<char*>(&effective), &optlen) == 0) {
+	if (getsockopt(m_handle, SOL_SOCKET, SO_SNDBUF, reinterpret_cast<char*>(&effective), &optlen) == 0) {
 		m_logger << Logger::Level::LowLevel << "Effective SO_SNDBUF: " << Logger::humanreadable_bytes << effective << Logger::nohumanreadable << std::endl;
 		m_effective_send_buf = effective;
 	}
 	optlen = sizeof(effective);
-	if (getsockopt(*m_handle, SOL_SOCKET, SO_RCVBUF, reinterpret_cast<char*>(&effective), &optlen) == 0) {
+	if (getsockopt(m_handle, SOL_SOCKET, SO_RCVBUF, reinterpret_cast<char*>(&effective), &optlen) == 0) {
 		m_logger << Logger::Level::LowLevel << "Effective SO_RCVBUF: " << Logger::humanreadable_bytes << effective << Logger::nohumanreadable << std::endl;
 		m_effective_recv_buf = effective;
 
@@ -329,12 +328,12 @@ void Socket::InitializeAfterConnect() noexcept {
 	}
 #else
 	socklen_t optlen = sizeof(effective);
-	if (getsockopt(*m_handle, SOL_SOCKET, SO_SNDBUF, &effective, &optlen) == 0) {
+	if (getsockopt(m_handle, SOL_SOCKET, SO_SNDBUF, &effective, &optlen) == 0) {
 		m_logger << Logger::Level::LowLevel << "Effective SO_SNDBUF: " << Logger::humanreadable_bytes << effective << Logger::nohumanreadable << std::endl;
 		m_effective_send_buf = effective;
 	}
 	optlen = sizeof(effective);
-	if (getsockopt(*m_handle, SOL_SOCKET, SO_RCVBUF, &effective, &optlen) == 0) {
+	if (getsockopt(m_handle, SOL_SOCKET, SO_RCVBUF, &effective, &optlen) == 0) {
 		m_logger << Logger::Level::LowLevel << "Effective SO_RCVBUF: " << Logger::humanreadable_bytes << effective << Logger::nohumanreadable << std::endl;
 		m_effective_recv_buf = effective;
 	}
@@ -354,12 +353,12 @@ void Socket::InitializeAfterConnect() noexcept {
 	// Disable Nagle for lower latency on small writes
 	int flag = 1;
 #ifdef WINDOWS
-	rc = setsockopt(*m_handle, IPPROTO_TCP, TCP_NODELAY, reinterpret_cast<const char*>(&flag), sizeof(flag));
+	rc = setsockopt(m_handle, IPPROTO_TCP, TCP_NODELAY, reinterpret_cast<const char*>(&flag), sizeof(flag));
 	if (rc != 0) {
 		m_logger << Logger::Level::Warning << "setsockopt(TCP_NODELAY) failed: " << Connection::Handler::Instance().LastError() << std::endl;
 	}
 #else
-	rc = setsockopt(*m_handle, IPPROTO_TCP, TCP_NODELAY, &flag, sizeof(flag));
+	rc = setsockopt(m_handle, IPPROTO_TCP, TCP_NODELAY, &flag, sizeof(flag));
 	if (rc != 0) {
 		m_logger << Logger::Level::Warning << "setsockopt(TCP_NODELAY) failed: " << Connection::Handler::Instance().LastError() << std::endl;
 	}
@@ -376,7 +375,7 @@ if (!m_conn_info || !m_handle)
 	socklen_t optlen = sizeof(mtu);
 
 	// Retrieve the MTU for the connected socket
-	if (getsockopt(*m_handle, IPPROTO_IP, IP_MTU, &mtu, &optlen) >= 0)
+	if (getsockopt(m_handle, IPPROTO_IP, IP_MTU, &mtu, &optlen) >= 0)
 		return mtu;
 	else
 		return DEFAULT_MTU;
@@ -417,21 +416,9 @@ int Socket::GetMTU() const noexcept {
 void Socket::SetNonBlocking() noexcept {
 	#ifdef WINDOWS
 	u_long mode = 1; // Enable non-blocking mode
-	ioctlsocket(*m_handle, FIONBIO, &mode);
+	ioctlsocket(m_handle, FIONBIO, &mode);
 	#else
-	int flags = fcntl(*m_handle, F_GETFL, 0);
-	fcntl(*m_handle, F_SETFL, flags | O_NONBLOCK);
+	int flags = fcntl(m_handle, F_GETFL, 0);
+	fcntl(m_handle, F_SETFL, flags | O_NONBLOCK);
 	#endif
-}
-
-void Socket::EnsureIsClosed() noexcept {
-	if (!m_handle)
-		return;
-
-	#ifdef LINUX
-	close(*m_handle);
-	#else
-	closesocket(*m_handle);
-	#endif
-	m_handle = nullptr;
 }

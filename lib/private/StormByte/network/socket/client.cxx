@@ -47,8 +47,7 @@ ExpectedVoid Socket::Client::Connect(const std::string& hostname, const unsigned
 		return StormByte::Unexpected(expected_socket.error());
 	}
 
-	EnsureIsClosed();
-	m_handle = std::make_unique<Connection::HandlerType>(expected_socket.value());
+	m_handle = expected_socket.value();
 
 	auto expected_conn_info = Connection::Info::FromHost(hostname, port, m_protocol);
 	if (!expected_conn_info) {
@@ -60,9 +59,9 @@ ExpectedVoid Socket::Client::Connect(const std::string& hostname, const unsigned
 		std::make_unique<Connection::Info>(std::move(expected_conn_info.value()));
 
 #ifdef WINDOWS
-	if (::connect(*m_handle, m_conn_info->SockAddr().get(), sizeof(*m_conn_info->SockAddr())) == SOCKET_ERROR) {
+	if (::connect(m_handle, m_conn_info->SockAddr().get(), sizeof(*m_conn_info->SockAddr())) == SOCKET_ERROR) {
 #else
-	if (::connect(*m_handle, m_conn_info->SockAddr().get(), sizeof(*m_conn_info->SockAddr())) == -1) {
+	if (::connect(m_handle, m_conn_info->SockAddr().get(), sizeof(*m_conn_info->SockAddr())) == -1) {
 #endif
 		m_logger << Logger::Level::Error << "Failed to connect: " << Connection::Handler::Instance().LastError() << std::endl;
 		return StormByte::Unexpected<ConnectionError>(Connection::Handler::Instance().LastError());
@@ -104,7 +103,7 @@ ExpectedVoid Socket::Client::Send(std::span<const std::byte> data) noexcept {
 #ifdef LINUX
 		// Use poll() to avoid FD_SET/select limitations (fd may exceed FD_SETSIZE)
 		struct pollfd pfd;
-		pfd.fd = *m_handle;
+		pfd.fd = m_handle;
 		pfd.events = POLLOUT;
 		int pol = poll(&pfd, 1, 50); // timeout 50ms
 		if (pol < 0) {
@@ -124,7 +123,7 @@ ExpectedVoid Socket::Client::Send(std::span<const std::byte> data) noexcept {
 #else // WINDOWS
 		fd_set writefds;
 		FD_ZERO(&writefds);
-		FD_SET(*m_handle, &writefds);
+		FD_SET(m_handle, &writefds);
 		TIMEVAL tv;
 		tv.tv_sec  = 0;
 		tv.tv_usec = 50000; // 50ms
@@ -153,10 +152,10 @@ ExpectedVoid Socket::Client::Send(std::span<const std::byte> data) noexcept {
 
 #ifdef LINUX
 		const int send_flags = MSG_NOSIGNAL;
-		const ssize_t written = ::send(*m_handle,
+		const ssize_t written = ::send(m_handle,
 #else
 		const int send_flags = 0;
-		const int written = ::send(*m_handle,
+		const int written = ::send(m_handle,
 #endif
 						reinterpret_cast<const char*>(chunk.data()),
 						chunk.size(), send_flags);
@@ -219,9 +218,9 @@ ExpectedVoid Socket::Client::Send(Buffer::Consumer data) noexcept {
 bool Socket::Client::HasShutdownRequest() noexcept {
 	char buffer[1]; // Inspect only one byte
 #ifdef LINUX
-	ssize_t result = ::recv(*m_handle, buffer, sizeof(buffer), MSG_PEEK | MSG_DONTWAIT);
+	ssize_t result = ::recv(m_handle, buffer, sizeof(buffer), MSG_PEEK | MSG_DONTWAIT);
 #else
-	int result = ::recv(*m_handle, buffer, sizeof(buffer), MSG_PEEK);
+	int result = ::recv(m_handle, buffer, sizeof(buffer), MSG_PEEK);
 	if (result == SOCKET_ERROR) {
 		if (Connection::Handler::Instance().LastErrorCode() == WSAEWOULDBLOCK) {
 			// No data available; not a shutdown
@@ -281,9 +280,9 @@ ExpectedBuffer Socket::Client::Receive(const std::size_t& max_size, const unsign
 		// Use a heap buffer so we don't stack-allocate very large arrays
 		std::vector<char> internal_buffer(bytes_to_read);
 #ifdef LINUX
-		const ssize_t valread = recv(*m_handle, internal_buffer.data(), bytes_to_read, 0);
+		const ssize_t valread = recv(m_handle, internal_buffer.data(), bytes_to_read, 0);
 #else
-		const int valread = recv(*m_handle, internal_buffer.data(), bytes_to_read, 0);
+		const int valread = recv(m_handle, internal_buffer.data(), bytes_to_read, 0);
 #endif
 
 		if (valread > 0) {
@@ -397,10 +396,10 @@ ExpectedVoid Socket::Client::Write(std::span<const std::byte> data, const std::s
 
 #ifdef LINUX
 		const int send_flags = MSG_NOSIGNAL;
-		const ssize_t written = ::send(*m_handle,
+		const ssize_t written = ::send(m_handle,
 #else
 		const int send_flags = 0;
-		const int written = ::send(*m_handle,
+		const int written = ::send(m_handle,
 #endif
 						reinterpret_cast<const char*>(chunk.data()),
 						chunk.size(), send_flags);
@@ -429,9 +428,9 @@ bool Socket::Client::Ping() noexcept {
 	bool ping_success = false;
 	char buffer[1]; // Inspect only one byte
 #ifdef LINUX
-	ssize_t result = ::recv(*m_handle, buffer, sizeof(buffer), MSG_PEEK | MSG_DONTWAIT);
+	ssize_t result = ::recv(m_handle, buffer, sizeof(buffer), MSG_PEEK | MSG_DONTWAIT);
 #else
-	int result = ::recv(*m_handle, buffer, sizeof(buffer), MSG_PEEK);
+	int result = ::recv(m_handle, buffer, sizeof(buffer), MSG_PEEK);
 	if (result == SOCKET_ERROR) {
 		if (Connection::Handler::Instance().LastErrorCode() == WSAEWOULDBLOCK) {
 			// No data available; not a shutdown

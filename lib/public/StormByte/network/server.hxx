@@ -105,6 +105,12 @@ namespace StormByte::Network {
 				return EndPoint::Send(client_uuid, packet);
 			}
 
+			/**
+			 * @brief Disconnects a client identified by UUID.
+			 * @param client_uuid The UUID of the client to disconnect.
+			 */
+			void 																	DisconnectClient(const std::string& client_uuid) noexcept;
+
 		private:
 			std::thread m_accept_thread;											///< The thread for accepting clients.
 			std::mutex m_clients_mutex;												///< The mutex to protect clients vector.

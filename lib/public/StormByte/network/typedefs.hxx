@@ -36,7 +36,7 @@ namespace StormByte::Network {																		///< The connection info class (
 	}
 	using ExpectedBuffer = StormByte::Expected<Buffer::FIFO, ConnectionError>;						///< The expected buffer type.
 	using ExpectedVoid = StormByte::Expected<void, ConnectionError>;								///< The expected void type.
-	using ExpectedClient = StormByte::Expected<Socket::Client, ConnectionError>;					///< The expected client type.
+	using ExpectedClient = StormByte::Expected<std::shared_ptr<Socket::Client>, ConnectionError>;	///< The expected client type.
 	using ExpectedReadResult = StormByte::Expected<Connection::Read::Result, ConnectionClosed>;		///< The expected read result type.
 	using SharedConsumerBuffer = std::shared_ptr<Buffer::Consumer>;									///< The shared consumer buffer type.
 	using SharedProducerBuffer = std::shared_ptr<Buffer::Producer>;									///< The shared producer buffer type.

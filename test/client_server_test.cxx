@@ -251,7 +251,7 @@ namespace Test {
 	};
 }
 
-Logger::ThreadedLog logger(std::cout, Logger::Level::LowLevel, "[%L] [T%i] %T:");
+Logger::ThreadedLog logger(std::cout, Logger::Level::Info, "[%L] [T%i] %T:");
 constexpr const unsigned short timeout = 5;
 
 int TestRequestNameList() {
