@@ -32,8 +32,21 @@ ExpectedVoid Socket::Server::Listen(const std::string& hostname, const unsigned 
 	EnsureIsClosed();
 	m_handle = std::make_unique<Connection::HandlerType>(expected_socket.value());
 
-	// Set SO_REUSEADDR to allow reuse of the address
+	// Set address reuse/exclusive options
 	int opt = 1;
+#ifdef WINDOWS
+	// On Windows, prefer SO_EXCLUSIVEADDRUSE to avoid TIME_WAIT binding issues
+	{
+		BOOL exclusive = TRUE;
+		if (setsockopt(*m_handle, SOL_SOCKET, SO_EXCLUSIVEADDRUSE, reinterpret_cast<const char*>(&exclusive), sizeof(exclusive)) == SOCKET_ERROR) {
+			m_status = Connection::Status::Disconnected;
+			m_handle.reset();
+			return StormByte::Unexpected<ConnectionError>("Failed to set SO_EXCLUSIVEADDRUSE: {} (error code: {})",
+													Connection::Handler::Instance().LastError(),
+													Connection::Handler::Instance().LastErrorCode());
+		}
+	}
+#else
 	if (setsockopt(*m_handle, SOL_SOCKET, SO_REUSEADDR, reinterpret_cast<const char*>(&opt), sizeof(opt)) < 0) {
 		m_status = Connection::Status::Disconnected;
 		m_handle.reset();
@@ -41,12 +54,11 @@ ExpectedVoid Socket::Server::Listen(const std::string& hostname, const unsigned 
 													Connection::Handler::Instance().LastError(),
 													Connection::Handler::Instance().LastErrorCode());
 	}
+#endif
 
 	auto expected_connection_info = Connection::Info::FromHost(hostname, port, m_protocol);
 	if (!expected_connection_info)
-		return StormByte::Unexpected<ConnectionError>("Failed to resolve hostname: {} (error code: {})",
-													Connection::Handler::Instance().LastError(),
-													Connection::Handler::Instance().LastErrorCode());
+		return StormByte::Unexpected<ConnectionError>(expected_connection_info.error()->what());
 
 	m_conn_info = std::make_unique<Connection::Info>(std::move(expected_connection_info.value()));
 

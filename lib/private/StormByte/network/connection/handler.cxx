@@ -14,7 +14,8 @@ using namespace StormByte::Network::Connection;
 
 Handler::Handler() noexcept {
 	#ifdef WINDOWS
-	m_initialized = WSAStartup(MAKEWORD(2, 2), &m_wsaData) != 0;
+	// Initialize Winsock; set initialized=true only on success
+	m_initialized = (WSAStartup(MAKEWORD(2, 2), &m_wsaData) == 0);
 	#else
 	m_initialized = true;
 	#endif
@@ -35,11 +36,17 @@ std::string Handler::LastError() const noexcept {
 	std::string error_string;
 	#ifdef WINDOWS
 	wchar_t* errorMsg = nullptr;
-	FormatMessage(FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
+	DWORD res = FormatMessage(
+				FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
 				nullptr, WSAGetLastError(), MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
 				reinterpret_cast<LPWSTR>(&errorMsg), 0, nullptr);
-	error_string = StormByte::String::UTF8Encode(errorMsg);
-	LocalFree(errorMsg);
+	if (res != 0 && errorMsg != nullptr) {
+		error_string = StormByte::String::UTF8Encode(std::wstring(errorMsg));
+		LocalFree(errorMsg);
+	} else {
+		// No message available; leave empty so callers can decide how to present it
+		if (errorMsg) LocalFree(errorMsg);
+	}
 	#else
 	if (errno != 0)
 		error_string = ErrnoToString(errno);

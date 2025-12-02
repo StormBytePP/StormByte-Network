@@ -32,7 +32,10 @@ using namespace StormByte::Network::Socket;
 Socket::Socket(const Protocol& protocol, Logger::ThreadedLog logger) noexcept:
 m_protocol(protocol), m_status(Connection::Status::Disconnected),
 m_handle(nullptr), m_conn_info(nullptr), m_mtu(DEFAULT_MTU), m_logger(logger),
-m_UUID(StormByte::GenerateUUIDv4()) {}
+m_UUID(StormByte::GenerateUUIDv4()) {
+	// Ensure platform networking is initialized (e.g., WSAStartup on Windows)
+	(void)StormByte::Network::Connection::Handler::Instance();
+}
 
 Socket::Socket(Socket&& other) noexcept:
 m_protocol(other.m_protocol), m_status(other.m_status),
@@ -175,8 +178,9 @@ StormByte::Network::ExpectedReadResult Socket::WaitForData(const long long& usec
 			return StormByte::Unexpected<ConnectionClosed>("Failed to create WSA event");
 		}
 
-		// Request notification for read/close events on the socket
-		if (WSAEventSelect(*m_handle, ev, FD_READ | FD_CLOSE) == SOCKET_ERROR) {
+		// Request notification for read/close/accept events on the socket
+		long mask = FD_READ | FD_CLOSE | FD_ACCEPT;
+		if (WSAEventSelect(*m_handle, ev, mask) == SOCKET_ERROR) {
 			WSACloseEvent(ev);
 			return StormByte::Unexpected<ConnectionClosed>("WSAEventSelect failed");
 		}
@@ -207,6 +211,8 @@ StormByte::Network::ExpectedReadResult Socket::WaitForData(const long long& usec
 }
 
 StormByte::Expected<StormByte::Network::Connection::HandlerType, StormByte::Network::ConnectionError> Socket::CreateSocket() noexcept {
+	// Make sure the platform handler is constructed before calling ::socket
+	(void)StormByte::Network::Connection::Handler::Instance();
 	auto protocol = m_protocol == Protocol::IPv4 ? AF_INET : AF_INET6;
 	Connection::HandlerType handle = ::socket(protocol, SOCK_STREAM, 0);
 	#ifdef WINDOWS
