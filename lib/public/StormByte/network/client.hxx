@@ -12,13 +12,16 @@ namespace StormByte::Network {
 	 * @class Client
 	 * @brief The class representing a client.
 	 */
-	class STORMBYTE_NETWORK_PUBLIC Client: public EndPoint {
+	class STORMBYTE_NETWORK_PUBLIC Client: private EndPoint {
 		public:
 			/**
 			 * @brief The constructor of the Client class.
-			 * @param address The address of the server.
+			 * @param protocol The protocol to use.
+			 * @param codec The codec to use.
+			 * @param timeout The timeout duration.
+			 * @param logger The logger instance.
 			 */
-			Client(const enum Protocol& protocol, Logger::ThreadedLog logger) noexcept;
+			Client(const enum Protocol& protocol, const Codec& codec, const unsigned short& timeout, const Logger::ThreadedLog& logger) noexcept;
 
 			/**
 			 * @brief The copy constructor of the Client class.
@@ -58,8 +61,14 @@ namespace StormByte::Network {
 			 * @param protocol The protocol of the server.
 			 * @return The expected void or error.
 			 */
-			virtual ExpectedVoid											Connect(const std::string& hostname, const unsigned short& port) noexcept override;
+			ExpectedVoid													Connect(const std::string& hostname, const unsigned short& port) noexcept override;
 
+			/**
+			 * @brief The function to disconnect the client.
+			 */
+			using EndPoint::Disconnect;
+
+		protected:
 			/**
 			 * @brief The function to receive data from the server.
 			 * @return The expected buffer or error.

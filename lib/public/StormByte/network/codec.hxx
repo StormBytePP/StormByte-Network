@@ -1,10 +1,12 @@
 #pragma once
 
 #include <StormByte/buffer/pipeline.hxx>
+#include <StormByte/clonable.hxx>
 #include <StormByte/logger/threaded_log.hxx>
 #include <StormByte/network/object.hxx>
 #include <StormByte/network/packet.hxx>
 
+#include <list>
 #include <memory>
 
 /**
@@ -47,8 +49,14 @@ namespace StormByte::Network {
 	 *   pipelines applied by `Process()`.
 	 *
 	 */
-	class STORMBYTE_NETWORK_PUBLIC Codec {
+	class STORMBYTE_NETWORK_PUBLIC Codec: public StormByte::Clonable<Network::Codec> {
 		public:
+			/**
+			 * @brief Protected ctor accepting a logger.
+			 * @param log Logger instance for diagnostics.
+			 */
+			Codec(const Logger::ThreadedLog& log) noexcept;
+
 			/**
 			 * @brief Copy constructor.
 			 *
@@ -58,7 +66,7 @@ namespace StormByte::Network {
 			 * Derived classes that hold additional non-copyable state should
 			 * explicitly define a copy constructor.
 			 */
-			Codec(const Codec& other)						= default;
+			Codec(const Codec& other)							= default;
 
 			/**
 			 * @brief Move constructor.
@@ -67,7 +75,7 @@ namespace StormByte::Network {
 			 * `noexcept` to allow efficient container operations and to
 			 * communicate that moving a `Codec` will not throw.
 			 */
-			Codec(Codec&& other) noexcept					= default;
+			Codec(Codec&& other) noexcept						= default;
 
 			/**
 			 * @brief Copy assignment.
@@ -76,7 +84,7 @@ namespace StormByte::Network {
 			 * with the copy constructor, derived classes with special state
 			 * should provide their own implementation when necessary.
 			 */
-			Codec& operator=(const Codec& other)			= default;
+			Codec& operator=(const Codec& other)				= default;
 
 			/**
 			 * @brief Move assignment.
@@ -85,7 +93,7 @@ namespace StormByte::Network {
 			 * members and is marked `noexcept` to match the move
 			 * constructor's exception-safety guarantees.
 			 */
-			Codec& operator=(Codec&& other) noexcept		= default;
+			Codec& operator=(Codec&& other) noexcept			= default;
 
 			/**
 			 * @brief Virtual destructor.
@@ -93,7 +101,7 @@ namespace StormByte::Network {
 			 * Defaulted virtual destructor ensures correct cleanup through
 			 * polymorphic interfaces in derived `Codec` implementations.
 			 */
-			virtual ~Codec() noexcept						= default;
+			virtual ~Codec() noexcept							= default;
 
 			/**
 			 * @brief Encode data from a `Buffer::Consumer` into a `Packet`.
@@ -106,7 +114,7 @@ namespace StormByte::Network {
 			 * @param consumer Source of raw input bytes.
 			 * @return Shared pointer to constructed `Packet` (or nullptr on failure).
 			 */
-			std::shared_ptr<Packet>							Encode(Buffer::Consumer consumer) const noexcept;
+			ExpectedPacket										Encode(const Buffer::Consumer& consumer) const noexcept;
 
 			/**
 			 * @brief Decode a `Packet` into a domain `Object`.
@@ -118,7 +126,7 @@ namespace StormByte::Network {
 			 * @param packet The packet to decode.
 			 * @return Shared pointer to decoded `Object` (or nullptr on failure).
 			 */
-			inline std::shared_ptr<Object>					Decode(const Packet& packet) const noexcept {
+			inline ExpectedObject 								Decode(const Packet& packet) const noexcept {
 				return DoDecode(packet);
 			}
 
@@ -131,9 +139,9 @@ namespace StormByte::Network {
 			 * conversion and pipeline steps.
 			 *
 			 * @param packet The packet to process.
-			 * @return Buffer::FIFO of bytes ready for sending on the wire.
+			 * @return Buffer::Consumer of bytes ready for sending on the wire.
 			 */
-			Buffer::FIFO									Process(const Packet& packet) const noexcept;
+			Buffer::Consumer									Process(const Packet& packet) const noexcept;
 
 			/**
 			 * @brief Configure input and output buffer pipelines.
@@ -151,16 +159,9 @@ namespace StormByte::Network {
 			}
 
 		protected:
-			Buffer::Pipeline m_in_pipeline, m_out_pipeline;	///< Pre/post-processing pipelines
-			mutable Logger::ThreadedLog m_log;				///< Logger for diagnostics
-
-			/**
-			 * @brief Protected ctor accepting a logger.
-			 *
-			 * Derived implementations may pass a `ThreadedLog` for
-			 * runtime diagnostics; defaulted to empty logger if not used.
-			 */
-			inline Codec(const Logger::ThreadedLog& log) noexcept: m_log(log) {}
+			Buffer::Pipeline m_in_pipeline, m_out_pipeline;		///< Pre/post-processing pipelines
+			mutable Logger::ThreadedLog m_log;					///< Logger for diagnostics
+			std::list<unsigned short> m_opcodes_skip_pipeline;	///< List of opcodes that should skip the pipeline processing
 
 		private:
 			/**
@@ -180,11 +181,12 @@ namespace StormByte::Network {
 			 * throwing.
 			 *
 			 * @param opcode Already-parsed opcode identifying the packet type.
+			 * @param size Size of the packet payload in bytes.
 			 * @param consumer Provides the packet payload bytes to decode.
 			 * @return `std::shared_ptr<Packet>` to a newly-constructed packet,
 			 *         or `nullptr` on parse/error.
 			 */
-			virtual std::shared_ptr<Packet>					DoEncode(const unsigned short& opcode, Buffer::Consumer consumer) const noexcept = 0;
+			virtual ExpectedPacket								DoEncode(const unsigned short& opcode, const std::size_t& size, const Buffer::Consumer& consumer) const noexcept = 0;
 
 			/**
 			 * @brief Construct a domain `Object` from a decoded `Packet`.
@@ -201,6 +203,6 @@ namespace StormByte::Network {
 			 * @param packet Decoded packet to convert.
 			 * @return `std::shared_ptr<Object>` to the created object, or `nullptr`.
 			 */
-			virtual std::shared_ptr<Object>					DoDecode(const Packet& packet) const noexcept = 0;
+			virtual ExpectedObject								DoDecode(const Packet& packet) const noexcept = 0;
 	};
 }
