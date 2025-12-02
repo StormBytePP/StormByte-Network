@@ -69,6 +69,8 @@ namespace StormByte::Network {
 			using EndPoint::Disconnect;
 
 		protected:
+			Buffer::Pipeline m_in_pipeline, m_out_pipeline;					///< Input and output pipelines for processing data.
+			
 			/**
 			 * @brief The function to receive data from the server.
 			 * @return The expected buffer or error.

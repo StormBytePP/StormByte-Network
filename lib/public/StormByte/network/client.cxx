@@ -31,9 +31,9 @@ ExpectedVoid Client::Connect(const std::string& hostname, const unsigned short& 
 }
 
 ExpectedPacket Client::Receive() noexcept {
-	return EndPoint::Receive(static_cast<Socket::Client&>(*m_self_socket));
+	return EndPoint::Receive(static_cast<Socket::Client&>(*m_self_socket), m_in_pipeline);
 }
 
 ExpectedVoid Client::Send(const Packet& packet) noexcept {
-	return EndPoint::Send(static_cast<Socket::Client&>(*m_self_socket), packet);
+	return EndPoint::Send(static_cast<Socket::Client&>(*m_self_socket), packet, m_out_pipeline);
 }

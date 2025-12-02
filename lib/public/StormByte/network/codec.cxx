@@ -5,7 +5,7 @@ using namespace StormByte::Network;
 
 Codec::Codec(const Logger::ThreadedLog& log) noexcept: m_log(log) {}
 
-ExpectedPacket Codec::Encode(const Buffer::Consumer& consumer) const noexcept {
+ExpectedPacket Codec::Encode(const Buffer::Consumer& consumer, const Buffer::Pipeline& pipeline) const noexcept {
 	// Expected format: [opcode (2 bytes)] [size (8 bytes)] [packet data...]
 	// Read opcode
 	auto opcode_bytes_expected = consumer.Read(sizeof(unsigned short));
@@ -31,10 +31,10 @@ ExpectedPacket Codec::Encode(const Buffer::Consumer& consumer) const noexcept {
 	}
 	const std::size_t& size = *size_expected;
 
-	return DoEncode(opcode, size, consumer);
+	return DoEncode(opcode, size, pipeline.Process(consumer, Buffer::ExecutionMode::Sync, m_log));
 }
 
-StormByte::Buffer::Consumer Codec::Process(const Packet& packet) const noexcept {
+ExpectedConsumer Codec::Process(const Packet& packet, const Buffer::Pipeline& pipeline) const noexcept {
 	// Out format: [opcode (2 bytes)] [size (8 bytes)] [packet data...]
 	Buffer::Producer final_producer;
 
@@ -44,16 +44,12 @@ StormByte::Buffer::Consumer Codec::Process(const Packet& packet) const noexcept 
 	// Get opcode data
 	auto opcode_bytes_expected = packet_buffer.Extract(sizeof(unsigned short));
 	if (!opcode_bytes_expected) {
-		m_log << Logger::Level::Error << "Codec::Process: failed to extract opcode bytes from packet serialization (" << opcode_bytes_expected.error()->what() << ")" << std::endl;
-		final_producer.SetError();
-		return final_producer.Consumer();
+		return StormByte::Unexpected<PacketError>("Codec::Process: failed to extract opcode bytes from packet serialization ({})", opcode_bytes_expected.error()->what());
 	}
 	const auto& opcode_bytes = opcode_bytes_expected.value();
 	auto opcode_expected = Serializable<unsigned short>::Deserialize(opcode_bytes);
 	if (!opcode_expected) {
-		m_log << Logger::Level::Error << "Codec::Process: failed to deserialize opcode (" << opcode_expected.error()->what() << ")" << std::endl;
-		final_producer.SetError();
-		return final_producer.Consumer();
+		return StormByte::Unexpected<PacketError>("Codec::Process: failed to deserialize opcode ({})", opcode_expected.error()->what());
 	}
 	const unsigned short& opcode = *opcode_expected;
 
@@ -63,11 +59,20 @@ StormByte::Buffer::Consumer Codec::Process(const Packet& packet) const noexcept 
 	// Get packet data
 	auto packet_data_expected = packet_buffer.Extract();
 	if (!packet_data_expected) {
-		m_log << Logger::Level::Error << "Codec::Process: failed to extract packet data from packet serialization (" << packet_data_expected.error()->what() << ")" << std::endl;
-		final_producer.SetError();
-		return final_producer.Consumer();
+		return StormByte::Unexpected<PacketError>("Codec::Process: failed to extract packet data from packet serialization ({})", packet_data_expected.error()->what());
 	}
-	auto packet_data = std::move(packet_data_expected.value());
+	std::vector<std::byte> packet_data;
+	{
+		Buffer::Producer packet_data_producer;
+		packet_data_producer.Write(*packet_data_expected);
+		Buffer::Consumer processed_packet_data = pipeline.Process(packet_data_producer.Consumer(), Buffer::ExecutionMode::Sync, m_log);
+		auto data = processed_packet_data.ExtractUntilEoF();
+		auto data_expected = data.Extract();
+		if (!data_expected) {
+			return StormByte::Unexpected<PacketError>("Codec::Process: failed to extract processed packet data after pipeline ({})", data_expected.error()->what());
+		}
+		packet_data = std::move(data_expected.value());
+	}
 
 	// Write size of packet data
 	auto size_bytes_data = Serializable<std::size_t>(packet_data.size()).Serialize();

@@ -109,12 +109,14 @@ namespace StormByte::Network {
 			 * Implementations should consume bytes from `consumer`, parse
 			 * or assemble them according to the application protocol, and
 			 * return a `Packet` ready for network transport. Return value is
-			 * wrapped in `std::shared_ptr` for lifetime convenience.
+			 * wrapped in `std::shared_ptr` for polymorphism convenience.
+			 * 
+			 * Pipeline is executed transparently
 			 *
 			 * @param consumer Source of raw input bytes.
 			 * @return Shared pointer to constructed `Packet` (or nullptr on failure).
 			 */
-			ExpectedPacket										Encode(const Buffer::Consumer& consumer) const noexcept;
+			ExpectedPacket										Encode(const Buffer::Consumer& consumer, const Buffer::Pipeline& pipeline) const noexcept;
 
 			/**
 			 * @brief Decode a `Packet` into a domain `Object`.
@@ -139,9 +141,10 @@ namespace StormByte::Network {
 			 * conversion and pipeline steps.
 			 *
 			 * @param packet The packet to process.
+			 * @param pipeline The pipeline to apply.
 			 * @return Buffer::Consumer of bytes ready for sending on the wire.
 			 */
-			Buffer::Consumer									Process(const Packet& packet) const noexcept;
+			ExpectedConsumer									Process(const Packet& packet, const Buffer::Pipeline& pipeline) const noexcept;
 
 		protected:
 			mutable Logger::ThreadedLog m_log;					///< Logger for diagnostics

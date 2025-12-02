@@ -92,7 +92,7 @@ namespace StormByte::Network {
 			 * @param socket The socket to receive the packet from.
 			 * @return A shared pointer to the received packet (nullptr if error).
 			 */
-			ExpectedPacket														Receive(Socket::Client& socket) noexcept;
+			ExpectedPacket														Receive(Socket::Client& socket, const Buffer::Pipeline& pipeline) noexcept;
 
 			/**
 			 * @brief Sends a packet through the specified socket.
@@ -100,6 +100,6 @@ namespace StormByte::Network {
 			 * @param packet The packet to send.
 			 * @return An expected void or error.
 			 */
-			ExpectedVoid 														Send(Socket::Client& socket, const Packet& packet) noexcept;
+			ExpectedVoid 														Send(Socket::Client& socket, const Packet& packet, const Buffer::Pipeline& pipeline) noexcept;
 	};
 }

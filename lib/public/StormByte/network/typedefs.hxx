@@ -41,4 +41,5 @@ namespace StormByte::Network {																		///< The connection info class (
 	using ExpectedPacket = StormByte::Expected<std::shared_ptr<Packet>, PacketError>;				///< The expected packet type.
 	using ExpectedObject = StormByte::Expected<std::shared_ptr<Object>, PacketError>;				///< The expected object type.
 	using PacketReaderFunction = std::function<ExpectedBuffer(const size_t&)>;						///< The packet reader function type.
+	using ExpectedConsumer = StormByte::Expected<Buffer::Consumer, Exception>;						///< The expected consumer type.
 }

@@ -30,7 +30,7 @@ Connection::Status EndPoint::Status() const noexcept {
 	return m_status.load();
 }
 
-ExpectedPacket EndPoint::Receive(Socket::Client& socket) noexcept {
+ExpectedPacket EndPoint::Receive(Socket::Client& socket, const Buffer::Pipeline& pipeline) noexcept {
 	// Create the socket reader function to encapsulate sockets away from final user
 	Buffer::ExternalReadFunction read_func = [&socket, this](const std::size_t& size) noexcept -> Buffer::ExpectedData<Buffer::ReadError> {
 		auto expected_data = socket.Receive(size, m_timeout);
@@ -52,9 +52,14 @@ ExpectedPacket EndPoint::Receive(Socket::Client& socket) noexcept {
 	Buffer::Producer producer(forwarder);
 
 	// Delegate packet creation to codec
-	return m_codec->Encode(producer.Consumer());
+	return m_codec->Encode(producer.Consumer(), pipeline);
 }
 
-ExpectedVoid EndPoint::Send(Socket::Client& socket, const Packet& packet) noexcept {
-	return socket.Send(m_codec->Process(packet));
+ExpectedVoid EndPoint::Send(Socket::Client& socket, const Packet& packet, const Buffer::Pipeline& pipeline) noexcept {
+	auto processed_data = m_codec->Process(packet, pipeline);
+	if (!processed_data) {
+		Disconnect();
+		return StormByte::Unexpected<ConnectionError>(processed_data.error()->what());
+	}
+	return socket.Send(processed_data->ExtractUntilEoF());
 }
