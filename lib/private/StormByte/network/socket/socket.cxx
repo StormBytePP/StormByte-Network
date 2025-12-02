@@ -85,8 +85,6 @@ StormByte::Network::ExpectedReadResult Socket::WaitForData(const long long& usec
 		return StormByte::Unexpected<ConnectionClosed>("Failed to wait for data: Invalid connection status");
 	}
 
-	fd_set read_fds;
-
 	// Store the starting time and compute deadline when a timeout is requested
 	auto start_time = std::chrono::steady_clock::now();
 	const std::chrono::microseconds requested_usecs = std::chrono::microseconds(usecs);
@@ -113,22 +111,7 @@ StormByte::Network::ExpectedReadResult Socket::WaitForData(const long long& usec
 			}
 		}
 
-		FD_ZERO(&read_fds);
-		FD_SET(*m_handle, &read_fds);
 
-		// Recompute remaining timeout for this select call (select may modify timeval)
-		struct timeval tv_storage;
-		struct timeval* tv_ptr = nullptr;
-		if (usecs > 0) {
-			auto now2 = std::chrono::steady_clock::now();
-			if (now2 >= deadline) {
-				return Connection::Read::Result::Timeout; // Deadline expired
-			}
-			auto remaining = std::chrono::duration_cast<std::chrono::microseconds>(deadline - now2);
-			tv_storage.tv_sec = static_cast<time_t>(remaining.count() / 1000000);
-			tv_storage.tv_usec = static_cast<decltype(tv_storage.tv_usec)>(remaining.count() % 1000000);
-			tv_ptr = &tv_storage;
-		}
 
 		// Platform-specific wait: use epoll on Linux for event-driven semantics
 #ifdef LINUX

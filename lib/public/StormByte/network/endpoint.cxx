@@ -6,8 +6,7 @@
 using namespace StormByte::Network;
 
 EndPoint::EndPoint(const enum Protocol& protocol, const Codec& codec, const unsigned short& timeout, const Logger::ThreadedLog& logger) noexcept:
-m_protocol(protocol), m_codec(codec.Clone()), m_timeout(timeout), m_logger(logger), m_status(Connection::Status::Disconnected),
-m_self_uuid() {}
+m_protocol(protocol), m_codec(codec.Clone()), m_timeout(timeout), m_logger(logger), m_status(Connection::Status::Disconnected) {}
 
 EndPoint::~EndPoint() noexcept {
 	Disconnect();

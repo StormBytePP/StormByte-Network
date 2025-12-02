@@ -199,11 +199,11 @@ void Server::HandleClientCommunication(const std::string& client_uuid) noexcept 
 	m_logger << Logger::Level::LowLevel << "Stopping handle client messages thread" << std::endl;
 }
 
-StormByte::Buffer::Pipeline Server::CreateClientInputPipeline(const std::string& client_uuid) noexcept {
+StormByte::Buffer::Pipeline Server::CreateClientInputPipeline(const std::string&) noexcept {
 	return Buffer::Pipeline();
 }
 
-StormByte::Buffer::Pipeline Server::CreateClientOutputPipeline(const std::string& client_uuid) noexcept {
+StormByte::Buffer::Pipeline Server::CreateClientOutputPipeline(const std::string&) noexcept {
 	return Buffer::Pipeline();
 }
 

@@ -51,7 +51,6 @@ ExpectedConsumer Codec::Process(const Packet& packet, std::shared_ptr<Buffer::Pi
 	if (!opcode_expected) {
 		return StormByte::Unexpected<PacketError>("Codec::Process: failed to deserialize opcode ({})", opcode_expected.error()->what());
 	}
-	const unsigned short& opcode = *opcode_expected;
 
 	// Write opcode to final producer
 	(void)final_producer.Write(opcode_bytes);
