@@ -9,6 +9,7 @@
 #include <cstdlib>
 #include <iostream>
 #include <thread>
+#include <random>
 
 using namespace StormByte;
 using namespace StormByte::Network;
@@ -224,8 +225,17 @@ namespace Test {
 						break;
 					}
 					case Packets::Opcode::C_MSG_ASKRANDOMNUMBER: {
-						// Generate random number
-						int random_number = rand() % 100; // Random number between 0 and 99
+						// Generate random number using C++ RNG (per-thread engine)
+						static thread_local std::mt19937 gen{[](){
+							std::random_device rd;
+							unsigned int seed = rd();
+							if (seed == 0) {
+								seed = static_cast<unsigned int>(std::chrono::high_resolution_clock::now().time_since_epoch().count());
+							}
+							return seed;
+						}()};
+						std::uniform_int_distribution<int> dist(0, 99);
+						int random_number = dist(gen);
 						Packets::AnswerRandomNumber answer_packet(random_number);
 						auto send_expected = Send(client_uuid, answer_packet);
 						if (!send_expected) {
@@ -241,7 +251,8 @@ namespace Test {
 	};
 }
 
-Logger::ThreadedLog logger(std::cout, Logger::Level::LowLevel, "[%L] [T%i] %T:");
+Logger::ThreadedLog logger(std::cout, Logger::Level::Info, "[%L] [T%i] %T:");
+constexpr const unsigned short timeout = 5;
 
 int TestRequestNameList() {
 	const std::string fn_name = "TestRequestNameList";
@@ -249,7 +260,7 @@ int TestRequestNameList() {
 	const char* HOST = "127.0.0.1";
 	const unsigned short PORT = 7081;
 
-	Test::Server server(Protocol::IPv4, 1, logger);
+	Test::Server server(Protocol::IPv4, timeout, logger);
 	auto listen_res = server.Connect(HOST, PORT);
 	if (!listen_res) {
 		logger << Logger::Level::Error << fn_name << ": server.Connect failed: " << listen_res.error()->what() << std::endl;
@@ -259,7 +270,7 @@ int TestRequestNameList() {
 	// Small delay to ensure server is listening
 	std::this_thread::sleep_for(std::chrono::milliseconds(100));
 
-	Test::Client client(Protocol::IPv4, 1, logger);
+	Test::Client client(Protocol::IPv4, timeout, logger);
 	auto connect_res = client.Connect(HOST, PORT);
 	if (!connect_res) {
 		logger << Logger::Level::Error << fn_name << ": client.Connect failed: " << connect_res.error()->what() << std::endl;
@@ -273,10 +284,13 @@ int TestRequestNameList() {
 		RETURN_TEST(fn_name, 1);
 	}
 	auto names = names_expected.value();
+	std::string all_names;
 	ASSERT_TRUE(fn_name, names.size() == amount);
 	for (std::size_t i = 0; i < amount; ++i) {
+		all_names += names[i] + " ";
 		ASSERT_TRUE(fn_name, names[i] == ("Name_" + std::to_string(i + 1)));
 	}
+	logger << Logger::Level::Info << fn_name << ": Received names: " << all_names << std::endl;
 
 	client.Disconnect();
 	server.Disconnect();
@@ -289,14 +303,14 @@ int TestRequestRandomNumber() {
 	const char* HOST = "127.0.0.1";
 	const unsigned short PORT = 7080;
 
-	Test::Server server(Protocol::IPv4, 1, logger);
+	Test::Server server(Protocol::IPv4, timeout, logger);
 	auto listen_res = server.Connect(HOST, PORT);
 	ASSERT_TRUE(fn_name, listen_res.has_value());
 
 	// Small delay to ensure server is listening
 	std::this_thread::sleep_for(std::chrono::milliseconds(100));
 
-	Test::Client client(Protocol::IPv4, 1, logger);
+	Test::Client client(Protocol::IPv4, timeout, logger);
 	auto connect_res = client.Connect(HOST, PORT);
 	ASSERT_TRUE(fn_name, connect_res.has_value());
 
@@ -307,6 +321,7 @@ int TestRequestRandomNumber() {
 	}
 	int n = number_expected.value();
 	ASSERT_TRUE(fn_name, n >= 0 && n < 100);
+	logger << Logger::Level::Info << fn_name << ": Received random number: " << n << std::endl;
 
 	client.Disconnect();
 	server.Disconnect();

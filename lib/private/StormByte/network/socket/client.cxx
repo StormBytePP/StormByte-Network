@@ -288,7 +288,7 @@ ExpectedBuffer Socket::Client::Receive(const std::size_t& max_size, const unsign
 
 		if (valread > 0) {
 			m_logger << Logger::Level::LowLevel << "Chunk received. Size: " << humanreadable_bytes << valread << nohumanreadable << std::endl;
-			[[maybe_unused]]buffer.Write(std::string(internal_buffer.data(), static_cast<std::size_t>(valread)));
+			(void)buffer.Write(std::string(internal_buffer.data(), static_cast<std::size_t>(valread)));
 			total_bytes_read += valread;
 			if (max_size > 0 && total_bytes_read >= max_size) {
 				m_logger << Logger::Level::LowLevel << "Reached requested max_size: " << humanreadable_bytes << total_bytes_read << nohumanreadable << ". Exiting loop." << std::endl;
