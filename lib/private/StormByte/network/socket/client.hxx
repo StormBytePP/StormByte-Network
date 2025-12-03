@@ -97,7 +97,7 @@ namespace StormByte::Network::Socket {
 			 * @param size Number of bytes to peek (must be > 0).
 			 * @return ExpectedBuffer with the peeked data or an error.
 			 */
-			ExpectedBuffer 											Peek(const std::size_t& size) noexcept;
+			ExpectedBuffer 													Peek(const std::size_t& size) noexcept;
 
 			/**
 			 * @brief Function to send data to the socket using a FIFO buffer.
