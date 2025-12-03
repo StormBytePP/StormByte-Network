@@ -7,7 +7,7 @@ on:
     branches: [ "master" ]
 
 env:
-  BUILD_TYPE: Release
+  BUILD_TYPE: Debug
 
 jobs:
   build-linux:
@@ -42,13 +42,12 @@ jobs:
         cxx: ${{ steps.install-toolchain.outputs.cxx_compiler }}
         configure-options: >-
           -G Ninja
-          -DWITH_SYSTEM_STORMBYTE=OFF
           -DENABLE_TEST=ON
-          -DGITHUB_WORKFLOW=ON
+          -DENABLE_ASAN=ON
+          -DWITH_SYSTEM_STORMBYTE=OFF
         build-type: ${{ env.BUILD_TYPE }}
-
-    - name: Run unit tests
-      run: ctest --output-on-failure --test-dir ${{ github.workspace }}/build
+        run-test: true
+        ctest-options: --output-on-failure --test-dir ${{ github.workspace }}/build/test
 
   build-windows:
     runs-on: windows-latest
@@ -68,16 +67,16 @@ jobs:
         uses: stormbytepp/install-toolchain@v1
         with:
           compiler: msvc
+          arch: ${{ matrix.arch }}
 
       - name: Build with CMake
         uses: ashutoshvarma/action-cmake-build@master
         with:
-          build-dir: ${{ github.workspace }}/build
+          build-dir: ${{ github.workspace }}\build
           configure-options: >-
             -G Ninja
-            -DWITH_SYSTEM_STORMBYTE=OFF
             -DENABLE_TEST=ON
-            -DGITHUB_WORKFLOW=ON
+            -DWITH_SYSTEM_STORMBYTE=OFF
           build-type: ${{ env.BUILD_TYPE }}
 
       - name: Copy DLLs
@@ -86,7 +85,6 @@ jobs:
           Copy-Item -Path "${{ github.workspace }}\build\thirdparty\StormByte\buffer\lib\StormByte-Buffer.dll" -Destination "${{ github.workspace }}\build\test" -Force
           Copy-Item -Path "${{ github.workspace }}\build\thirdparty\StormByte\logger\lib\StormByte-Logger.dll" -Destination "${{ github.workspace }}\build\test" -Force
           Copy-Item -Path "${{ github.workspace }}\build\lib\StormByte-Network.dll" -Destination "${{ github.workspace }}\build\test" -Force
-          
 
       - name: Run unit tests
-        run: ctest --output-on-failure --test-dir ${{ github.workspace }}\build
+        run: ctest --output-on-failure --test-dir ${{ github.workspace }}\build\test

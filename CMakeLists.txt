@@ -10,8 +10,11 @@ project("StormByte C++ Library: Network module"
 	HOMEPAGE_URL "https://dev.stormbyte.org/StormByte-Network"
 )
 
-enable_testing()
-add_subdirectory(thirdparty)
+include(cmake/asan.cmake)
+
 add_subdirectory(doc)
+add_subdirectory(thirdparty)
 add_subdirectory(lib)
 add_subdirectory(test)
+
+include(cmake/outputflags.cmake)
