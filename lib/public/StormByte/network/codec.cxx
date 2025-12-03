@@ -64,7 +64,7 @@ ExpectedConsumer Codec::Process(const Packet& packet, std::shared_ptr<Buffer::Pi
 	}
 
 	// Write opcode to final producer
-	(void)final_producer.Write(opcode_bytes);
+	(void)final_producer.Write(std::move(opcode_bytes));
 	m_log << Logger::Level::LowLevel << "Codec::Process: wrote opcode to output" << std::endl;
 
 	// Get packet data (may be empty)
@@ -75,7 +75,7 @@ ExpectedConsumer Codec::Process(const Packet& packet, std::shared_ptr<Buffer::Pi
 			return StormByte::Unexpected<PacketError>("Codec::Process: failed to extract packet data from packet serialization ({})", packet_data_expected.error()->what());
 		}
 		Buffer::Producer packet_data_producer;
-		(void)packet_data_producer.Write(*packet_data_expected);
+		(void)packet_data_producer.Write(std::move(*packet_data_expected));
 		Buffer::Consumer processed_packet_data = pipeline->Process(packet_data_producer.Consumer(), Buffer::ExecutionMode::Async, m_log);
 		auto data = processed_packet_data.ExtractUntilEoF();
 		auto data_expected = data.Extract();
@@ -88,11 +88,11 @@ ExpectedConsumer Codec::Process(const Packet& packet, std::shared_ptr<Buffer::Pi
 
 	// Write size of packet data
 	auto size_bytes_data = Serializable<std::size_t>(packet_data.size()).Serialize();
-	(void)final_producer.Write(size_bytes_data);
+	(void)final_producer.Write(std::move(size_bytes_data));
 	m_log << Logger::Level::LowLevel << "Codec::Process: wrote payload size=" << Logger::humanreadable_bytes << packet_data.size() << Logger::nohumanreadable << std::endl;
 
 	// Write packet data
-	(void)final_producer.Write(packet_data);
+	(void)final_producer.Write(std::move(packet_data));
 	m_log << Logger::Level::LowLevel << "Codec::Process: wrote payload bytes" << std::endl;
 
 	// Close and return

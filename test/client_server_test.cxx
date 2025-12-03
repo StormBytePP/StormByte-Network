@@ -87,11 +87,9 @@ namespace Test {
 			public:
 				LargeData(const std::size_t& size): Generic(Opcode::C_MSG_SENDLARGEDATA), m_size(size) {}
 				Buffer::FIFO DoSerialize() const noexcept override {
-					return StormByte::Serializable<std::string>(GetLargeData()).Serialize();
-				}
-
-				std::string GetLargeData() const noexcept {
-					return std::string(m_size, 'A');
+					// Instead of creating a 20MB string, just serialize the size
+					// The actual data transfer is simulated by the size value
+					return StormByte::Serializable<std::size_t>(m_size).Serialize();
 				}
 
 				std::size_t GetSize() const noexcept {

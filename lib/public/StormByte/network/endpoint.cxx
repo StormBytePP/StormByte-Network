@@ -45,12 +45,14 @@ ExpectedPacket EndPoint::Receive(std::shared_ptr<Socket::Client> client) noexcep
 			return StormByte::Unexpected<Buffer::ReadError>(expected_data.error()->what());
 		}
 		Buffer::FIFO& buffer = expected_data.value();
-		auto data_vec_expected = buffer.Read(size);
-		if (!data_vec_expected) {
-			m_logger << Logger::Level::LowLevel << "EndPoint::Receive: buffer.Read failed (uuid=" << client->UUID() << ") error=" << data_vec_expected.error()->what() << std::endl;
-			return StormByte::Unexpected<Buffer::ReadError>(data_vec_expected.error()->what());
+		auto data_span_expected = buffer.Span(size);
+		if (!data_span_expected) {
+			m_logger << Logger::Level::LowLevel << "EndPoint::Receive: buffer.Span failed (uuid=" << client->UUID() << ") error=" << data_span_expected.error()->what() << std::endl;
+			return StormByte::Unexpected<Buffer::ReadError>(data_span_expected.error()->what());
 		}
-		return data_vec_expected.value();
+		// Convert span to vector for the return type (ExternalReadFunction requires vector)
+		auto span = data_span_expected.value();
+		return std::vector<std::byte>(span.begin(), span.end());
 	};
 
 	// Create forwarder to read from socket

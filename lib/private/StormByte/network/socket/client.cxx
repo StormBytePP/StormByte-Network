@@ -75,12 +75,11 @@ ExpectedVoid Socket::Client::Connect(const std::string& hostname, const unsigned
 }
 
 ExpectedVoid Socket::Client::Send(const Buffer::FIFO& buffer) noexcept {
-	auto expected_data = buffer.Read(0);
-	if (!expected_data) {
-		return StormByte::Unexpected<ConnectionError>(expected_data.error()->what());
+	auto expected_span = buffer.Span(0);
+	if (!expected_span) {
+		return StormByte::Unexpected<ConnectionError>(expected_span.error()->what());
 	}
-	auto& data_vec = expected_data.value();
-	return Send(data_vec);
+	return Send(expected_span.value());
 }
 
 ExpectedVoid Socket::Client::Send(const std::vector<std::byte>& buffer) noexcept {
@@ -201,12 +200,11 @@ ExpectedVoid Socket::Client::Send(Buffer::Consumer data) noexcept {
 			continue;
 		}
 		auto send_bytes = data.AvailableBytes();
-		auto expected_data = data.Read(send_bytes);
-		if (!expected_data) {
-			return StormByte::Unexpected<ConnectionError>(expected_data.error()->what());
+		auto expected_span = data.Span(send_bytes);
+		if (!expected_span) {
+			return StormByte::Unexpected<ConnectionError>(expected_span.error()->what());
 		}
-		auto& data_vec = expected_data.value();
-		auto expected_send = Send(data_vec);
+		auto expected_send = Send(expected_span.value());
 		if (!expected_send) {
 			return StormByte::Unexpected<ConnectionError>(expected_send.error()->what());
 		}
@@ -285,7 +283,7 @@ ExpectedBuffer Socket::Client::ReadOnce(const std::size_t& size, int flags) noex
 
 	if (valread > 0) {
 		Buffer::FIFO buffer;
-		(void)buffer.Write(std::string(internal_buffer.data(), static_cast<std::size_t>(valread)));
+		(void)buffer.Write(std::span<const std::byte>(reinterpret_cast<const std::byte*>(internal_buffer.data()), static_cast<std::size_t>(valread)));
 		return buffer;
 	} else if (valread == 0) {
 		return StormByte::Unexpected<ConnectionError>("Read failed: connection closed by peer");
@@ -335,7 +333,7 @@ ExpectedBuffer Socket::Client::Receive(const std::size_t& max_size, const unsign
 
 		if (valread > 0) {
 			m_logger << Logger::Level::LowLevel << "Chunk received. Size: " << humanreadable_bytes << valread << nohumanreadable << std::endl;
-			(void)buffer.Write(std::string(internal_buffer.data(), static_cast<std::size_t>(valread)));
+			(void)buffer.Write(std::span<const std::byte>(reinterpret_cast<const std::byte*>(internal_buffer.data()), static_cast<std::size_t>(valread)));
 			total_bytes_read += valread;
 			if (max_size > 0 && total_bytes_read >= max_size) {
 				m_logger << Logger::Level::LowLevel << "Reached requested max_size: " << humanreadable_bytes << total_bytes_read << nohumanreadable << ". Exiting loop." << std::endl;
