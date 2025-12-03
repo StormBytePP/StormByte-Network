@@ -185,6 +185,12 @@ void Server::HandleClientCommunication(const std::string& client_uuid) noexcept 
 				}
 				m_logger << Logger::Level::LowLevel << "HandleClientCommunication: received packet opcode=" << expected_packet.value()->Opcode() << " from client=" << client_uuid << std::endl;
 
+				// Guard against server teardown races: if disconnecting, skip calling virtual handler
+				if (!Connection::IsConnected(m_status)) {
+					m_logger << Logger::Level::LowLevel << "HandleClientCommunication: server is disconnecting; skipping packet processing for client=" << client_uuid << std::endl;
+					goto end;
+				}
+
 				auto expected_processed_packet = ProcessClientPacket(client_uuid, *expected_packet.value());
 				if (!expected_processed_packet) {
 					m_logger << Logger::Level::Error << expected_processed_packet.error()->what() << std::endl;
@@ -194,7 +200,7 @@ void Server::HandleClientCommunication(const std::string& client_uuid) noexcept 
 				m_logger << Logger::Level::LowLevel << "HandleClientCommunication: processed packet successfully for client=" << client_uuid << std::endl;
 
 				// After processing, honour shutdown if requested
-				if (client->HasShutdownRequest()) {
+				if (client->HasShutdownRequest() || !Connection::IsConnected(m_status)) {
 					m_logger << Logger::Level::LowLevel << "Client has requested shutdown, disconnecting..." << std::endl;
 					goto end;
 				}
@@ -206,7 +212,7 @@ void Server::HandleClientCommunication(const std::string& client_uuid) noexcept 
 				continue;
 		}
 	}
-	
+    
 	end:
 	DisconnectClient(client_uuid);
 	m_logger << Logger::Level::LowLevel << "Stopping handle client messages thread" << std::endl;
