@@ -14,9 +14,9 @@
 using namespace StormByte;
 using namespace StormByte::Network;
 
-Logger::ThreadedLog logger(std::cout, Logger::Level::LowLevel, "[%L] [T%i] %T:");
-constexpr const unsigned short timeout = 5;
-constexpr const std::size_t large_data_size = 1 * 1024 * 1024; // 1 MB
+Logger::ThreadedLog logger(std::cout, Logger::Level::Info, "[%L] [T%i] %T:");
+constexpr const unsigned short timeout = 5; // 5 seconds
+constexpr const std::size_t large_data_size = 20 * 1024 * 1024; // 20 MB
 
 namespace Test {
 	namespace Packets {
