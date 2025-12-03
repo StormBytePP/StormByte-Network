@@ -255,6 +255,54 @@ ExpectedBuffer Socket::Client::Receive(const std::size_t& max_size) noexcept {
 	return Receive(max_size, 0);
 }
 
+ExpectedBuffer Socket::Client::Peek(const std::size_t& size) noexcept {
+	return ReadOnce(size, MSG_PEEK);
+}
+
+ExpectedBuffer Socket::Client::ReadOnce(const std::size_t& size, int flags) noexcept {
+	if (size == 0) {
+		return StormByte::Unexpected<ConnectionError>("Read failed: size must be greater than 0");
+	}
+
+	if (!m_handle) {
+		return StormByte::Unexpected<ConnectionError>("Read failed: Invalid socket handle");
+	}
+
+	// Limit single read to MAX_SINGLE_IO and effective recv buffer if available
+	std::size_t capacity = BUFFER_SIZE;
+	if (m_effective_recv_buf > 0) {
+		capacity = static_cast<std::size_t>(m_effective_recv_buf);
+	}
+	capacity = std::min(capacity, MAX_SINGLE_IO);
+	const std::size_t bytes_to_read = std::min(capacity, size);
+
+	std::vector<char> internal_buffer(bytes_to_read);
+#ifdef LINUX
+	const ssize_t valread = ::recv(m_handle, internal_buffer.data(), bytes_to_read, flags);
+#else
+	const int valread = ::recv(m_handle, internal_buffer.data(), bytes_to_read, flags);
+#endif
+
+	if (valread > 0) {
+		Buffer::FIFO buffer;
+		(void)buffer.Write(std::string(internal_buffer.data(), static_cast<std::size_t>(valread)));
+		return buffer;
+	} else if (valread == 0) {
+		return StormByte::Unexpected<ConnectionError>("Read failed: connection closed by peer");
+	} else {
+#ifdef LINUX
+		if (Connection::Handler::Instance().LastErrorCode() == EAGAIN || Connection::Handler::Instance().LastErrorCode() == EWOULDBLOCK) {
+			return StormByte::Unexpected<ConnectionError>("Read would block: no data available");
+		}
+#else
+		if (Connection::Handler::Instance().LastErrorCode() == WSAEWOULDBLOCK) {
+			return StormByte::Unexpected<ConnectionError>("Read would block: no data available");
+		}
+#endif
+		return StormByte::Unexpected<ConnectionError>("Read failed: {}", Connection::Handler::Instance().LastError());
+	}
+}
+
 ExpectedBuffer Socket::Client::Receive(const std::size_t& max_size, const unsigned short& timeout_seconds) noexcept {
 	m_logger << Logger::Level::LowLevel << "Starting to read data with max_size: " << humanreadable_bytes << max_size << nohumanreadable << std::endl;
 

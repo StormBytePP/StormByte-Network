@@ -88,6 +88,18 @@ namespace StormByte::Network::Socket {
 			ExpectedBuffer 													Receive(const std::size_t& size, const unsigned short& timeout_seconds) noexcept;
 
 			/**
+			 * @brief Peek data from the socket without consuming it.
+			 *
+			 * Uses OS-level MSG_PEEK to read up to `size` bytes from the
+			 * socket receive buffer without removing them. Returns the data
+			 * in a Buffer::FIFO for convenient processing.
+			 *
+			 * @param size Number of bytes to peek (must be > 0).
+			 * @return ExpectedBuffer with the peeked data or an error.
+			 */
+			ExpectedBuffer 											Peek(const std::size_t& size) noexcept;
+
+			/**
 			 * @brief Function to send data to the socket using a FIFO buffer.
 			 * @param buffer The buffer containing the data to send.
 			 * @return The expected result of the operation.
@@ -128,6 +140,13 @@ namespace StormByte::Network::Socket {
 			bool 															Ping() noexcept;
 
 		private:
+			/**
+			 * @brief Perform a single recv with custom flags.
+			 *
+			 * Wraps ::recv and maps common errors to ExpectedBuffer.
+			 * Used by Peek and can be reused by other single-shot reads.
+			 */
+			ExpectedBuffer 											ReadOnce(const std::size_t& size, int flags) noexcept;
 			/**
 			 * @brief Function to read data from the socket (non-blocking version).
 			 * @param buffer The buffer to read the data into.
