@@ -14,6 +14,10 @@
 using namespace StormByte;
 using namespace StormByte::Network;
 
+Logger::ThreadedLog logger(std::cout, Logger::Level::LowLevel, "[%L] [T%i] %T:");
+constexpr const unsigned short timeout = 5;
+constexpr const std::size_t large_data_size = 1 * 1024 * 1024; // 1 MB
+
 namespace Test {
 	namespace Packets {
 		enum class Opcode: unsigned short {
@@ -350,10 +354,6 @@ namespace Test {
 			}
 	};
 }
-
-Logger::ThreadedLog logger(std::cout, Logger::Level::LowLevel, "[%L] [T%i] %T:");
-constexpr const unsigned short timeout = 5;
-constexpr const std::size_t large_data_size = 1 * 1024 * 1024; // 1 MB
 
 int TestRequestNameList() {
 	const std::string fn_name = "TestRequestNameList";
