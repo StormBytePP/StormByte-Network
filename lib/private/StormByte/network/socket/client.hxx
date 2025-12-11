@@ -1,7 +1,9 @@
 #pragma once
 
 #include <StormByte/buffer/consumer.hxx>
+#include <StormByte/network/socket/reader.hxx>
 #include <StormByte/network/socket/socket.hxx>
+#include <StormByte/network/socket/writer.hxx>
 #include <StormByte/network/typedefs.hxx>
 
 #include <span>
@@ -11,7 +13,6 @@
  * @brief The namespace containing all the socket related classes.
  */
 namespace StormByte::Network::Socket {
-
 	/**
 	 * @class Client
 	 * @brief The class representing a client socket.
@@ -23,7 +24,7 @@ namespace StormByte::Network::Socket {
 			 * @param protocol The protocol of the socket.
 			 * @param logger The logger to use.
 			 */
-			Client(const Protocol& protocol, Logger::ThreadedLog logger) noexcept;
+			Client(const Connection::Protocol& protocol, Logger::ThreadedLog logger) noexcept;
 
 			/**
 			 * @brief The copy constructor of the Client class.
@@ -65,6 +66,14 @@ namespace StormByte::Network::Socket {
 			ExpectedVoid 													Connect(const std::string& hostname, const unsigned short& port) noexcept;
 
 			/**
+			 * @brief Creates a Reader associated with this Client.
+			 * @return A Reader instance.
+			 */
+			inline Reader 													Reader() noexcept {
+				return { *this };
+			}
+			
+			/**
 			 * @brief The function to receive data from the socket.
 			 * @param size The size of the data to receive.
 			 * @return The expected result of the operation.
@@ -97,7 +106,7 @@ namespace StormByte::Network::Socket {
 			 * @param size Number of bytes to peek (must be > 0).
 			 * @return ExpectedBuffer with the peeked data or an error.
 			 */
-			ExpectedBuffer 													Peek(const std::size_t& size) noexcept;
+			ExpectedBuffer 													Peek(const std::size_t& size) const noexcept;
 
 			/**
 			 * @brief Function to send data to the socket using a FIFO buffer.
@@ -139,6 +148,14 @@ namespace StormByte::Network::Socket {
 			 */
 			bool 															Ping() noexcept;
 
+			/**
+			 * @brief Creates a Writer associated with this Client.
+			 * @return A Writer instance.
+			 */
+			inline Writer 													Writer() noexcept {
+				return { *this };
+			}
+
 		private:
 			/**
 			 * @brief Perform a single recv with custom flags.
@@ -146,7 +163,7 @@ namespace StormByte::Network::Socket {
 			 * Wraps ::recv and maps common errors to ExpectedBuffer.
 			 * Used by Peek and can be reused by other single-shot reads.
 			 */
-			ExpectedBuffer 											ReadOnce(const std::size_t& size, int flags) noexcept;
+			ExpectedBuffer 													ReadOnce(const std::size_t& size, int flags) noexcept;
 			/**
 			 * @brief Function to read data from the socket (non-blocking version).
 			 * @param buffer The buffer to read the data into.

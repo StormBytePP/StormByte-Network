@@ -14,6 +14,10 @@ namespace StormByte::Network {
 	 */
 	class STORMBYTE_NETWORK_PUBLIC Exception: public StormByte::Exception {
 		public:
+			template <typename... Args>
+			Exception(const std::string& component, std::format_string<Args...> fmt, Args&&... args):
+			StormByte::Exception("Network::" + component, fmt, std::forward<Args>(args)...) {}
+
 			/**
 			 * Constructor
 			 */
@@ -26,6 +30,10 @@ namespace StormByte::Network {
 	 */
 	class ConnectionError: public Exception {
 		public:
+			template <typename... Args>
+			ConnectionError(std::format_string<Args...> fmt, Args&&... args):
+			Exception("Connection", fmt, std::forward<Args>(args)...) {}
+
 			/**
 			 * Constructor
 			 */
@@ -38,6 +46,10 @@ namespace StormByte::Network {
 	 */
 	class STORMBYTE_NETWORK_PUBLIC ConnectionClosed final: public Exception {
 		public:
+			template <typename... Args>
+			ConnectionClosed(std::format_string<Args...> fmt, Args&&... args):
+			Exception("Connection: Connection closed. " + fmt, std::forward<Args>(args)...) {}
+
 			/**
 			 * Constructor
 			 */
@@ -50,6 +62,26 @@ namespace StormByte::Network {
 	 */
 	class STORMBYTE_NETWORK_PUBLIC PacketError final: public Exception {
 		public:
+			template <typename... Args>
+			PacketError(std::format_string<Args...> fmt, Args&&... args):
+			Exception("Transport::Packet: ", fmt, std::forward<Args>(args)...) {}
+
+			/**
+			 * Constructor
+			 */
+			using Exception::Exception;
+	};
+
+	/**
+	 * @class FrameError
+	 * @brief The class representing an error in the packet.
+	 */
+	class STORMBYTE_NETWORK_PUBLIC FrameError final: public Exception {
+		public:
+			template <typename... Args>
+			FrameError(std::format_string<Args...> fmt, Args&&... args):
+			Exception("Transport::Frame: ", fmt, std::forward<Args>(args)...) {}
+			
 			/**
 			 * Constructor
 			 */

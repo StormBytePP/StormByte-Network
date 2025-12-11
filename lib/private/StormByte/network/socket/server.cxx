@@ -15,20 +15,20 @@
 
 using namespace StormByte::Network;
 
-Socket::Server::Server(const Protocol& protocol, Logger::ThreadedLog logger) noexcept:
+Socket::Server::Server(const Connection::Protocol& protocol, Logger::ThreadedLog logger) noexcept:
 Socket(protocol, logger) {
 	m_logger << Logger::Level::LowLevel << "Created server socket with UUID: " << m_UUID << std::endl;
 }
 
 ExpectedVoid Socket::Server::Listen(const std::string& hostname, const unsigned short& port) noexcept {
 	if (Connection::IsConnected(m_status))
-		return StormByte::Unexpected<ConnectionError>("Server is already connected");
+		return Unexpected<ConnectionError>("Server is already connected");
 	
 	m_status = Connection::Status::Connecting;
 
 	auto expected_socket = CreateSocket();
 	if (!expected_socket)
-		return StormByte::Unexpected(expected_socket.error());
+		return Unexpected(expected_socket.error());
 
 	m_handle = expected_socket.value();
 
@@ -41,7 +41,7 @@ ExpectedVoid Socket::Server::Listen(const std::string& hostname, const unsigned 
 		if (setsockopt(m_handle, SOL_SOCKET, SO_EXCLUSIVEADDRUSE, reinterpret_cast<const char*>(&exclusive), sizeof(exclusive)) == SOCKET_ERROR) {
 			m_status = Connection::Status::Disconnected;
 			m_handle = -1;
-			return StormByte::Unexpected<ConnectionError>("Failed to set SO_EXCLUSIVEADDRUSE: {} (error code: {})",
+			return Unexpected<ConnectionError>("Failed to set SO_EXCLUSIVEADDRUSE: {} (error code: {})",
 													Connection::Handler::Instance().LastError(),
 													Connection::Handler::Instance().LastErrorCode());
 		}
@@ -50,7 +50,7 @@ ExpectedVoid Socket::Server::Listen(const std::string& hostname, const unsigned 
 	if (setsockopt(m_handle, SOL_SOCKET, SO_REUSEADDR, reinterpret_cast<const char*>(&opt), sizeof(opt)) < 0) {
 		m_status = Connection::Status::Disconnected;
 		m_handle = -1;
-		return StormByte::Unexpected<ConnectionError>("Failed to set socket options: {} (error code: {})",
+		return Unexpected<ConnectionError>("Failed to set socket options: {} (error code: {})",
 													Connection::Handler::Instance().LastError(),
 													Connection::Handler::Instance().LastErrorCode());
 	}
@@ -58,7 +58,7 @@ ExpectedVoid Socket::Server::Listen(const std::string& hostname, const unsigned 
 
 	auto expected_connection_info = Connection::Info::FromHost(hostname, port, m_protocol);
 	if (!expected_connection_info)
-		return StormByte::Unexpected<ConnectionError>(expected_connection_info.error()->what());
+		return Unexpected<ConnectionError>(expected_connection_info.error()->what());
 
 	m_conn_info = std::make_unique<Connection::Info>(std::move(expected_connection_info.value()));
 
@@ -66,7 +66,7 @@ ExpectedVoid Socket::Server::Listen(const std::string& hostname, const unsigned 
 	if (bind_result == -1) {
 		m_status = Connection::Status::Disconnected;
 		m_handle = -1;
-		return StormByte::Unexpected<ConnectionError>("Failed to bind socket: {} (error code: {})",
+		return Unexpected<ConnectionError>("Failed to bind socket: {} (error code: {})",
 													Connection::Handler::Instance().LastError(),
 													Connection::Handler::Instance().LastErrorCode()
 		);
@@ -76,7 +76,7 @@ ExpectedVoid Socket::Server::Listen(const std::string& hostname, const unsigned 
 	if (listen_result == -1) {
 		m_status = Connection::Status::Disconnected;
 		m_handle = -1;
-		return StormByte::Unexpected<ConnectionError>("Failed to listen on socket: {} (error code: {})",
+		return Unexpected<ConnectionError>("Failed to listen on socket: {} (error code: {})",
 													Connection::Handler::Instance().LastError(),
 													Connection::Handler::Instance().LastErrorCode()
 		);
@@ -91,7 +91,7 @@ ExpectedVoid Socket::Server::Listen(const std::string& hostname, const unsigned 
 
 ExpectedClient Socket::Server::Accept() noexcept {
 	if (!Connection::IsConnected(m_status))
-		return StormByte::Unexpected<ConnectionError>("Socket is not connected");
+		return Unexpected<ConnectionError>("Socket is not connected");
 
 	fd_set read_fds;
 	FD_ZERO(&read_fds);
@@ -100,14 +100,14 @@ ExpectedClient Socket::Server::Accept() noexcept {
 	struct timeval timeout = {0, 200000}; // 200ms timeout
 	int select_result = select(m_handle + 1, &read_fds, nullptr, nullptr, &timeout);
 	if (select_result == 0) {
-		return StormByte::Unexpected<ConnectionError>("Timeout occurred while waiting to accept connection.");
+		return Unexpected<ConnectionError>("Timeout occurred while waiting to accept connection.");
 	} else if (select_result < 0) {
-		return StormByte::Unexpected<ConnectionError>("Error during select.");
+		return Unexpected<ConnectionError>("Error during select.");
 	}
 
 	Connection::HandlerType client_handle = ::accept(m_handle, nullptr, nullptr);
 	if (client_handle == -1) {
-		return StormByte::Unexpected<ConnectionError>("Failed to accept client connection.");
+		return Unexpected<ConnectionError>("Failed to accept client connection.");
 	}
 
 	Client client_socket(m_protocol, m_logger);

@@ -11,17 +11,34 @@
 #include <thread>
 #include <random>
 
-using namespace StormByte;
+// Namespace aliases and commonly used types to reduce verbosity
+namespace SB = StormByte;
+namespace Net = SB::Network;
+namespace Buf = SB::Buffer;
+namespace SBLog = SB::Logger;
+namespace Transport = Net::Transport;
+
+template<typename T>
+using Serializable = SB::Serializable<T>;
+
+template<typename T>
+using NetExpected = SB::Expected<T, Net::Exception>;
+
+using Buf::DataType;
+using Buf::Consumer;
+using SBLog::ThreadedLog;
+using Buf::Pipeline;
+using namespace StormByte::Logger;
 using namespace StormByte::Network;
 
-Logger::ThreadedLog logger(std::cout, Logger::Level::Info, "[%L] [T%i] %T:");
+ThreadedLog logger(std::cout, Level::Debug, "[%L] [T%i] %T:");
 constexpr const unsigned short timeout = 5; // 5 seconds
 constexpr const std::size_t large_data_size = 20 * 1024 * 1024; // 20 MB
 
 namespace Test {
-	namespace Packets {
+	namespace Packet {
 		enum class Opcode: unsigned short {
-			C_MSG_ASKNAMELIST,
+			C_MSG_ASKNAMELIST = 1,
 			S_MSG_RESPONDNAMELIST,
 			C_MSG_ASKRANDOMNUMBER,
 			S_MSG_RESPONDRANDOMNUMBER,
@@ -29,16 +46,19 @@ namespace Test {
 			S_MSG_REPLYLARGEDATASIZE
 		};
 
-		class Generic: public Network::Packet {
+		class Generic: public Transport::Packet {
 			public:
-				Generic(const enum Opcode& opcode): Network::Packet(static_cast<unsigned short>(opcode)) {}
+				Generic(const enum Opcode& opcode): Transport::Packet(static_cast<Transport::Packet::OpcodeType>(opcode)) {}
 		};
 
 		class AskNameList: public Generic {
 			public:
 				AskNameList(const std::size_t& amount): Generic(Opcode::C_MSG_ASKNAMELIST), m_amount(amount) {}
-				Buffer::FIFO DoSerialize() const noexcept override {
-					return StormByte::Serializable<std::size_t>(m_amount).Serialize();
+				DataType DoSerialize() const noexcept override {
+					return Serializable<std::size_t>(m_amount).Serialize();
+				}
+				std::size_t GetAmount() const noexcept {
+					return m_amount;
 				}
 
 			private:
@@ -48,8 +68,8 @@ namespace Test {
 		class AnswerNameList: public Generic {
 			public:
 				AnswerNameList(const std::vector<std::string>& names): Generic(Opcode::S_MSG_RESPONDNAMELIST), m_names(names) {}
-				Buffer::FIFO DoSerialize() const noexcept override {
-					return StormByte::Serializable<std::vector<std::string>>(m_names).Serialize();
+				DataType DoSerialize() const noexcept override {
+					return Serializable<std::vector<std::string>>(m_names).Serialize();
 				}
 
 				const std::vector<std::string>& GetNames() const noexcept {
@@ -63,16 +83,16 @@ namespace Test {
 		class AskRandomNumber: public Generic {
 			public:
 				AskRandomNumber(): Generic(Opcode::C_MSG_ASKRANDOMNUMBER) {}
-				Buffer::FIFO DoSerialize() const noexcept override {
-					return Buffer::FIFO();
+				DataType DoSerialize() const noexcept override {
+					return {};
 				}
 		};
 
 		class AnswerRandomNumber: public Generic {
 			public:
 				AnswerRandomNumber(const int& number): Generic(Opcode::S_MSG_RESPONDRANDOMNUMBER), m_number(number) {}
-				Buffer::FIFO DoSerialize() const noexcept override {
-					return StormByte::Serializable<int>(m_number).Serialize();
+				DataType DoSerialize() const noexcept override {
+					return Serializable<int>(m_number).Serialize();
 				}
 
 				int GetNumber() const noexcept {
@@ -86,10 +106,10 @@ namespace Test {
 		class LargeData: public Generic {
 			public:
 				LargeData(const std::size_t& size): Generic(Opcode::C_MSG_SENDLARGEDATA), m_size(size) {}
-				Buffer::FIFO DoSerialize() const noexcept override {
+				DataType DoSerialize() const noexcept override {
 					// Instead of creating a 20MB string, just serialize the size
 					// The actual data transfer is simulated by the size value
-					return StormByte::Serializable<std::size_t>(m_size).Serialize();
+					return Serializable<std::size_t>(m_size).Serialize();
 				}
 
 				std::size_t GetSize() const noexcept {
@@ -103,8 +123,8 @@ namespace Test {
 			class AnswerLargeDataSize: public Generic {
 			public:
 				AnswerLargeDataSize(const std::size_t& size): Generic(Opcode::S_MSG_REPLYLARGEDATASIZE), m_size(size) {}
-				Buffer::FIFO DoSerialize() const noexcept override {
-					return StormByte::Serializable<std::size_t>(m_size).Serialize();
+				DataType DoSerialize() const noexcept override {
+					return Serializable<std::size_t>(m_size).Serialize();
 				}
 
 				std::size_t GetSize() const noexcept {
@@ -116,205 +136,164 @@ namespace Test {
 		};
 	}
 
-	class Codec: public Network::Codec {
-		public:
-			Codec(const Logger::ThreadedLog& log) noexcept: Network::Codec(log) {}
-
-			PointerType Clone() const override {
-				return MakePointer<Codec>(*this);
-			}
-			PointerType Move() override {
-				return MakePointer<Codec>(std::move(*this));
-			}
-
-			Network::ExpectedPacket DoEncode(const unsigned short& opcode, const std::size_t& size, const StormByte::Buffer::Consumer& consumer) const noexcept override {
-				switch(static_cast<Packets::Opcode>(opcode)) {
-					case Packets::Opcode::C_MSG_ASKNAMELIST: {
-						auto expected_data = consumer.Read(size);
-						if (!expected_data) {
-							return StormByte::Unexpected<Network::PacketError>("Codec::DoEncode: failed to read AskNameList data ({})", expected_data.error()->what());
-						}
-						auto expected_amount = StormByte::Serializable<std::size_t>::Deserialize(expected_data.value());
-						if (!expected_amount) {
-							return StormByte::Unexpected<Network::PacketError>("Codec::DoEncode: failed to deserialize AskNameList amount ({})", expected_amount.error()->what());
-						}
-						return std::make_shared<Packets::AskNameList>(*expected_amount);
+	DeserializePacketFunction DeserializeFunction() {
+		return [](Transport::Packet::OpcodeType opcode, Consumer consumer, Log& logger) -> PacketPointer {
+			DataType data;
+			consumer.ExtractUntilEoF(data);
+			switch(static_cast<Packet::Opcode>(opcode)) {
+				case Packet::Opcode::C_MSG_ASKNAMELIST: {
+					auto expected_amount = Serializable<std::size_t>::Deserialize(data);
+					if (!expected_amount) {
+						return nullptr;
 					}
-					case Packets::Opcode::S_MSG_RESPONDNAMELIST: {
-						auto expected_data = consumer.Read(size);
-						if (!expected_data) {
-							return StormByte::Unexpected<Network::PacketError>("Codec::DoEncode: failed to read AnswerNameList data ({})", expected_data.error()->what());
-						}
-						auto expected_names = StormByte::Serializable<std::vector<std::string>>::Deserialize(expected_data.value());
-						if (!expected_names) {
-							return StormByte::Unexpected<Network::PacketError>("Codec::DoEncode: failed to deserialize AnswerNameList names ({})", expected_names.error()->what());
-						}
-						return std::make_shared<Packets::AnswerNameList>(*expected_names);
-					}
-					case Packets::Opcode::C_MSG_ASKRANDOMNUMBER: {
-						// No data to read
-						return std::make_shared<Packets::AskRandomNumber>();
-					}
-					case Packets::Opcode::S_MSG_RESPONDRANDOMNUMBER: {
-						auto expected_data = consumer.Read(size);
-						if (!expected_data) {
-							return StormByte::Unexpected<Network::PacketError>("Codec::DoEncode: failed to read AnswerRandomNumber data ({})", expected_data.error()->what());
-						}
-						auto expected_number = StormByte::Serializable<int>::Deserialize(expected_data.value());
-						if (!expected_number) {
-							return StormByte::Unexpected<Network::PacketError>("Codec::DoEncode: failed to deserialize AnswerRandomNumber number ({})", expected_number.error()->what());
-						}
-						return std::make_shared<Packets::AnswerRandomNumber>(*expected_number);
-					}
-					case Packets::Opcode::C_MSG_SENDLARGEDATA: {
-						// Don't deserialize the full string - just consume the bytes and use the size
-						// The size already tells us how big the data was; no need to reconstruct the entire string
-						auto expected_data = consumer.Read(size);
-						if (!expected_data) {
-							return StormByte::Unexpected<Network::PacketError>("Codec::DoEncode: failed to read LargeData data ({})", expected_data.error()->what());
-						}
-						// The serialized string format is: [size(8 bytes)][string_data]
-						// We need to extract the size from the first 8 bytes to know the actual string length
-						if (expected_data->size() < sizeof(std::size_t)) {
-							return StormByte::Unexpected<Network::PacketError>("Codec::DoEncode: LargeData payload too small for size field");
-						}
-						std::vector<std::byte> size_bytes(expected_data->begin(), expected_data->begin() + sizeof(std::size_t));
-						auto size_expected = StormByte::Serializable<std::size_t>::Deserialize(size_bytes);
-						if (!size_expected) {
-							return StormByte::Unexpected<Network::PacketError>("Codec::DoEncode: failed to deserialize LargeData size ({})", size_expected.error()->what());
-						}
-						return std::make_shared<Packets::LargeData>(*size_expected);
-					}
-					case Packets::Opcode::S_MSG_REPLYLARGEDATASIZE: {
-						auto expected_data = consumer.Read(size);
-						if (!expected_data) {
-							return StormByte::Unexpected<Network::PacketError>("Codec::DoEncode: failed to read AnswerLargeDataSize data ({})", expected_data.error()->what());
-						}
-						auto expected_size = StormByte::Serializable<std::size_t>::Deserialize(expected_data.value());
-						if (!expected_size) {
-							return StormByte::Unexpected<Network::PacketError>("Codec::DoEncode: failed to deserialize AnswerLargeDataSize size ({})", expected_size.error()->what());
-						}
-						return std::make_shared<Packets::AnswerLargeDataSize>(*expected_size);
-					}
-					default:
-						return StormByte::Unexpected<Network::PacketError>("Codec::DoEncode: unknown packet opcode ({})", opcode);
+					return std::make_shared<Packet::AskNameList>(*expected_amount);
 				}
+				case Packet::Opcode::S_MSG_RESPONDNAMELIST: {
+					auto expected_names = Serializable<std::vector<std::string>>::Deserialize(data);
+					if (!expected_names) {
+						return nullptr;
+					}
+					return std::make_shared<Packet::AnswerNameList>(*expected_names);
+				}
+				case Packet::Opcode::C_MSG_ASKRANDOMNUMBER: {
+					// No data to read
+					return std::make_shared<Packet::AskRandomNumber>();
+				}
+				case Packet::Opcode::S_MSG_RESPONDRANDOMNUMBER: {
+					auto expected_number = Serializable<int>::Deserialize(data);
+					if (!expected_number) {
+						return nullptr;
+					}
+					return std::make_shared<Packet::AnswerRandomNumber>(*expected_number);
+				}
+				case Packet::Opcode::C_MSG_SENDLARGEDATA: {
+					// Don't deserialize the full string - just consume the bytes and use the size
+					// The size already tells us how big the data was; no need to reconstruct the entire string
+					// The serialized string format is: [size(8 bytes)][string_data]
+					// We need to extract the size from the first 8 bytes to know the actual string length
+					if (data.size() < sizeof(std::size_t)) {
+						return nullptr;
+					}
+					std::vector<std::byte> size_bytes(data.begin(), data.begin() + sizeof(std::size_t));
+					auto size_expected = Serializable<std::size_t>::Deserialize(size_bytes);
+					if (!size_expected) {
+						return nullptr;
+					}
+					return std::make_shared<Packet::LargeData>(*size_expected);
+				}
+				case Packet::Opcode::S_MSG_REPLYLARGEDATASIZE: {
+					auto expected_size = Serializable<std::size_t>::Deserialize(data);
+					if (!expected_size) {
+						return nullptr;
+					}
+					return std::make_shared<Packet::AnswerLargeDataSize>(*expected_size);
+				}
+				default:
+					return nullptr;
 			}
-	};
+		};
+	}
 
-	using ExpectedNameList = StormByte::Expected<std::vector<std::string>, StormByte::Network::Exception>;
-	using ExpectedRandomNumber = StormByte::Expected<int, StormByte::Network::Exception>;
-	using ExpectedLargeDataSize = StormByte::Expected<std::size_t, StormByte::Network::Exception>;
+	using ExpectedNameList = NetExpected<std::vector<std::string>>;
+	using ExpectedRandomNumber = NetExpected<int>;
+	using ExpectedLargeDataSize = NetExpected<std::size_t>;
 
-	class Client: public Network::Client {
+	class Client: public Net::Client {
 		public:
-			Client(const enum Network::Protocol& protocol, const unsigned short& timeout, const Logger::ThreadedLog& logger) noexcept:
-			Network::Client(protocol, Test::Codec(logger), timeout, logger) {}
+			Client(const ThreadedLog& logger) noexcept:
+			Net::Client(DeserializeFunction(), logger) {}
 			~Client() noexcept = default;
+			Pipeline InputPipeline() const noexcept override {
+				Pipeline pipeline;
+				// No processing stages for input
+				return pipeline;
+			}
+			Pipeline OutputPipeline() const noexcept override {
+				Pipeline pipeline;
+				// No processing stages for output
+				return pipeline;
+			}
 
 			ExpectedNameList RequestNameList(const std::size_t& amount) noexcept {
 				// Send request
-				Packets::AskNameList request_packet(amount);
-				auto send_expected = Send(request_packet);
-				if (!send_expected) {
-					return StormByte::Unexpected<Network::Exception>("Client::RequestNameList: failed to send AskNameList packet ({})", send_expected.error()->what());
+				Packet::AskNameList request_packet(amount);
+				auto received_packet = Send(request_packet);
+				if (!received_packet) {
+					return SB::Unexpected<Net::Exception>("Client::RequestNameList: failed to send/receive AskNameList packet");
 				}
 
-				// Receive response
-				auto receive_expected = Receive();
-				if (!receive_expected) {
-					return StormByte::Unexpected<Network::Exception>("Client::RequestNameList: failed to receive AnswerNameList packet ({})", receive_expected.error()->what());
+				std::shared_ptr<Packet::AnswerNameList> namelist_packet = std::dynamic_pointer_cast<Packet::AnswerNameList>(received_packet);
+				if (!namelist_packet) {
+					return SB::Unexpected<Net::Exception>("Client::RequestNameList: received unexpected packet opcode ({})", received_packet->Opcode());
 				}
-				auto& received_packet = receive_expected.value();
-				if (received_packet->Opcode() != static_cast<unsigned short>(Packets::Opcode::S_MSG_RESPONDNAMELIST)) {
-					return StormByte::Unexpected<Network::Exception>("Client::RequestNameList: received unexpected packet opcode ({})", received_packet->Opcode());
-				}
-				auto answer_packet = std::static_pointer_cast<Packets::AnswerNameList>(received_packet);
-				return answer_packet->GetNames();
+				return namelist_packet->GetNames();
 			}
 
 			ExpectedRandomNumber RequestRandomNumber() noexcept {
 				// Send request
-				Packets::AskRandomNumber request_packet;
-				auto send_expected = Send(request_packet);
-				if (!send_expected) {
-					return StormByte::Unexpected<Network::Exception>("Client::RequestRandomNumber: failed to send AskRandomNumber packet ({})", send_expected.error()->what());
+				Packet::AskRandomNumber request_packet;
+				auto response_packet = Send(request_packet);
+				if (!response_packet) {
+					return SB::Unexpected<Net::Exception>("Client::RequestRandomNumber: failed to send AskRandomNumber packet");
 				}
 
-				// Receive response
-				auto receive_expected = Receive();
-				if (!receive_expected) {
-					return StormByte::Unexpected<Network::Exception>("Client::RequestRandomNumber: failed to receive AnswerRandomNumber packet ({})", receive_expected.error()->what());
+				std::shared_ptr<Packet::AnswerRandomNumber> answer_packet = std::dynamic_pointer_cast<Packet::AnswerRandomNumber>(response_packet);
+				if (!answer_packet) {
+					return SB::Unexpected<Net::Exception>("Client::RequestRandomNumber: received unexpected packet opcode ({})", response_packet->Opcode());
 				}
-				auto& received_packet = receive_expected.value();
-				if (received_packet->Opcode() != static_cast<unsigned short>(Packets::Opcode::S_MSG_RESPONDRANDOMNUMBER)) {
-					return StormByte::Unexpected<Network::Exception>("Client::RequestRandomNumber: received unexpected packet opcode ({})", received_packet->Opcode());
-				}
-				auto answer_packet = std::static_pointer_cast<Packets::AnswerRandomNumber>(received_packet);
 				return answer_packet->GetNumber();
 			}
 
 			ExpectedLargeDataSize RequestLargeDataSize(const std::size_t& size) noexcept {
-				this->Log() << Logger::Level::LowLevel << "Client: sending C_MSG_SENDLARGEDATA size=" << Logger::humanreadable_bytes << size << Logger::nohumanreadable << std::endl;
 				// Send request
-				Packets::LargeData request_packet(size);
-				auto send_expected = Send(request_packet);
-				if (!send_expected) {
-					return StormByte::Unexpected<Network::Exception>("Client::RequestLargeDataSize: failed to send LargeData packet ({})", send_expected.error()->what());
+				Packet::LargeData request_packet(size);
+				auto response_packet = Send(request_packet);
+				if (!response_packet) {
+					return SB::Unexpected<Net::Exception>("Client::RequestLargeDataSize: failed to send LargeData packet");
 				}
 
-				this->Log() << Logger::Level::LowLevel << "Client: waiting for S_MSG_REPLYLARGEDATASIZE" << std::endl;
-				// Receive response
-				auto receive_expected = Receive();
-				if (!receive_expected) {
-					return StormByte::Unexpected<Network::Exception>("Client::RequestLargeDataSize: failed to receive AnswerLargeDataSize packet ({})", receive_expected.error()->what());
+				std::shared_ptr<Packet::AnswerLargeDataSize> answer_packet = std::dynamic_pointer_cast<Packet::AnswerLargeDataSize>(response_packet);
+				if (!answer_packet) {
+					return SB::Unexpected<Net::Exception>("Client::RequestLargeDataSize: received unexpected packet opcode ({})", response_packet->Opcode());
 				}
-				auto& received_packet = receive_expected.value();
-				if (received_packet->Opcode() != static_cast<unsigned short>(Packets::Opcode::S_MSG_REPLYLARGEDATASIZE)) {
-					return StormByte::Unexpected<Network::Exception>("Client::RequestLargeDataSize: received unexpected packet opcode ({})", received_packet->Opcode());
-				}
-				auto answer_packet = std::static_pointer_cast<Packets::AnswerLargeDataSize>(received_packet);
-				this->Log() << Logger::Level::LowLevel << "Client: received S_MSG_REPLYLARGEDATASIZE size=" << Logger::humanreadable_bytes << answer_packet->GetSize() << Logger::nohumanreadable << std::endl;
 				return answer_packet->GetSize();
 			}
 	};
 
-	class Server: public Network::Server {
+	class Server: public Net::Server {
 		public:
-			Server(const enum Network::Protocol& protocol, const unsigned short& timeout, const Logger::ThreadedLog& logger) noexcept:
-			Network::Server(protocol, Test::Codec(logger), timeout, logger) {}
+			Server(const ThreadedLog& logger) noexcept:
+			Net::Server(DeserializeFunction(), logger) {}
 			~Server() noexcept = default;
+			Pipeline InputPipeline() const noexcept override {
+				Pipeline pipeline;
+				// No processing stages for input
+				return pipeline;
+			}
+			Pipeline OutputPipeline() const noexcept override {
+				Pipeline pipeline;
+				// No processing stages for output
+				return pipeline;
+			}
 
 		private:
-			Expected<void, Network::PacketError> ProcessClientPacket(const std::string& client_uuid, const Network::Packet& packet) noexcept override {
-				switch(static_cast<Packets::Opcode>(packet.Opcode())) {
-					case Packets::Opcode::C_MSG_ASKNAMELIST: {
-						auto ask_packet = static_cast<const Packets::AskNameList&>(packet);
-						// Deserialize amount from the AskNameList packet
-						auto serialized = ask_packet.DoSerialize();
-						auto extracted = serialized.Extract();
-						if (!extracted) {
-							return StormByte::Unexpected<Network::PacketError>("Server::ProcessClientPacket: failed to extract AskNameList data");
+			PacketPointer ProcessClientPacket(const std::string& client_uuid, PacketPointer packet) noexcept override {
+				switch(static_cast<Packet::Opcode>(packet->Opcode())) {
+					case Packet::Opcode::C_MSG_ASKNAMELIST: {
+						auto ask_packet = std::dynamic_pointer_cast<Packet::AskNameList>(packet);
+						if (!ask_packet) {
+							return nullptr;
 						}
-						auto expected_amount = StormByte::Serializable<std::size_t>::Deserialize(extracted.value());
-						if (!expected_amount) {
-							return StormByte::Unexpected<Network::PacketError>("Server::ProcessClientPacket: failed to deserialize AskNameList amount ({})", expected_amount.error()->what());
-						}
-						std::size_t amount = *expected_amount;
+						std::size_t amount = ask_packet->GetAmount();
 
 						// Create dummy name list
 						std::vector<std::string> names;
 						for (std::size_t i = 0; i < amount; ++i) {
 							names.push_back("Name_" + std::to_string(i + 1));
 						}
-						Packets::AnswerNameList answer_packet(names);
-						auto send_expected = Send(client_uuid, answer_packet);
-						if (!send_expected) {
-							return StormByte::Unexpected<Network::PacketError>("Server::ProcessClientPacket: failed to send AnswerNameList packet ({})", send_expected.error()->what());
-						}
-						break;
+						return std::make_shared<Packet::AnswerNameList>(names);
 					}
-					case Packets::Opcode::C_MSG_ASKRANDOMNUMBER: {
+					case Packet::Opcode::C_MSG_ASKRANDOMNUMBER: {
 						// Generate random number using C++ RNG (per-thread engine)
 						static thread_local std::mt19937 gen{[](){
 							std::random_device rd;
@@ -326,27 +305,15 @@ namespace Test {
 						}()};
 						std::uniform_int_distribution<int> dist(0, 99);
 						int random_number = dist(gen);
-						Packets::AnswerRandomNumber answer_packet(random_number);
-						auto send_expected = Send(client_uuid, answer_packet);
-						if (!send_expected) {
-							return StormByte::Unexpected<Network::PacketError>("Server::ProcessClientPacket: failed to send AnswerRandomNumber packet ({})", send_expected.error()->what());
-						}
-						break;
+						return std::make_shared<Packet::AnswerRandomNumber>(random_number);
 					}
-					case Packets::Opcode::C_MSG_SENDLARGEDATA: {
-						auto large_data_packet = static_cast<const Packets::LargeData&>(packet);
-						std::size_t data_size = large_data_packet.GetSize();
-						this->Log() << Logger::Level::LowLevel << "Server: received C_MSG_SENDLARGEDATA size=" << Logger::humanreadable_bytes << data_size << Logger::nohumanreadable << std::endl;
-						Packets::AnswerLargeDataSize answer_packet(data_size);
-						auto send_expected = Send(client_uuid, answer_packet);
-						if (!send_expected) {
-							return StormByte::Unexpected<Network::PacketError>("Server::ProcessClientPacket: failed to send AnswerLargeDataSize packet ({})", send_expected.error()->what());
-						}
-						this->Log() << Logger::Level::LowLevel << "Server: sent S_MSG_REPLYLARGEDATASIZE to client=" << client_uuid << std::endl;
-						break;
+					case Packet::Opcode::C_MSG_SENDLARGEDATA: {
+						auto large_data_packet = std::static_pointer_cast<const Packet::LargeData>(packet);
+						std::size_t data_size = large_data_packet->GetSize();
+						return std::make_shared<Packet::AnswerLargeDataSize>(data_size);
 					}
 					default:
-						return StormByte::Unexpected<Network::PacketError>("Server::ProcessClientPacket: received unknown packet opcode ({})", packet.Opcode());
+						return nullptr;
 				}
 				return {};
 			}
@@ -359,27 +326,25 @@ int TestRequestNameList() {
 	const char* HOST = "127.0.0.1";
 	const unsigned short PORT = 7081;
 
-	Test::Server server(Protocol::IPv4, timeout, logger);
-	auto listen_res = server.Connect(HOST, PORT);
-	if (!listen_res) {
-		logger << Logger::Level::Error << fn_name << ": server.Connect failed: " << listen_res.error()->what() << std::endl;
+	Test::Server server(logger);
+	if (!server.Connect(Net::Connection::Protocol::IPv4, HOST, PORT)) {
+		logger << Level::Error << fn_name << ": server.Connect failed." << std::endl;
 		RETURN_TEST(fn_name, 1);
 	}
 
 	// Small delay to ensure server is listening
 	std::this_thread::sleep_for(std::chrono::milliseconds(100));
 
-	Test::Client client(Protocol::IPv4, timeout, logger);
-	auto connect_res = client.Connect(HOST, PORT);
-	if (!connect_res) {
-		logger << Logger::Level::Error << fn_name << ": client.Connect failed: " << connect_res.error()->what() << std::endl;
+	Test::Client client(logger);
+	if (!client.Connect(Net::Connection::Protocol::IPv4, HOST, PORT)) {
+		logger << Level::Error << fn_name << ": client.Connect failed." << std::endl;
 		RETURN_TEST(fn_name, 1);
 	}
 
 	const std::size_t amount = 3;
 	auto names_expected = client.RequestNameList(amount);
 	if (!names_expected) {
-		logger << Logger::Level::Error << fn_name << ": RequestNameList failed: " << names_expected.error()->what() << std::endl;
+		logger << Level::Error << fn_name << ": RequestNameList failed: " << names_expected.error()->what() << std::endl;
 		RETURN_TEST(fn_name, 1);
 	}
 	auto names = names_expected.value();
@@ -389,7 +354,7 @@ int TestRequestNameList() {
 		all_names += names[i] + " ";
 		ASSERT_TRUE(fn_name, names[i] == ("Name_" + std::to_string(i + 1)));
 	}
-	logger << Logger::Level::Info << fn_name << ": Received names: " << all_names << std::endl;
+	logger << Level::Info << fn_name << ": Received names: " << all_names << std::endl;
 
 	client.Disconnect();
 	server.Disconnect();
@@ -402,26 +367,29 @@ int TestRequestRandomNumber() {
 	const char* HOST = "127.0.0.1";
 	const unsigned short PORT = 7080;
 
-	Test::Server server(Protocol::IPv4, timeout, logger);
-	auto listen_res = server.Connect(HOST, PORT);
-	ASSERT_TRUE(fn_name, listen_res.has_value());
+	Test::Server server(logger);
+	if (!server.Connect(Net::Connection::Protocol::IPv4, HOST, PORT)) {
+		logger << Level::Error << fn_name << ": server.Connect failed." << std::endl;
+		RETURN_TEST(fn_name, 1);
+	}
 
 	// Small delay to ensure server is listening
 	std::this_thread::sleep_for(std::chrono::milliseconds(100));
 
-	Test::Client client(Protocol::IPv4, timeout, logger);
-	auto connect_res = client.Connect(HOST, PORT);
-	ASSERT_TRUE(fn_name, connect_res.has_value());
+	Test::Client client(logger);
+	if (!client.Connect(Net::Connection::Protocol::IPv4, HOST, PORT)) {
+		logger << Level::Error << fn_name << ": client.Connect failed." << std::endl;
+		RETURN_TEST(fn_name, 1);
+	}
 
 	auto number_expected = client.RequestRandomNumber();
 	if (!number_expected) {
-		logger << Logger::Level::Error << fn_name << ": RequestRandomNumber failed: " << number_expected.error()->what() << std::endl;
+		logger << Level::Error << fn_name << ": RequestRandomNumber failed: " << number_expected.error()->what() << std::endl;
 		RETURN_TEST(fn_name, 1);
 	}
 	int n = number_expected.value();
 	ASSERT_TRUE(fn_name, n >= 0 && n < 100);
-	logger << Logger::Level::Info << fn_name << ": Received random number: " << n << std::endl;
-
+	logger << Level::Info << fn_name << ": Received random number: " << n << std::endl;
 	client.Disconnect();
 	server.Disconnect();
 	RETURN_TEST(fn_name, 0);
@@ -433,26 +401,29 @@ int TestRequestLargeDataSize() {
 	const char* HOST = "127.0.0.1";
 	const unsigned short PORT = 7080;
 
-	Test::Server server(Protocol::IPv4, timeout, logger);
-	auto listen_res = server.Connect(HOST, PORT);
-	ASSERT_TRUE(fn_name, listen_res.has_value());
+	Test::Server server(logger);
+	if (!server.Connect(Net::Connection::Protocol::IPv4, HOST, PORT)) {
+		logger << Level::Error << fn_name << ": server.Connect failed." << std::endl;
+		RETURN_TEST(fn_name, 1);
+	}
 
 	// Small delay to ensure server is listening
 	std::this_thread::sleep_for(std::chrono::milliseconds(100));
 
-	Test::Client client(Protocol::IPv4, timeout, logger);
-	auto connect_res = client.Connect(HOST, PORT);
-	ASSERT_TRUE(fn_name, connect_res.has_value());
+	Test::Client client(logger);
+	if (!client.Connect(Net::Connection::Protocol::IPv4, HOST, PORT)) {
+		logger << Level::Error << fn_name << ": client.Connect failed." << std::endl;
+		RETURN_TEST(fn_name, 1);
+	}
 
 	auto size_expected = client.RequestLargeDataSize(large_data_size);
 	if (!size_expected) {
-		logger << Logger::Level::Error << fn_name << ": RequestLargeDataSize failed: " << size_expected.error()->what() << std::endl;
+		logger << Level::Error << fn_name << ": RequestLargeDataSize failed: " << size_expected.error()->what() << std::endl;
 		RETURN_TEST(fn_name, 1);
 	}
 	std::size_t size = size_expected.value();
 	ASSERT_EQUAL(fn_name, size, large_data_size);
-	logger << Logger::Level::Info << fn_name << ": Received large data size: " << size << std::endl;
-
+	logger << Level::Info << fn_name << ": Received large data size: " << size << std::endl;
 	client.Disconnect();
 	server.Disconnect();
 	RETURN_TEST(fn_name, 0);

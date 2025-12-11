@@ -1,20 +1,18 @@
 #pragma once
 
-#include <StormByte/buffer/consumer.hxx>
-#include <StormByte/buffer/pipeline.hxx>
-#include <StormByte/buffer/producer.hxx>
 #include <StormByte/buffer/fifo.hxx>
 #include <StormByte/expected.hxx>
-#include <StormByte/network/protocol.hxx>
+#include <StormByte/logger/log.hxx>
+#include <StormByte/network/connection/protocol.hxx>
 #include <StormByte/network/connection/rw.hxx>
 #include <StormByte/network/connection/status.hxx>
 #include <StormByte/network/exception.hxx>
+#include <StormByte/network/transport/packet.hxx>
 
 #ifdef WINDOWS
 #include <winsock2.h>
 #endif
-#include <functional>
-#include <unordered_map>
+
 #include <memory>
 
 /**
@@ -22,7 +20,6 @@
  * @brief The namespace containing all the network related classes.
  */
 namespace StormByte::Network {																		///< The connection info class (forward declaration).
-	class Packet;																					///< The packet class (forward declaration).
 	namespace Socket {
 		class Socket;																				///< The socket class (forward declaration).
 		class Client;																				///< The client socket class (forward declaration).
@@ -38,11 +35,10 @@ namespace StormByte::Network {																		///< The connection info class (
 	using ExpectedVoid = StormByte::Expected<void, ConnectionError>;								///< The expected void type.
 	using ExpectedClient = StormByte::Expected<std::shared_ptr<Socket::Client>, ConnectionError>;	///< The expected client type.
 	using ExpectedReadResult = StormByte::Expected<Connection::Read::Result, ConnectionClosed>;		///< The expected read result type.
-	using SharedConsumerBuffer = std::shared_ptr<Buffer::Consumer>;									///< The shared consumer buffer type.
-	using SharedProducerBuffer = std::shared_ptr<Buffer::Producer>;									///< The shared producer buffer type.
-	using ExpectedPacket = StormByte::Expected<std::shared_ptr<Packet>, PacketError>;				///< The expected packet type.
-	using PacketReaderFunction = std::function<ExpectedBuffer(const size_t&)>;						///< The packet reader function type.
-	using ExpectedConsumer = StormByte::Expected<Buffer::Consumer, Exception>;						///< The expected consumer type.
-	using SocketUUIDPMap = std::unordered_map<std::string, std::shared_ptr<Socket::Socket>>;        ///< The client map type (owns sockets).
-	using PipelineUUIDPMap = std::unordered_map<std::string, std::shared_ptr<Buffer::Pipeline>>;	///< The pipeline map type.
+	using PacketPointer = std::shared_ptr<Transport::Packet>;										///< The packet pointer type.
+	using DeserializePacketFunction = std::function<PacketPointer(
+		Transport::Packet::OpcodeType,
+		Buffer::Consumer,
+		Logger::Log&
+	)>; 																							///< The deserialize packet function type.
 }

@@ -29,7 +29,7 @@ constexpr const int SOCKET_BUFFER_SIZE = 262144; // 256 KiB
 
 using namespace StormByte::Network::Socket;
 
-Socket::Socket(const Protocol& protocol, Logger::ThreadedLog logger) noexcept:
+Socket::Socket(const Connection::Protocol& protocol, Logger::ThreadedLog logger) noexcept:
 m_protocol(protocol), m_status(Connection::Status::Disconnected),
 m_handle(-1), m_conn_info(nullptr), m_mtu(DEFAULT_MTU), m_logger(logger),
 m_UUID(StormByte::GenerateUUIDv4()) {
@@ -88,7 +88,7 @@ void Socket::Disconnect() noexcept {
 
 StormByte::Network::ExpectedReadResult Socket::WaitForData(const long long& usecs) noexcept {
 	if (!Connection::IsConnected(m_status)) {
-		return StormByte::Unexpected<ConnectionClosed>("Failed to wait for data: Invalid connection status");
+		return Unexpected<ConnectionClosed>("Failed to wait for data: Invalid connection status");
 	}
 
 	// Store the starting time and compute deadline when a timeout is requested
@@ -134,16 +134,17 @@ StormByte::Network::ExpectedReadResult Socket::WaitForData(const long long& usec
 		int epfd = epoll_create1(0);
 		if (epfd == -1) {
 			// Fall back to select path if epoll creation failed
-			return StormByte::Unexpected<ConnectionClosed>("Failed to create epoll instance");
+			return Unexpected<ConnectionClosed>("Failed to create epoll instance");
 		}
 
 		struct epoll_event ev;
-		ev.events = EPOLLIN | EPOLLPRI;
+		// Also request hang-up/rdhup and errors so we can detect FIN/close vs actual data
+		ev.events = EPOLLIN | EPOLLPRI | EPOLLRDHUP | EPOLLHUP | EPOLLERR;
 		ev.data.fd = m_handle;
 
 		if (epoll_ctl(epfd, EPOLL_CTL_ADD, m_handle, &ev) == -1) {
 			close(epfd);
-			return StormByte::Unexpected<ConnectionClosed>("Failed to add fd to epoll");
+			return Unexpected<ConnectionClosed>("Failed to add fd to epoll");
 		}
 
 		struct epoll_event events[1];
@@ -153,17 +154,47 @@ StormByte::Network::ExpectedReadResult Socket::WaitForData(const long long& usec
 		close(epfd);
 
 		if (nfds > 0) {
-			// Event(s) available
+			// Event(s) available — inspect flags to distinguish data vs shutdown vs error
+			uint32_t evflags = events[0].events;
+			if (evflags & EPOLLERR) {
+				return Unexpected<ConnectionClosed>("Socket error while waiting for data");
+			}
+
+			// EPOLLHUP/EPOLLRDHUP indicate peer closed (FIN). Treat as shutdown request.
+			if (evflags & (EPOLLHUP | EPOLLRDHUP)) {
+				// If socket isn't connected anymore, keep existing behaviour
+				if (m_status != Connection::Status::Connected) return Connection::Read::Result::Closed;
+				// If there's also data pending, peek to determine which to return
+				if (evflags & EPOLLIN) {
+					char tmp;
+					ssize_t r = recv(m_handle, &tmp, 1, MSG_PEEK | MSG_DONTWAIT);
+					if (r > 0) {
+						return Connection::Read::Result::Success; // data available
+					} else if (r == 0) {
+						// FIN with no data
+						return Connection::Read::Result::ShutdownRequest;
+					} else {
+						if (errno == EWOULDBLOCK || errno == EAGAIN) {
+							return Connection::Read::Result::Success;
+						}
+						return Unexpected<ConnectionClosed>("recv(MSG_PEEK) error while checking shutdown");
+					}
+				}
+				return Connection::Read::Result::ShutdownRequest;
+			}
+
 			if (m_status != Connection::Status::Connected) return Connection::Read::Result::Closed;
-			return Connection::Read::Result::Success;
+			if (evflags & (EPOLLIN | EPOLLPRI)) return Connection::Read::Result::Success;
+			// Fallback
+			return Unexpected<ConnectionClosed>("Unknown epoll event while waiting for data");
 		} else if (nfds == 0) {
 			return Connection::Read::Result::Timeout;
 		} else {
 			// Error occurred
 			if (errno == ECONNRESET || errno == EBADF) {
-				return StormByte::Unexpected<ConnectionClosed>("Connection closed or invalid socket");
+				return Unexpected<ConnectionClosed>("Connection closed or invalid socket");
 			}
-			return StormByte::Unexpected<ConnectionClosed>("Failed to wait for data: epoll_wait error");
+			return Unexpected<ConnectionClosed>("Failed to wait for data: epoll_wait error");
 		}
 #else
 		// Windows: use WSAEventSelect + WSAWaitForMultipleEvents for event-driven wait
@@ -178,53 +209,98 @@ StormByte::Network::ExpectedReadResult Socket::WaitForData(const long long& usec
 
 		WSAEVENT ev = WSACreateEvent();
 		if (ev == WSA_INVALID_EVENT) {
-			return StormByte::Unexpected<ConnectionClosed>("Failed to create WSA event");
+			return Unexpected<ConnectionClosed>("Failed to create WSA event");
 		}
 
 		// Request notification for read/close/accept events on the socket
 		long mask = FD_READ | FD_CLOSE | FD_ACCEPT;
 		if (WSAEventSelect(m_handle, ev, mask) == SOCKET_ERROR) {
 			WSACloseEvent(ev);
-			return StormByte::Unexpected<ConnectionClosed>("WSAEventSelect failed");
+			return Unexpected<ConnectionClosed>("WSAEventSelect failed");
 		}
 
 		DWORD wait_res = WSAWaitForMultipleEvents(1, &ev, FALSE, (timeout_ms < 0 ? WSA_INFINITE : static_cast<DWORD>(timeout_ms)), FALSE);
 
-		// Disable event notification and clean up
-		WSAEventSelect(m_handle, NULL, 0);
-		WSACloseEvent(ev);
-
 		if (wait_res == WSA_WAIT_TIMEOUT) {
+			// Disable event notification and clean up
+			WSAEventSelect(m_handle, NULL, 0);
+			WSACloseEvent(ev);
 			return Connection::Read::Result::Timeout;
 		} else if (wait_res == WSA_WAIT_FAILED) {
 			int wsa_err = WSAGetLastError();
+			// Disable event notification and clean up
+			WSAEventSelect(m_handle, NULL, 0);
+			WSACloseEvent(ev);
 			if (wsa_err == WSAECONNRESET || wsa_err == WSAENOTSOCK) {
-				return StormByte::Unexpected<ConnectionClosed>("Connection closed or invalid socket");
+				return Unexpected<ConnectionClosed>("Connection closed or invalid socket");
 			}
-			return StormByte::Unexpected<ConnectionClosed>("WSAWaitForMultipleEvents failed");
+			return Unexpected<ConnectionClosed>("WSAWaitForMultipleEvents failed");
 		} else {
-			// Event signaled — treat as data available or connection state change
+			// Event signaled — inspect network events to distinguish close vs data
+			WSANETWORKEVENTS netev;
+			if (WSAEnumNetworkEvents(m_handle, ev, &netev) == SOCKET_ERROR) {
+				// Disable event notification and clean up
+				WSAEventSelect(m_handle, NULL, 0);
+				WSACloseEvent(ev);
+				return Unexpected<ConnectionClosed>("WSAEnumNetworkEvents failed");
+			}
+
+			// Disable event notification and clean up
+			WSAEventSelect(m_handle, NULL, 0);
+			WSACloseEvent(ev);
+
+			// FD_CLOSE indicates peer closed (FIN) — return ShutdownRequest if orderly
+			if (netev.lNetworkEvents & FD_CLOSE) {
+				int err = netev.iErrorCode[FD_CLOSE_BIT];
+				if (err != 0) {
+					return Unexpected<ConnectionClosed>("Connection closed with error");
+				}
+				// If there is also FD_READ, peek to check for data vs pure FIN
+				if ((netev.lNetworkEvents & FD_READ) != 0) {
+					char tmp;
+					int r = recv(m_handle, &tmp, 1, MSG_PEEK);
+					if (r > 0) {
+						return Connection::Read::Result::Success;
+					} else if (r == 0) {
+						return Connection::Read::Result::ShutdownRequest;
+					} else {
+						int wsaerr = WSAGetLastError();
+						if (wsaerr == WSAEWOULDBLOCK) {
+							return Connection::Read::Result::Success;
+						}
+						return Unexpected<ConnectionClosed>("recv(MSG_PEEK) failed while checking shutdown");
+					}
+				}
+				return Connection::Read::Result::ShutdownRequest;
+			}
+
+			if (netev.lNetworkEvents & FD_READ) {
+				if (m_status != Connection::Status::Connected) return Connection::Read::Result::Closed;
+				return Connection::Read::Result::Success;
+			}
+
+			// If we reach here treat as unknown network event — don't fail the wait.
+			m_logger << Logger::Level::LowLevel << "WSA wait signaled unknown network event (flags=0x" << std::hex << netev.lNetworkEvents << std::dec << ")" << std::endl;
 			if (m_status != Connection::Status::Connected) return Connection::Read::Result::Closed;
 			return Connection::Read::Result::Success;
 		}
 	#endif
 	}
 
-	return StormByte::Unexpected<ConnectionClosed>("Failed to wait for data: Unknown error occurred");
+	return Unexpected<ConnectionClosed>("Failed to wait for data: Unknown error occurred");
 }
 
 StormByte::Expected<StormByte::Network::Connection::HandlerType, StormByte::Network::ConnectionError> Socket::CreateSocket() noexcept {
 	// Make sure the platform handler is constructed before calling ::socket
 	(void)StormByte::Network::Connection::Handler::Instance();
-	auto protocol = m_protocol == Protocol::IPv4 ? AF_INET : AF_INET6;
-	Connection::HandlerType handle = ::socket(protocol, SOCK_STREAM, 0);
+	Connection::HandlerType handle = ::socket(Connection::ProtocolInt(m_protocol), SOCK_STREAM, 0);
 	#ifdef WINDOWS
 	if (handle == INVALID_SOCKET) {
 	#else
 	if (handle == -1) {
 	#endif
 		m_status = Connection::Status::Disconnected;
-		return StormByte::Unexpected<ConnectionError>(Connection::Handler::Instance().LastError());
+		return Unexpected<ConnectionError>(Connection::Handler::Instance().LastError());
 	}
 
 	return handle;

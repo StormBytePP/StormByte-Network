@@ -23,7 +23,8 @@ namespace StormByte::Network::Connection {
 			WouldBlock,
 			Closed,
 			Failed,
-			Timeout
+			Timeout,
+			ShutdownRequest
 		};
 	}
 
@@ -57,6 +58,10 @@ namespace StormByte::Network::Connection {
 				return "Failed";
 			case StormByte::Network::Connection::Read::Result::Closed:
 				return "Closed";
+			case StormByte::Network::Connection::Read::Result::Timeout:
+				return "Timeout";
+			case StormByte::Network::Connection::Read::Result::ShutdownRequest:
+				return "ShutdownRequest";
 			default:
 				return "Unknown";
 		}

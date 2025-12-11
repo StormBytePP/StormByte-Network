@@ -4,7 +4,7 @@
 #include <StormByte/logger/threaded_log.hxx>
 #include <StormByte/network/connection/handler.hxx>
 #include <StormByte/network/connection/info.hxx>
-#include <StormByte/network/protocol.hxx>
+#include <StormByte/network/connection/protocol.hxx>
 #include <StormByte/network/connection/status.hxx>
 #include <StormByte/network/exception.hxx>
 #include <StormByte/network/typedefs.hxx>
@@ -45,7 +45,11 @@ namespace StormByte::Network::Socket {
 		friend class Server;
 		friend class Client;
 		public:
-			// Non-copyable: sockets represent unique OS handles.
+			/**
+			 * @brief Copy constructor.
+			 *
+			 * Deleted to prevent copying of socket instances.
+			 */
 			Socket(const Socket& other) = delete;
 
 			/**
@@ -65,7 +69,12 @@ namespace StormByte::Network::Socket {
 			 */
 			virtual ~Socket() noexcept;
 
-			Socket& operator=(const Socket& other) = delete;
+			/**
+			 * @brief Copy assignment.
+			 *
+			 * Deleted to prevent copying of socket instances.
+			 */
+			Socket& operator=(const Socket& other) 			= delete;
 
 			/**
 			 * @brief Move assignment.
@@ -81,7 +90,7 @@ namespace StormByte::Network::Socket {
 			 * Perform protocol-level and OS-level shutdown/close operations. This
 			 * is safe to call multiple times and will not throw.
 			 */
-			virtual void Disconnect() noexcept;
+			virtual void 									Disconnect() noexcept;
 
 			/**
 			 * @brief Current connection status.
@@ -90,7 +99,9 @@ namespace StormByte::Network::Socket {
 			 * current state (Connected/Disconnected/etc.). The reference remains
 			 * valid for the lifetime of the `Socket` object.
 			 */
-			constexpr const Connection::Status& Status() const noexcept { return m_status; }
+			constexpr const Connection::Status& 			Status() const noexcept {
+				return m_status;
+			}
 
 			/**
 			 * @brief Report the current MTU in bytes.
@@ -99,7 +110,9 @@ namespace StormByte::Network::Socket {
 			 * returned reference aliases an internal member — the value itself is
 			 * a small integer (unsigned long) and safe to read.
 			 */
-			constexpr const unsigned long& MTU() const noexcept { return m_mtu; }
+			constexpr const unsigned long& 					MTU() const noexcept {
+				return m_mtu;
+			}
 
 			/**
 			 * @brief Access the underlying connection handler.
@@ -108,7 +121,7 @@ namespace StormByte::Network::Socket {
 			 * instance. The returned reference is valid while the `Socket` is
 			 * alive and holds the handler.
 			 */
-			inline const Connection::HandlerType& Handle() const noexcept { return m_handle; }
+			inline const Connection::HandlerType& 			Handle() const noexcept { return m_handle; }
 
 			/**
 			 * @brief Access the UUID associated with the socket.
@@ -116,7 +129,7 @@ namespace StormByte::Network::Socket {
 			 * Returns a constant reference to the UUID string assigned to this
 			 * socket instance.
 			 */
-			inline const std::string& UUID() const noexcept { return m_UUID; }
+			inline const std::string& 						UUID() const noexcept { return m_UUID; }
 
 			/**
 			 * @brief Poll the socket for incoming data.
@@ -129,15 +142,15 @@ namespace StormByte::Network::Socket {
 			 * @param usecs Timeout in microseconds (default 0).
 			 * @return `ExpectedReadResult` with readiness or error.
 			 */
-			ExpectedReadResult WaitForData(const long long& usecs = 0) noexcept;
+			ExpectedReadResult 								WaitForData(const long long& usecs = 0) noexcept;
 
 		protected:
-			Protocol m_protocol;							///< Protocol family/config
+			Connection::Protocol m_protocol;				///< Protocol family/config
 			Connection::Status m_status;					///< Current connection status
 			Connection::HandlerType m_handle;				///< Owned connection handler
 			std::unique_ptr<Connection::Info> m_conn_info;	///< Optional connection metadata
 			unsigned long m_mtu;							///< Active MTU value
-			Logger::ThreadedLog m_logger;					///< Logger used for socket diagnostics
+			mutable Logger::ThreadedLog m_logger;			///< Logger used for socket diagnostics
 
 			// Effective socket buffer sizes as reported by the OS (bytes).
 			// Initialized to a sensible default; updated in InitializeAfterConnect().
@@ -151,7 +164,7 @@ namespace StormByte::Network::Socket {
 			 * be supplied to receive diagnostic messages. The constructor does
 			 * not throw and leaves the object ready for `CreateSocket()`.
 			 */
-			Socket(const Protocol& protocol, Logger::ThreadedLog logger) noexcept;
+			Socket(const Connection::Protocol& protocol, Logger::ThreadedLog logger) noexcept;
 
 			/**
 			 * @brief Create and configure the underlying OS socket.
@@ -190,7 +203,7 @@ namespace StormByte::Network::Socket {
 			 * Returns the MTU used for decision-making about packet sizes. The
 			 * function is `noexcept` and falls back to `DEFAULT_MTU` on error.
 			 */
-			int GetMTU() const noexcept;
+			int 												GetMTU() const noexcept;
 
 			/**
 			 * @brief Set the socket to non-blocking mode.
@@ -199,6 +212,6 @@ namespace StormByte::Network::Socket {
 			 * non-blocking. This method is used during initialization and is
 			 * `noexcept`.
 			 */
-			void SetNonBlocking() noexcept;
+			void 												SetNonBlocking() noexcept;
 		};
 }

@@ -26,7 +26,7 @@ constexpr const std::size_t MAX_SINGLE_IO = 4 * 1024 * 1024; // 4 MiB
 using namespace StormByte::Logger;
 using namespace StormByte::Network;
 
-Socket::Client::Client(const Protocol& protocol, Logger::ThreadedLog logger) noexcept
+Socket::Client::Client(const Connection::Protocol& protocol, Logger::ThreadedLog logger) noexcept
 :Socket(protocol, logger) {
 	m_logger << Logger::Level::LowLevel << "Created client socket with UUID: " << m_UUID << std::endl;
 }
@@ -36,7 +36,7 @@ ExpectedVoid Socket::Client::Connect(const std::string& hostname, const unsigned
 
 	if (m_status != Connection::Status::Disconnected) {
 		m_logger << Logger::Level::Error << "Client is already connected" << std::endl;
-		return StormByte::Unexpected<ConnectionError>("Client is already connected");
+		return Unexpected<ConnectionError>("Client is already connected");
 	}
 
 	m_status = Connection::Status::Connecting;
@@ -44,7 +44,7 @@ ExpectedVoid Socket::Client::Connect(const std::string& hostname, const unsigned
 	auto expected_socket = CreateSocket();
 	if (!expected_socket) {
 		m_logger << Logger::Level::Error << "Failed to create socket: " << expected_socket.error()->what() << std::endl;
-		return StormByte::Unexpected(expected_socket.error());
+		return Unexpected(expected_socket.error());
 	}
 
 	m_handle = expected_socket.value();
@@ -52,7 +52,7 @@ ExpectedVoid Socket::Client::Connect(const std::string& hostname, const unsigned
 	auto expected_conn_info = Connection::Info::FromHost(hostname, port, m_protocol);
 	if (!expected_conn_info) {
 		m_logger << Logger::Level::Error << "Failed to resolve host: " << expected_conn_info.error()->what() << std::endl;
-		return StormByte::Unexpected<ConnectionError>(expected_conn_info.error()->what());
+		return Unexpected<ConnectionError>(expected_conn_info.error()->what());
 	}
 
 	m_conn_info =
@@ -64,7 +64,7 @@ ExpectedVoid Socket::Client::Connect(const std::string& hostname, const unsigned
 	if (::connect(m_handle, m_conn_info->SockAddr().get(), sizeof(*m_conn_info->SockAddr())) == -1) {
 #endif
 		m_logger << Logger::Level::Error << "Failed to connect: " << Connection::Handler::Instance().LastError() << std::endl;
-		return StormByte::Unexpected<ConnectionError>(Connection::Handler::Instance().LastError());
+		return Unexpected<ConnectionError>(Connection::Handler::Instance().LastError());
 	}
 
 	InitializeAfterConnect();
@@ -75,11 +75,7 @@ ExpectedVoid Socket::Client::Connect(const std::string& hostname, const unsigned
 }
 
 ExpectedVoid Socket::Client::Send(const Buffer::FIFO& buffer) noexcept {
-	auto expected_span = buffer.Span(0);
-	if (!expected_span) {
-		return StormByte::Unexpected<ConnectionError>(expected_span.error()->what());
-	}
-	return Send(expected_span.value());
+	return Send(std::span<const std::byte>(buffer.Data().data(), buffer.Size()));
 }
 
 ExpectedVoid Socket::Client::Send(const std::vector<std::byte>& buffer) noexcept {
@@ -88,11 +84,11 @@ ExpectedVoid Socket::Client::Send(const std::vector<std::byte>& buffer) noexcept
 
 ExpectedVoid Socket::Client::Send(std::span<const std::byte> data) noexcept {
 	if (m_status != Connection::Status::Connected) {
-		return StormByte::Unexpected<ConnectionError>("Failed to send: Client is not connected");
+		return Unexpected<ConnectionError>("Failed to send: Client is not connected");
 	}
 
 	if (!m_handle) {
-		return StormByte::Unexpected<ConnectionError>("Failed to send: Invalid socket handle");
+		return Unexpected<ConnectionError>("Failed to send: Invalid socket handle");
 	}
 
 	std::size_t total_bytes_sent = 0;
@@ -106,7 +102,7 @@ ExpectedVoid Socket::Client::Send(std::span<const std::byte> data) noexcept {
 		pfd.events = POLLOUT;
 		int pol = poll(&pfd, 1, 50); // timeout 50ms
 		if (pol < 0) {
-			return StormByte::Unexpected<ConnectionError>(
+			return Unexpected<ConnectionError>(
 							"Poll error: {} (error code: {})",
 							Connection::Handler::Instance().LastError(), Connection::Handler::Instance().LastErrorCode());
 		} else if (pol == 0) {
@@ -128,7 +124,7 @@ ExpectedVoid Socket::Client::Send(std::span<const std::byte> data) noexcept {
 		tv.tv_usec = 50000; // 50ms
 		int sel = select(0, nullptr, &writefds, nullptr, &tv);
 		if (sel == SOCKET_ERROR) {
-			return StormByte::Unexpected<ConnectionError>(
+			return Unexpected<ConnectionError>(
 							"Select error: {} (error code: {})",
 							Connection::Handler::Instance().LastError(), Connection::Handler::Instance().LastErrorCode());
 		} else if (sel == 0) {
@@ -164,7 +160,7 @@ ExpectedVoid Socket::Client::Send(std::span<const std::byte> data) noexcept {
 			m_logger << Logger::Level::Error << "Send failed: " << Connection::Handler::Instance().LastError()
 					 << " (code: " << Connection::Handler::Instance().LastErrorCode() << ")"
 					 << " errno: " << sys_errno << " (" << Connection::Handler::Instance().ErrnoToString(sys_errno) << ")" << std::endl;
-			return StormByte::Unexpected<ConnectionError>(
+			return Unexpected<ConnectionError>(
 							"Failed to write: {} (error code: {})",
 							Connection::Handler::Instance().LastError(), Connection::Handler::Instance().LastErrorCode());
 		}
@@ -183,11 +179,11 @@ ExpectedVoid Socket::Client::Send(std::span<const std::byte> data) noexcept {
 
 ExpectedVoid Socket::Client::Send(Buffer::Consumer data) noexcept {
 	if (m_status != Connection::Status::Connected) {
-		return StormByte::Unexpected<ConnectionError>("Failed to send: Client is not connected");
+		return Unexpected<ConnectionError>("Failed to send: Client is not connected");
 	}
 
 	if (!m_handle) {
-		return StormByte::Unexpected<ConnectionError>("Failed to send: Invalid socket handle");
+		return Unexpected<ConnectionError>("Failed to send: Invalid socket handle");
 	}
 
 	while (data.IsWritable() || data.AvailableBytes() > 0) {
@@ -199,14 +195,13 @@ ExpectedVoid Socket::Client::Send(Buffer::Consumer data) noexcept {
 			std::this_thread::yield();
 			continue;
 		}
-		auto send_bytes = data.AvailableBytes();
-		auto expected_span = data.Span(send_bytes);
-		if (!expected_span) {
-			return StormByte::Unexpected<ConnectionError>(expected_span.error()->what());
-		}
-		auto expected_send = Send(expected_span.value());
+		Buffer::DataType byte_data;
+		data.Extract(0, byte_data); // Read all available data
+		auto send_bytes = byte_data.size();
+		auto data_span = std::span<const std::byte>(byte_data.data(), send_bytes);
+		auto expected_send = Send(data_span);
 		if (!expected_send) {
-			return StormByte::Unexpected<ConnectionError>(expected_send.error()->what());
+			return Unexpected<ConnectionError>(expected_send.error()->what());
 		}
 	}
 
@@ -253,17 +248,17 @@ ExpectedBuffer Socket::Client::Receive(const std::size_t& max_size) noexcept {
 	return Receive(max_size, 0);
 }
 
-ExpectedBuffer Socket::Client::Peek(const std::size_t& size) noexcept {
-	return ReadOnce(size, MSG_PEEK);
+ExpectedBuffer Socket::Client::Peek(const std::size_t& size) const noexcept {
+	return const_cast<Client*>(this)->ReadOnce(size, MSG_PEEK);
 }
 
 ExpectedBuffer Socket::Client::ReadOnce(const std::size_t& size, int flags) noexcept {
 	if (size == 0) {
-		return StormByte::Unexpected<ConnectionError>("Read failed: size must be greater than 0");
+		return Unexpected<ConnectionError>("Read failed: size must be greater than 0");
 	}
 
 	if (!m_handle) {
-		return StormByte::Unexpected<ConnectionError>("Read failed: Invalid socket handle");
+		return Unexpected<ConnectionError>("Read failed: Invalid socket handle");
 	}
 
 	// Limit single read to MAX_SINGLE_IO and effective recv buffer if available
@@ -286,18 +281,18 @@ ExpectedBuffer Socket::Client::ReadOnce(const std::size_t& size, int flags) noex
 		(void)buffer.Write(std::span<const std::byte>(reinterpret_cast<const std::byte*>(internal_buffer.data()), static_cast<std::size_t>(valread)));
 		return buffer;
 	} else if (valread == 0) {
-		return StormByte::Unexpected<ConnectionError>("Read failed: connection closed by peer");
+		return Unexpected<ConnectionError>("Read failed: connection closed by peer");
 	} else {
 #ifdef LINUX
 		if (Connection::Handler::Instance().LastErrorCode() == EAGAIN || Connection::Handler::Instance().LastErrorCode() == EWOULDBLOCK) {
-			return StormByte::Unexpected<ConnectionError>("Read would block: no data available");
+			return Unexpected<ConnectionError>("Read would block: no data available");
 		}
 #else
 		if (Connection::Handler::Instance().LastErrorCode() == WSAEWOULDBLOCK) {
-			return StormByte::Unexpected<ConnectionError>("Read would block: no data available");
+			return Unexpected<ConnectionError>("Read would block: no data available");
 		}
 #endif
-		return StormByte::Unexpected<ConnectionError>("Read failed: {}", Connection::Handler::Instance().LastError());
+		return Unexpected<ConnectionError>("Read failed: {}", Connection::Handler::Instance().LastError());
 	}
 }
 
@@ -305,7 +300,7 @@ ExpectedBuffer Socket::Client::Receive(const std::size_t& max_size, const unsign
 	m_logger << Logger::Level::LowLevel << "Starting to read data with max_size: " << humanreadable_bytes << max_size << nohumanreadable << std::endl;
 
 	if (!m_handle) {
-		return StormByte::Unexpected<ConnectionError>("Receive failed: Invalid socket handle");
+		return Unexpected<ConnectionError>("Receive failed: Invalid socket handle");
 	}
 
 	Buffer::FIFO buffer;
@@ -351,7 +346,7 @@ ExpectedBuffer Socket::Client::Receive(const std::size_t& max_size, const unsign
 					auto now = std::chrono::steady_clock::now();
 					if (std::chrono::duration_cast<std::chrono::seconds>(now - start_time).count() >= timeout_seconds) {
 						m_logger << Logger::Level::LowLevel << "Receive timed out after " << timeout_seconds << " seconds" << std::endl;
-						return StormByte::Unexpected<ConnectionError>("Receive timed out");
+						return Unexpected<ConnectionError>("Receive timed out");
 					}
 				}
 				auto wait_res = WaitForData(100000); // 100ms
@@ -365,7 +360,7 @@ ExpectedBuffer Socket::Client::Receive(const std::size_t& max_size, const unsign
 						auto now = std::chrono::steady_clock::now();
 						if (std::chrono::duration_cast<std::chrono::seconds>(now - start_time).count() >= timeout_seconds) {
 							m_logger << Logger::Level::LowLevel << "Receive timed out after " << timeout_seconds << " seconds" << std::endl;
-							return StormByte::Unexpected<ConnectionError>("Receive timed out");
+							return Unexpected<ConnectionError>("Receive timed out");
 						}
 					}
 					if (max_size == 0 && total_bytes_read > 0) {
@@ -381,7 +376,7 @@ ExpectedBuffer Socket::Client::Receive(const std::size_t& max_size, const unsign
 					auto now = std::chrono::steady_clock::now();
 					if (std::chrono::duration_cast<std::chrono::seconds>(now - start_time).count() >= timeout_seconds) {
 						m_logger << Logger::Level::LowLevel << "Receive timed out after " << timeout_seconds << " seconds" << std::endl;
-						return StormByte::Unexpected<ConnectionError>("Receive timed out");
+						return Unexpected<ConnectionError>("Receive timed out");
 					}
 				}
 				auto wait_res = WaitForData(100000); // 100ms
@@ -395,7 +390,7 @@ ExpectedBuffer Socket::Client::Receive(const std::size_t& max_size, const unsign
 						auto now = std::chrono::steady_clock::now();
 						if (std::chrono::duration_cast<std::chrono::seconds>(now - start_time).count() >= timeout_seconds) {
 							m_logger << Logger::Level::LowLevel << "Receive timed out after " << timeout_seconds << " seconds" << std::endl;
-							return StormByte::Unexpected<ConnectionError>("Receive timed out");
+							return Unexpected<ConnectionError>("Receive timed out");
 						}
 					}
 					if (max_size == 0 && total_bytes_read > 0) {
@@ -406,7 +401,7 @@ ExpectedBuffer Socket::Client::Receive(const std::size_t& max_size, const unsign
 #endif
 			} else {
 				m_logger << Logger::Level::LowLevel << "Read error: " << Connection::Handler::Instance().LastError() << std::endl;
-				return StormByte::Unexpected<ConnectionError>("Receive failed: {}", Connection::Handler::Instance().LastError());
+				return Unexpected<ConnectionError>("Receive failed: {}", Connection::Handler::Instance().LastError());
 			}
 		}
 	}
@@ -420,7 +415,7 @@ ExpectedVoid Socket::Client::Write(std::span<const std::byte> data, const std::s
 
 	if (m_status != Connection::Status::Connected) {
 		m_logger << Logger::Level::LowLevel << "Failed to write: Client is not connected" << std::endl;
-		return StormByte::Unexpected<ConnectionError>("Failed to write: Client is not connected");
+		return Unexpected<ConnectionError>("Failed to write: Client is not connected");
 	}
 
 	// If the passed-in size is larger than the span, adjust accordingly.
@@ -454,7 +449,7 @@ ExpectedVoid Socket::Client::Write(std::span<const std::byte> data, const std::s
 				m_logger << Logger::Level::Error << "Write failed: " << Connection::Handler::Instance().LastError()
 					    << " (code: " << Connection::Handler::Instance().LastErrorCode() << ")"
 					    << " errno: " << sys_errno << " (" << Connection::Handler::Instance().ErrnoToString(sys_errno) << ")" << std::endl;
-			return StormByte::Unexpected<ConnectionError>(
+			return Unexpected<ConnectionError>(
 				"Write failed: {} (error code: {})",
 				Connection::Handler::Instance().LastError(),
 				Connection::Handler::Instance().LastErrorCode()

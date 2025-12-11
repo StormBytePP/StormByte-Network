@@ -1,144 +1,169 @@
 #pragma once
 
+#include <StormByte/buffer/pipeline.hxx>
 #include <StormByte/logger/threaded_log.hxx>
-#include <StormByte/network/codec.hxx>
-#include <StormByte/network/packet.hxx>
 #include <StormByte/network/typedefs.hxx>
-
-#include <atomic>
-#include <unordered_map>
-#include <memory>
 
 /**
  * @namespace StormByte::Network
- * @brief Contains all the network-related classes and utilities.
+ * @brief Network-related classes and utilities used by the StormByte networking
+ *        subsystem.
  */
 namespace StormByte::Network {
+	namespace Connection {
+		class Client;                                        ///< Forward declaration
+	}
+
 	/**
-	 * @class EndPoint
-	 * @brief Represents a network endpoint, serving as a base class for both clients and servers.
+	 * @class Endpoint
+	 * @brief Abstract base for network endpoints (clients/servers).
+	 *
+	 * Provides common functionality shared by concrete endpoint implementations
+	 * such as `Client` and `Server`. This class is exported from the library but
+	 * is not intended to be instantiated directly; implementors should derive
+	 * from `Endpoint` and override the protected hooks as required.
 	 */
-	class STORMBYTE_NETWORK_PUBLIC EndPoint {
+	class STORMBYTE_NETWORK_PUBLIC Endpoint {
 		public:
 			/**
-			 * @brief Constructs an EndPoint with the specified protocol and logger.
-			 * @param protocol The protocol to use (e.g., IPv4, IPv6).
-			 * @param codec The codec to use for encoding/decoding packets.
-			 * @param timeout The read timeout in seconds.
-			 * @param logger A shared pointer to the logger instance.
+			 * @brief Constructs an Endpoint.
+			 *
+			 * @param deserialize_packet_function Function used to deserialize incoming
+			 *        transport packets into domain `Packet` objects.
+			 * @param logger Logger instance used by the endpoint for diagnostic
+			 *        messages (copied into the endpoint).
 			 */
-			EndPoint(const enum Protocol& protocol, const Codec& codec, const unsigned short& timeout, const Logger::ThreadedLog& logger) noexcept;
+			Endpoint(const DeserializePacketFunction& deserialize_packet_function, const Logger::ThreadedLog& logger) noexcept;
 
 			/**
-			 * @brief Deleted copy constructor to prevent copying.
+			 * @brief Copy constructor (deleted).
+			 *
+			 * Copying is disabled to avoid accidental sharing of connection state.
 			 */
-			EndPoint(const EndPoint& other) 									= delete;
+			Endpoint(const Endpoint& other)								= delete;
 
 			/**
-			 * @brief Defaulted move constructor.
+			 * @brief Move constructor.
+			 *
+			 * Move semantics are supported to allow transfer of ownership of
+			 * non-copyable members.
 			 */
-			EndPoint(EndPoint&& other) noexcept 								= default;
+			Endpoint(Endpoint&& other) noexcept							= default;
 
 			/**
-			 * @brief Virtual destructor for proper cleanup in derived classes.
+			 * @brief Virtual destructor.
+			 *
+			 * Declared pure to make `Endpoint` an abstract base. Concrete subclasses
+			 * must provide an implementation for the destructor (even if defaulted)
+			 * in their translation unit.
 			 */
-			virtual ~EndPoint() noexcept;
+			virtual ~Endpoint() noexcept								= default;
 
 			/**
-			 * @brief Deleted copy assignment operator to prevent copying.
+			 * @brief Copy-assignment operator (deleted).
+			 *
+			 * Copy assignment is disabled for the same reasons as copy construction.
 			 */
-			EndPoint& operator=(const EndPoint& other) 							= delete;
+			Endpoint& operator=(const Endpoint& other)					= delete;
 
 			/**
-			 * @brief Defaulted move assignment operator.
+			 * @brief Move-assignment operator.
+			 *
+			 * Provides move-assignment for transfer of ownership of internal
+			 * resources.
 			 */
-			EndPoint& operator=(EndPoint&& other) noexcept 						= default;
+			Endpoint& operator=(Endpoint&& other) noexcept				= default;
 
 			/**
-			 * @brief Starts the endpoint (client or server) and connects/binds to the specified host and port.
-			 * @param host The hostname or IP address to connect to.
-			 * @param port The port number to connect to.
-			 * @return An expected void or error.
+			 * @brief Establish a connection to a server.
+			 *
+			 * @param protocol The protocol to use for the connection.
+			 * @param port The port to connect to.
+			 * @return True if the connection was successful, false otherwise.
 			 */
-			virtual ExpectedVoid 												Connect(const std::string& host, const unsigned short& port) noexcept = 0;
+			virtual bool												Connect(const Connection::Protocol& protocol, const std::string& address, const unsigned short& port) = 0;
 
 			/**
-			 * @brief Stops the endpoint (client or server) and disconnects.
+			 * @brief Disconnect from the server, if connected.
 			 */
-			virtual void 														Disconnect() noexcept;
+			virtual void 												Disconnect() noexcept = 0;
 
 			/**
-			 * @brief Retrieves the protocol used by the endpoint.
-			 * @return A constant reference to the protocol.
-			 */
-			const enum Protocol& 												Protocol() const noexcept;
-
-			/**
-			 * @brief Retrieves the current connection status of the endpoint.
+			 * @brief Gets the current connection status.
+			 *
 			 * @return The current connection status.
 			 */
-			Connection::Status 													Status() const noexcept;
+			virtual Connection::Status									Status() const noexcept = 0;
 
 		protected:
-			std::string m_self_uuid;											///< The UUID associated with this endpoint.
-			enum Protocol m_protocol;											///< The protocol used by the endpoint (e.g., IPv4, IPv6).
-			std::shared_ptr<Codec> m_codec;										///< The codec instance used for encoding/decoding packets.
-			const unsigned short m_timeout;										///< The read timeout in seconds.
-			Logger::ThreadedLog m_logger;										///< The logger instance.
-			std::atomic<Connection::Status> m_status;							///< The current connection status of the endpoint.
-			SocketUUIDPMap m_client_pmap; 										///< Map of all sockets including self.
-			PipelineUUIDPMap m_in_pipeline_pmap;								///< Map of in pipelines associated with clients.
-			PipelineUUIDPMap m_out_pipeline_pmap;								///< Map of out pipelines associated with clients.
+			DeserializePacketFunction m_deserialize_packet_function;	///< The packet deserialization function.
+			Logger::ThreadedLog m_logger;								///< The logger instance.
 
 			/**
-			 * @brief Receives a packet from a client identified by UUID.
-			 * @param client_uuid The UUID of the client to receive the packet from.
-			 * @return An expected packet or error.
+			 * @brief Create a `Connection::Client` wrapper for an accepted socket.
+			 *
+			 * @param socket Shared pointer to the underlying client socket.
+			 * @return Shared pointer to the created `Connection::Client` instance.
 			 */
-			ExpectedPacket														Receive(const std::string& client_uuid) noexcept;
+			std::shared_ptr<Connection::Client>							CreateConnection(std::shared_ptr<Socket::Client> socket) noexcept;
 
 			/**
-			 * @brief Receives a packet from a client identified by UUID.
-			 * @param client The client to receive the packet from.
-			 * @return An expected packet or error.
+			 * @brief Provide the input `Buffer::Pipeline` for incoming data.
+			 *
+			 * Override this hook in derived classes to return a custom pipeline that
+			 * will be applied to inbound buffers.
+			 *
+			 * @return A `Buffer::Pipeline` instance for input processing.
 			 */
-			ExpectedPacket														Receive(std::shared_ptr<Socket::Client> client) noexcept;
+			virtual Buffer::Pipeline									InputPipeline() const noexcept = 0;
 
 			/**
-			 * @brief Sends a packet to a client identified by UUID.
-			 * @param client_uuid The UUID of the client to send the packet to.
-			 * @param packet The packet to send.
-			 * @return An expected void or error.
+			 * @brief Provide the output `Buffer::Pipeline` for outgoing data.
+			 *
+			 * Override this hook to return a pipeline that will be applied to buffers
+			 * before they are transmitted.
+			 *
+			 * @return A `Buffer::Pipeline` instance for output processing.
 			 */
-			ExpectedVoid 														Send(const std::string& client_uuid, const Packet& packet) noexcept;
+			virtual Buffer::Pipeline									OutputPipeline() const noexcept = 0;
 
 			/**
-			 * @brief Sends a packet to a client identified by UUID.
-			 * @param client The client to send the packet to.
-			 * @param packet The packet to send.
-			 * @return An expected void or error.
+			 * @brief Send a transport packet over the specified connection and
+			 * obtains the response.
+			 *
+			 * The packet is prepared (e.g. serialized/enqueued) and handed to the
+			 * transport for transmission. Implementations should return a pointer to
+			 * the packet representation used by the transport, or `nullptr` on
+			 * failure.
+			 *
+			 * @param client_connection Connection to use for sending the packet.
+			 * @param packet The transport-level packet to send.
+			 * @return A `PacketPointer` to the enqueued/sent packet, or `nullptr`
+			 *         if sending failed.
 			 */
-			ExpectedVoid 														Send(std::shared_ptr<Socket::Client> client, const Packet& packet) noexcept;
+			PacketPointer												Send(std::shared_ptr<Connection::Client> client_connection, const Transport::Packet& packet) noexcept;
 
 			/**
-			 * @brief Retrieves a socket by its UUID.
-			 * @param uuid The UUID of the socket to retrieve.
-			 * @return A pointer to the socket, or nullptr if not found.
+			 * @brief Send a transport packet as a reply over the specified connection.
+			 *
+			 * The packet is prepared (e.g. serialized/enqueued) and handed to the
+			 * transport for transmission. This function does not expect a response
+			 * packet.
+			 *
+			 * @param client_connection Connection to use for sending the packet.
+			 * @param packet The transport-level packet to send.
+			 * @return True if the packet was sent successfully, false otherwise.
 			 */
-			virtual std::shared_ptr<Socket::Socket>								GetSocketByUUID(const std::string& uuid) noexcept;
+			bool 														Reply(std::shared_ptr<Connection::Client> client_connection, const Transport::Packet& packet) noexcept;
 
+		private:
 			/**
-			 * @brief Retrieves the input pipeline associated with a UUID.
-			 * @param uuid The UUID of the pipeline to retrieve.
-			 * @return A pointer to the input pipeline, or nullptr if not found.
+			 * @brief Internal helper to send a packet over a connection.
+			 *
+			 * @param client_connection Connection to use for sending the packet.
+			 * @param packet The transport-level packet to send.
+			 * @return True if the packet was sent successfully, false otherwise.
 			 */
-			virtual std::shared_ptr<Buffer::Pipeline>							GetInPipelineByUUID(const std::string& uuid) noexcept;
-
-			/**
-			 * @brief Retrieves the output pipeline associated with a UUID.
-			 * @param uuid The UUID of the pipeline to retrieve.
-			 * @return A pointer to the output pipeline, or nullptr if not found.
-			 */
-			virtual std::shared_ptr<Buffer::Pipeline>							GetOutPipelineByUUID(const std::string& uuid) noexcept;
+			bool 														SendPacket(std::shared_ptr<Connection::Client> client_connection, const Transport::Packet& packet) noexcept;
 	};
 }
