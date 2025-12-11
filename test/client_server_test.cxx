@@ -32,19 +32,22 @@ using Buf::Pipeline;
 using namespace StormByte::Logger;
 using namespace StormByte::Network;
 
-std::shared_ptr<Log> logger = std::make_shared<ThreadedLog>(std::cout, Level::Info, "[%L] [T%i] %T:");
+std::shared_ptr<Log> logger = std::make_shared<ThreadedLog>(std::cout, Level::LowLevel, "[%L] [T%i] %T:");
 constexpr const unsigned short timeout = 5; // 5 seconds
-constexpr const std::size_t large_data_size = 20 * 1024 * 1024; // 20 MB
+constexpr const std::size_t large_data_size = 60 * 1024 * 1024; // 20 MB
+constexpr const char large_data_repeat_char = 'x';
+constexpr const char* HOST = "10.55.1.20";
+constexpr const unsigned short PORT = 7080;
 
 namespace Test {
 	namespace Packet {
 		enum class Opcode: unsigned short {
-			C_MSG_ASKNAMELIST = Net::Transport::Packet::PROCESS_THRESHOLD,
+			C_MSG_ASKNAMELIST = 1, //Net::Transport::Packet::PROCESS_THRESHOLD,
 			S_MSG_RESPONDNAMELIST,
 			C_MSG_ASKRANDOMNUMBER,
 			S_MSG_RESPONDRANDOMNUMBER,
 			C_MSG_SENDLARGEDATA,
-			S_MSG_REPLYLARGEDATASIZE
+			S_MSG_REPLYLARGEDATAECHOED
 		};
 
 		class Generic: public Transport::Packet {
@@ -106,34 +109,33 @@ namespace Test {
 
 		class LargeData: public Generic {
 			public:
-				LargeData(const std::size_t& size): Generic(Opcode::C_MSG_SENDLARGEDATA), m_size(size) {}
+				LargeData(const std::size_t& size): Generic(Opcode::C_MSG_SENDLARGEDATA), m_data(std::string(size, large_data_repeat_char)) {}
 				DataType DoSerialize() const noexcept override {
-					// Instead of creating a 20MB string, just serialize the size
-					// The actual data transfer is simulated by the size value
-					return Serializable<std::size_t>(m_size).Serialize();
+					// The test is designed to test transfers so we create the big string
+					return Serializable<std::string>(m_data).Serialize();
 				}
 
-				std::size_t GetSize() const noexcept {
-					return m_size;
+				const std::string& GetData() const noexcept {
+					return m_data;
 				}
 
 			private:
-				std::size_t m_size;
+				std::string m_data;
 			};
 
-			class AnswerLargeDataSize: public Generic {
+			class AnswerLargeDataEchoed: public Generic {
 			public:
-				AnswerLargeDataSize(const std::size_t& size): Generic(Opcode::S_MSG_REPLYLARGEDATASIZE), m_size(size) {}
+				AnswerLargeDataEchoed(const std::string& data): Generic(Opcode::S_MSG_REPLYLARGEDATAECHOED), m_data(data) {}
 				DataType DoSerialize() const noexcept override {
-					return Serializable<std::size_t>(m_size).Serialize();
+					return Serializable<std::string>(m_data).Serialize();
 				}
 
-				std::size_t GetSize() const noexcept {
-					return m_size;
+				const std::string& GetData() const noexcept {
+					return m_data;
 				}
 
 			private:
-				std::size_t m_size;
+				std::string m_data;
 		};
 	}
 
@@ -182,12 +184,12 @@ namespace Test {
 					}
 					return std::make_shared<Packet::LargeData>(*size_expected);
 				}
-				case Packet::Opcode::S_MSG_REPLYLARGEDATASIZE: {
-					auto expected_size = Serializable<std::size_t>::Deserialize(data);
-					if (!expected_size) {
+				case Packet::Opcode::S_MSG_REPLYLARGEDATAECHOED: {
+					auto expected_data = Serializable<std::string>::Deserialize(data);
+					if (!expected_data) {
 						return nullptr;
 					}
-					return std::make_shared<Packet::AnswerLargeDataSize>(*expected_size);
+					return std::make_shared<Packet::AnswerLargeDataEchoed>(*expected_data);
 				}
 				default:
 					return nullptr;
@@ -197,7 +199,7 @@ namespace Test {
 
 	using ExpectedNameList = NetExpected<std::vector<std::string>>;
 	using ExpectedRandomNumber = NetExpected<int>;
-	using ExpectedLargeDataSize = NetExpected<std::size_t>;
+	using ExpectedLargeData = NetExpected<std::string>;
 
 	Buf::PipeFunction CreateXorPipe() noexcept {
 		return [](Consumer input, Producer output, std::shared_ptr<Log> logger) {
@@ -267,7 +269,7 @@ namespace Test {
 				return answer_packet->GetNumber();
 			}
 
-			ExpectedLargeDataSize RequestLargeDataSize(const std::size_t& size) noexcept {
+			ExpectedLargeData RequestLargeDataEcho(const std::size_t& size) noexcept {
 				// Send request
 				Packet::LargeData request_packet(size);
 				auto response_packet = Send(request_packet);
@@ -275,11 +277,11 @@ namespace Test {
 					return SB::Unexpected<Net::Exception>("Client::RequestLargeDataSize: failed to send LargeData packet");
 				}
 
-				std::shared_ptr<Packet::AnswerLargeDataSize> answer_packet = std::dynamic_pointer_cast<Packet::AnswerLargeDataSize>(response_packet);
+				std::shared_ptr<Packet::AnswerLargeDataEchoed> answer_packet = std::dynamic_pointer_cast<Packet::AnswerLargeDataEchoed>(response_packet);
 				if (!answer_packet) {
 					return SB::Unexpected<Net::Exception>("Client::RequestLargeDataSize: received unexpected packet opcode ({})", response_packet->Opcode());
 				}
-				return answer_packet->GetSize();
+				return answer_packet->GetData();
 			}
 	};
 
@@ -332,8 +334,8 @@ namespace Test {
 					}
 					case Packet::Opcode::C_MSG_SENDLARGEDATA: {
 						auto large_data_packet = std::static_pointer_cast<const Packet::LargeData>(packet);
-						std::size_t data_size = large_data_packet->GetSize();
-						return std::make_shared<Packet::AnswerLargeDataSize>(data_size);
+						const std::string& data = large_data_packet->GetData();
+						return std::make_shared<Packet::AnswerLargeDataEchoed>(data);
 					}
 					default:
 						return nullptr;
@@ -345,9 +347,6 @@ namespace Test {
 
 int TestRequestNameList() {
 	const std::string fn_name = "TestRequestNameList";
-
-	const char* HOST = "127.0.0.1";
-	const unsigned short PORT = 7081;
 
 	Test::Server server(logger);
 	if (!server.Connect(Net::Connection::Protocol::IPv4, HOST, PORT)) {
@@ -387,9 +386,6 @@ int TestRequestNameList() {
 int TestRequestRandomNumber() {
 	const std::string fn_name = "TestRequestRandomNumber";
 
-	const char* HOST = "127.0.0.1";
-	const unsigned short PORT = 7080;
-
 	Test::Server server(logger);
 	if (!server.Connect(Net::Connection::Protocol::IPv4, HOST, PORT)) {
 		logger << Level::Error << fn_name << ": server.Connect failed." << std::endl;
@@ -418,11 +414,9 @@ int TestRequestRandomNumber() {
 	RETURN_TEST(fn_name, 0);
 }
 
-int TestRequestLargeDataSize() {
-	const std::string fn_name = "TestRequestLargeDataSize";
-
-	const char* HOST = "127.0.0.1";
-	const unsigned short PORT = 7080;
+int TestRequestLargeDataEchoed() {
+	const std::string fn_name = "TestRequestLargeDataEchoed";
+	const std::string large_data = std::string(large_data_size, large_data_repeat_char);
 
 	Test::Server server(logger);
 	if (!server.Connect(Net::Connection::Protocol::IPv4, HOST, PORT)) {
@@ -439,14 +433,15 @@ int TestRequestLargeDataSize() {
 		RETURN_TEST(fn_name, 1);
 	}
 
-	auto size_expected = client.RequestLargeDataSize(large_data_size);
-	if (!size_expected) {
-		logger << Level::Error << fn_name << ": RequestLargeDataSize failed: " << size_expected.error()->what() << std::endl;
+	auto data_expected = client.RequestLargeDataEcho(large_data_size);
+	if (!data_expected) {
+		logger << Level::Error << fn_name << ": RequestLargeDataEcho failed: " << data_expected.error()->what() << std::endl;
 		RETURN_TEST(fn_name, 1);
 	}
-	std::size_t size = size_expected.value();
-	ASSERT_EQUAL(fn_name, size, large_data_size);
-	logger << Level::Info << fn_name << ": Received large data size: " << size << std::endl;
+	const std::string& data = data_expected.value();
+	ASSERT_EQUAL(fn_name, data.size(), large_data_size);
+	ASSERT_EQUAL(fn_name, data, large_data);
+	logger << Level::Info << fn_name << ": Received large data size: " << data.size() << std::endl;
 	client.Disconnect();
 	server.Disconnect();
 	RETURN_TEST(fn_name, 0);
@@ -456,7 +451,7 @@ int main() {
 	int result = 0;
 	result += TestRequestNameList();
 	result += TestRequestRandomNumber();
-	result += TestRequestLargeDataSize();
+	result += TestRequestLargeDataEchoed();
 
 	if (result == 0) {
 		std::cout << "All tests passed!" << std::endl;
