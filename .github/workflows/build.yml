@@ -55,7 +55,6 @@ jobs:
       matrix:
         arch:
           - x64
-          - x86
 
     steps:
       - name: Checkout repository and submodules
