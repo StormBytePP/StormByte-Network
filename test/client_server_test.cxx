@@ -32,7 +32,7 @@ using Buf::Pipeline;
 using namespace StormByte::Logger;
 using namespace StormByte::Network;
 
-ThreadedLog logger(std::cout, Level::Info, "[%L] [T%i] %T:");
+std::shared_ptr<Log> logger = std::make_shared<ThreadedLog>(std::cout, Level::Info, "[%L] [T%i] %T:");
 constexpr const unsigned short timeout = 5; // 5 seconds
 constexpr const std::size_t large_data_size = 20 * 1024 * 1024; // 20 MB
 
@@ -138,7 +138,7 @@ namespace Test {
 	}
 
 	DeserializePacketFunction DeserializeFunction() {
-		return [](Transport::Packet::OpcodeType opcode, Consumer consumer, Log& logger) -> PacketPointer {
+		return [](Transport::Packet::OpcodeType opcode, Consumer consumer, std::shared_ptr<Log> logger) -> PacketPointer {
 			DataType data;
 			consumer.ExtractUntilEoF(data);
 			switch(static_cast<Packet::Opcode>(opcode)) {
@@ -200,7 +200,7 @@ namespace Test {
 	using ExpectedLargeDataSize = NetExpected<std::size_t>;
 
 	Buf::PipeFunction CreateXorPipe() noexcept {
-		return [](Consumer input, Producer output, StormByte::Logger::Log& logger) {
+		return [](Consumer input, Producer output, std::shared_ptr<Log> logger) {
 			logger << Level::Debug << "XOR Pipe: Starting processing data..." << std::endl;
 			while (!input.EoF()) {
 				const std::size_t available = input.AvailableBytes();
@@ -223,7 +223,7 @@ namespace Test {
 
 	class Client: public Net::Client {
 		public:
-			Client(const ThreadedLog& logger) noexcept:
+			Client(std::shared_ptr<Log> logger) noexcept:
 			Net::Client(DeserializeFunction(), logger) {}
 			~Client() noexcept = default;
 			Pipeline InputPipeline() const noexcept override {
@@ -285,7 +285,7 @@ namespace Test {
 
 	class Server: public Net::Server {
 		public:
-			Server(const ThreadedLog& logger) noexcept:
+			Server(std::shared_ptr<Log> logger) noexcept:
 			Net::Server(DeserializeFunction(), logger) {}
 			~Server() noexcept = default;
 			Pipeline InputPipeline() const noexcept override {

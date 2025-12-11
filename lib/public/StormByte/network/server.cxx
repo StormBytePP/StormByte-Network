@@ -4,7 +4,7 @@
 
 using namespace StormByte::Network;
 
-Server::Server(const DeserializePacketFunction& deserialize_packet_function, const Logger::ThreadedLog& logger) noexcept:
+Server::Server(const DeserializePacketFunction& deserialize_packet_function, std::shared_ptr<Logger::Log> logger) noexcept:
 	Endpoint(deserialize_packet_function, logger),
 	m_socket_server(nullptr),
 	m_status(Connection::Status::Disconnected),

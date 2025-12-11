@@ -22,7 +22,7 @@ Frame::Frame(const Packet& packet) noexcept {
 	}
 }
 
-Frame Frame::ProcessInput(std::shared_ptr<Socket::Client> client, Buffer::Pipeline& in_pipeline, Logger::Log& logger) noexcept {
+Frame Frame::ProcessInput(std::shared_ptr<Socket::Client> client, Buffer::Pipeline& in_pipeline, std::shared_ptr<Logger::Log> logger) noexcept {
 	// Read opcode
 	ExpectedBuffer expected_opcode_buffer = client->Receive(sizeof(Packet::OpcodeType));
 	if (!expected_opcode_buffer) {
@@ -66,7 +66,7 @@ Frame Frame::ProcessInput(std::shared_ptr<Socket::Client> client, Buffer::Pipeli
 			Producer payload_producer;
 			payload_producer.Write(std::move(payload));
 			payload_producer.Close();
-			Consumer processed_payload = in_pipeline.Process(payload_producer.Consumer(), Buffer::ExecutionMode::Sync, logger);
+			Consumer processed_payload = in_pipeline.Process(payload_producer.Consumer(), Buffer::ExecutionMode::Async, logger);
 			payload.clear();
 			processed_payload.ExtractUntilEoF(payload);
 		}
@@ -75,7 +75,7 @@ Frame Frame::ProcessInput(std::shared_ptr<Socket::Client> client, Buffer::Pipeli
 	return Frame(opcode, std::move(payload));
 }
 
-StormByte::Network::PacketPointer Frame::ProcessPacket(const DeserializePacketFunction& packet_fn, Logger::Log& logger) const noexcept {
+StormByte::Network::PacketPointer Frame::ProcessPacket(const DeserializePacketFunction& packet_fn, std::shared_ptr<Logger::Log> logger) const noexcept {
 	Producer payload_producer;
 	payload_producer.Write(m_payload);
 	payload_producer.Close();
@@ -85,7 +85,7 @@ StormByte::Network::PacketPointer Frame::ProcessPacket(const DeserializePacketFu
 	return packet;
 }
 
-Consumer Frame::ProcessOutput(Buffer::Pipeline& pipeline, Logger::Log& logger) const noexcept {
+Consumer Frame::ProcessOutput(Buffer::Pipeline& pipeline, std::shared_ptr<Logger::Log> logger) const noexcept {
 	Producer producer;
 
 	// Write opcode
@@ -98,7 +98,7 @@ Consumer Frame::ProcessOutput(Buffer::Pipeline& pipeline, Logger::Log& logger) c
 		Producer payload_producer;
 		payload_producer.Write(std::move(payload));
 		payload_producer.Close();
-		Consumer processed_payload = pipeline.Process(payload_producer.Consumer(), Buffer::ExecutionMode::Sync, logger);
+		Consumer processed_payload = pipeline.Process(payload_producer.Consumer(), Buffer::ExecutionMode::Async, logger);
 		payload.clear();
 		processed_payload.ExtractUntilEoF(payload);
 	}

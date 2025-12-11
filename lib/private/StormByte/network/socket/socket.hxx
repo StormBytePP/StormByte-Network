@@ -150,7 +150,7 @@ namespace StormByte::Network::Socket {
 			Connection::HandlerType m_handle;				///< Owned connection handler
 			std::unique_ptr<Connection::Info> m_conn_info;	///< Optional connection metadata
 			unsigned long m_mtu;							///< Active MTU value
-			mutable Logger::ThreadedLog m_logger;			///< Logger used for socket diagnostics
+			mutable std::shared_ptr<Logger::Log> m_logger;	///< Logger used for socket diagnostics
 
 			// Effective socket buffer sizes as reported by the OS (bytes).
 			// Initialized to a sensible default; updated in InitializeAfterConnect().
@@ -164,7 +164,7 @@ namespace StormByte::Network::Socket {
 			 * be supplied to receive diagnostic messages. The constructor does
 			 * not throw and leaves the object ready for `CreateSocket()`.
 			 */
-			Socket(const Connection::Protocol& protocol, Logger::ThreadedLog logger) noexcept;
+			Socket(const Connection::Protocol& protocol, std::shared_ptr<Logger::Log> logger) noexcept;
 
 			/**
 			 * @brief Create and configure the underlying OS socket.

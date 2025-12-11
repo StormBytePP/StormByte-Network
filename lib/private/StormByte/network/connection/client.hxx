@@ -80,7 +80,7 @@ namespace StormByte::Network::Connection {
 			 * @param logger The logger to use.
 			 * @return The expected result of the operation.
 			 */
-			bool 														Send(const Transport::Frame& frame, Logger::Log& logger) noexcept;
+			bool 														Send(const Transport::Frame& frame, std::shared_ptr<Logger::Log> logger) noexcept;
 
 			/**
 			 * @brief Get the current connection status.
@@ -95,7 +95,7 @@ namespace StormByte::Network::Connection {
 			 * @param logger The logger to use.
 			 * @return The received Frame.
 			 */
-			Transport::Frame 											Receive(Logger::Log& logger) noexcept;
+			Transport::Frame 											Receive(std::shared_ptr<Logger::Log> logger) noexcept;
 
 		private:
 			std::shared_ptr<Socket::Client> m_socket;					///< The underlying socket.

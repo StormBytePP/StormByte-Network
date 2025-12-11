@@ -29,7 +29,7 @@ constexpr const int SOCKET_BUFFER_SIZE = 262144; // 256 KiB
 
 using namespace StormByte::Network::Socket;
 
-Socket::Socket(const Connection::Protocol& protocol, Logger::ThreadedLog logger) noexcept:
+Socket::Socket(const Connection::Protocol& protocol, std::shared_ptr<Logger::Log> logger) noexcept:
 m_protocol(protocol), m_status(Connection::Status::Disconnected),
 m_handle(-1), m_conn_info(nullptr), m_mtu(DEFAULT_MTU), m_logger(logger),
 m_UUID(StormByte::GenerateUUIDv4()) {

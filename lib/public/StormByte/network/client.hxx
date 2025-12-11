@@ -47,7 +47,7 @@ namespace StormByte::Network {
 			 *        transport packets into domain `Packet` objects.
 			 * @param logger Logger instance used for diagnostic messages.
 			 */
-			inline Client(const DeserializePacketFunction& deserialize_packet_function, const Logger::ThreadedLog& logger) noexcept:
+			inline Client(const DeserializePacketFunction& deserialize_packet_function, std::shared_ptr<Logger::Log> logger) noexcept:
 				Endpoint(deserialize_packet_function, logger),
 				m_connection(nullptr) {}
 

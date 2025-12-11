@@ -39,6 +39,6 @@ namespace StormByte::Network {																		///< The connection info class (
 	using DeserializePacketFunction = std::function<PacketPointer(
 		Transport::Packet::OpcodeType,
 		Buffer::Consumer,
-		Logger::Log&
+		std::shared_ptr<Logger::Log>
 	)>; 																							///< The deserialize packet function type.
 }

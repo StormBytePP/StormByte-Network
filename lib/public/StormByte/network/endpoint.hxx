@@ -33,7 +33,7 @@ namespace StormByte::Network {
 			 * @param logger Logger instance used by the endpoint for diagnostic
 			 *        messages (copied into the endpoint).
 			 */
-			Endpoint(const DeserializePacketFunction& deserialize_packet_function, const Logger::ThreadedLog& logger) noexcept;
+			Endpoint(const DeserializePacketFunction& deserialize_packet_function, std::shared_ptr<Logger::Log> logger) noexcept;
 
 			/**
 			 * @brief Copy constructor (deleted).
@@ -97,7 +97,7 @@ namespace StormByte::Network {
 
 		protected:
 			DeserializePacketFunction m_deserialize_packet_function;	///< The packet deserialization function.
-			Logger::ThreadedLog m_logger;								///< The logger instance.
+			std::shared_ptr<Logger::Log> m_logger;						///< The logger instance.
 
 			/**
 			 * @brief Create a `Connection::Client` wrapper for an accepted socket.

@@ -3,7 +3,7 @@
 
 using namespace StormByte::Network;
 
-Endpoint::Endpoint(const DeserializePacketFunction& deserialize_packet_function, const Logger::ThreadedLog& logger) noexcept:
+Endpoint::Endpoint(const DeserializePacketFunction& deserialize_packet_function, std::shared_ptr<Logger::Log> logger) noexcept:
 	m_deserialize_packet_function(deserialize_packet_function),
 	m_logger(logger) {}
 
