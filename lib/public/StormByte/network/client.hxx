@@ -15,13 +15,28 @@ namespace StormByte::Network {
 
 	/**
 	 * @class Client
-	 * @brief Abstract base class for custom client implementations.
+	 * @brief Abstract base class for application-specific clients.
 	 *
-	 * Derive from `Client` to implement application-specific clients. The
-	 * protected `Send()` helper transmits a `Transport::Packet` to the
-	 * connected server and returns a `PacketPointer` to the reply (or `nullptr`
-	 * on failure). Concrete subclasses can call `Send()` from their member
-	 * functions to perform request/response interactions.
+	 * @details
+	 * Derive from `Client` to implement your application's client-side logic.
+	 * The modern API expects a deserializer function (see `DeserializePacketFunction`)
+	 * and a `Logger::ThreadedLog` instance to be provided to the `Client`
+	 * constructor. Subclasses typically implement lightweight, domain-specific
+	 * helper methods that call the protected `Send()` helper to perform
+	 * synchronous request/response flows.
+	 *
+	 * Key extension points:
+	 * - Override `InputPipeline()` and `OutputPipeline()` to return any
+	 *   `Buffer::Pipeline` stages required by your application (compression,
+	 *   encryption, framing, etc.). Return an empty pipeline when no processing
+	 *   is required (the common case in tests/examples).
+	 * - Implement a concrete (non-pure) destructor in a translation unit. The
+	 *   base destructor is declared virtual/pure to enforce an out-of-line
+	 *   definition in derived classes.
+	 *
+	 * The protected `Send()` helper sends a `Transport::Packet` to the server
+	 * and returns a `PacketPointer` referencing the reply (or `nullptr` on
+	 * failure). Use `Connect()` / `Disconnect()` to manage the connection.
 	 */
 	class STORMBYTE_NETWORK_PUBLIC Client: private Endpoint {
 		public:

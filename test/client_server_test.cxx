@@ -26,19 +26,20 @@ using NetExpected = SB::Expected<T, Net::Exception>;
 
 using Buf::DataType;
 using Buf::Consumer;
+using Buf::Producer;
 using SBLog::ThreadedLog;
 using Buf::Pipeline;
 using namespace StormByte::Logger;
 using namespace StormByte::Network;
 
-ThreadedLog logger(std::cout, Level::Debug, "[%L] [T%i] %T:");
+ThreadedLog logger(std::cout, Level::Info, "[%L] [T%i] %T:");
 constexpr const unsigned short timeout = 5; // 5 seconds
 constexpr const std::size_t large_data_size = 20 * 1024 * 1024; // 20 MB
 
 namespace Test {
 	namespace Packet {
 		enum class Opcode: unsigned short {
-			C_MSG_ASKNAMELIST = 1,
+			C_MSG_ASKNAMELIST = Net::Transport::Packet::PROCESS_THRESHOLD,
 			S_MSG_RESPONDNAMELIST,
 			C_MSG_ASKRANDOMNUMBER,
 			S_MSG_RESPONDRANDOMNUMBER,
@@ -198,6 +199,28 @@ namespace Test {
 	using ExpectedRandomNumber = NetExpected<int>;
 	using ExpectedLargeDataSize = NetExpected<std::size_t>;
 
+	Buf::PipeFunction CreateXorPipe() noexcept {
+		return [](Consumer input, Producer output, StormByte::Logger::Log& logger) {
+			logger << Level::Debug << "XOR Pipe: Starting processing data..." << std::endl;
+			while (!input.EoF()) {
+				const std::size_t available = input.AvailableBytes();
+				logger << Level::Debug << "XOR Pipe: Available bytes to read: " << available << std::endl;
+				if (available == 0) {
+					//std::this_thread::sleep_for(std::chrono::milliseconds(10));
+					continue;
+				}
+				DataType data;
+				input.Extract(available, data);
+				for (auto& byte : data) {
+					byte ^= std::byte{0xAB};
+				}
+				output.Write(std::move(data));
+			}
+			output.Close();
+			logger << Level::Debug << "XOR Pipe: Finished processing data." << std::endl;
+		};
+	}
+
 	class Client: public Net::Client {
 		public:
 			Client(const ThreadedLog& logger) noexcept:
@@ -205,12 +228,12 @@ namespace Test {
 			~Client() noexcept = default;
 			Pipeline InputPipeline() const noexcept override {
 				Pipeline pipeline;
-				// No processing stages for input
+				pipeline.AddPipe(CreateXorPipe());
 				return pipeline;
 			}
 			Pipeline OutputPipeline() const noexcept override {
 				Pipeline pipeline;
-				// No processing stages for output
+				pipeline.AddPipe(CreateXorPipe());
 				return pipeline;
 			}
 
@@ -267,12 +290,12 @@ namespace Test {
 			~Server() noexcept = default;
 			Pipeline InputPipeline() const noexcept override {
 				Pipeline pipeline;
-				// No processing stages for input
+				pipeline.AddPipe(CreateXorPipe());
 				return pipeline;
 			}
 			Pipeline OutputPipeline() const noexcept override {
 				Pipeline pipeline;
-				// No processing stages for output
+				pipeline.AddPipe(CreateXorPipe());
 				return pipeline;
 			}
 

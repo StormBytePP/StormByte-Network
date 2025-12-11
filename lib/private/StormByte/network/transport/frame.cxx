@@ -62,7 +62,7 @@ Frame Frame::ProcessInput(std::shared_ptr<Socket::Client> client, Buffer::Pipeli
 		expected_payload_buffer->Extract(payload);
 
 		// Process payload if needed
-		if (payload_size >= Packet::PROCESS_THRESHOLD) {
+		if (opcode >= Packet::PROCESS_THRESHOLD) {
 			Producer payload_producer;
 			payload_producer.Write(std::move(payload));
 			payload_producer.Close();

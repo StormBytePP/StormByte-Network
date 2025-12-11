@@ -23,9 +23,28 @@ namespace StormByte::Network {
 
 	/**
 	 * @class Server
-	 * @brief Abstract base for server implementations.
+	 * @brief Abstract base for application-specific servers.
 	 *
-	 * Derive from `Server` to implement application-specific servers.
+	 * @details
+	 * Subclass `Server` to implement your server-side application logic. The
+	 * constructor accepts a `DeserializePacketFunction` and a `Logger::ThreadedLog`
+	 * instance; the deserializer converts opcode + payload bytes into concrete
+	 * `Transport::Packet` instances used by the framework.
+	 *
+	 * Key extension points:
+	 * - Implement `ProcessClientPacket()` to inspect incoming packets and return
+	 *   a `PacketPointer` that will be sent back to the requesting client. If error
+	 *   return `nullptr`.
+	 * - Override `InputPipeline()` and `OutputPipeline()` to add buffer
+	 *   preprocessing/postprocessing stages (compression, encryption, etc.).
+	 * - Provide a concrete (out-of-line) destructor implementation in derived
+	 *   classes (the base destructor is declared pure to force an out-of-line
+	 *   override).
+	 *
+	 * Implementation notes:
+	 * - The `Server` base manages listening, accepting, per-client threads and
+	 *   the underlying socket server; application logic should reside in
+	 *   `ProcessClientPacket()` or other overridable helpers.
 	 */
 	class STORMBYTE_NETWORK_PUBLIC Server: private Endpoint {
 		public:
