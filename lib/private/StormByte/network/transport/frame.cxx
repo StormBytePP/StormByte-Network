@@ -66,7 +66,7 @@ Frame Frame::ProcessInput(std::shared_ptr<Socket::Client> client, Buffer::Pipeli
 			Producer payload_producer;
 			payload_producer.Write(std::move(payload));
 			payload_producer.Close();
-			Consumer processed_payload = in_pipeline.Process(payload_producer.Consumer(), Buffer::ExecutionMode::Async, logger);
+			Consumer processed_payload = in_pipeline.Process(payload_producer.Consumer(), Buffer::ExecutionMode::Sync, logger);
 			payload.clear();
 			processed_payload.ExtractUntilEoF(payload);
 		}
@@ -98,7 +98,7 @@ Consumer Frame::ProcessOutput(Buffer::Pipeline& pipeline, Logger::Log& logger) c
 		Producer payload_producer;
 		payload_producer.Write(std::move(payload));
 		payload_producer.Close();
-		Consumer processed_payload = pipeline.Process(payload_producer.Consumer(), Buffer::ExecutionMode::Async, logger);
+		Consumer processed_payload = pipeline.Process(payload_producer.Consumer(), Buffer::ExecutionMode::Sync, logger);
 		payload.clear();
 		processed_payload.ExtractUntilEoF(payload);
 	}
