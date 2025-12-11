@@ -87,4 +87,4 @@ jobs:
           Copy-Item -Path "${{ github.workspace }}\build\lib\StormByte-Network.dll" -Destination "${{ github.workspace }}\build\test" -Force
 
       - name: Run unit tests
-        run: ctest --output-on-failure --test-dir ${{ github.workspace }}\build\test
+        run: ctest --output-on-failure --test-dir ${{ github.workspace }}\build\test --timeout 30
