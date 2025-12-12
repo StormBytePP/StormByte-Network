@@ -19,9 +19,7 @@
 #include <vector>
 #include <thread>
 
-constexpr const std::size_t BUFFER_SIZE = 65536;
-// Optional safety cap for a single syscall to avoid extremely large syscalls
-constexpr const std::size_t MAX_SINGLE_IO = 4 * 1024 * 1024; // 4 MiB
+constexpr const std::size_t BUFFER_SIZE = 200 * 1024 * 1024; // 200 MiB
 
 using namespace StormByte::Logger;
 using namespace StormByte::Network;
@@ -137,10 +135,12 @@ ExpectedVoid Socket::Client::Send(std::span<const std::byte> data) noexcept {
 		// effective send buffer (or a sensible fallback), capped to avoid
 		// extremely large single syscalls.
 		std::size_t chunk_capacity = BUFFER_SIZE;
-		if (m_effective_send_buf > 0) {
-			chunk_capacity = static_cast<std::size_t>(m_effective_send_buf);
-		}
-		chunk_capacity = std::min(chunk_capacity, MAX_SINGLE_IO);
+#ifdef LIMITS
+		//if (m_effective_send_buf > 0) {
+		//	chunk_capacity = static_cast<std::size_t>(m_effective_send_buf);
+		//}
+		//chunk_capacity = std::min(chunk_capacity, MAX_SINGLE_IO);
+#endif
 
 		std::size_t chunk_size = std::min(chunk_capacity, data.size());
 		std::span<const std::byte> chunk = data.subspan(0, chunk_size);
@@ -263,10 +263,12 @@ ExpectedBuffer Socket::Client::ReadOnce(const std::size_t& size, int flags) noex
 
 	// Limit single read to MAX_SINGLE_IO and effective recv buffer if available
 	std::size_t capacity = BUFFER_SIZE;
-	if (m_effective_recv_buf > 0) {
-		capacity = static_cast<std::size_t>(m_effective_recv_buf);
-	}
-	capacity = std::min(capacity, MAX_SINGLE_IO);
+#ifdef LIMITS
+	//if (m_effective_recv_buf > 0) {
+	//	capacity = static_cast<std::size_t>(m_effective_recv_buf);
+	//}
+	//capacity = std::min(capacity, MAX_SINGLE_IO);
+#endif
 	const std::size_t bytes_to_read = std::min(capacity, size);
 
 	std::vector<char> internal_buffer(bytes_to_read);
@@ -311,10 +313,12 @@ ExpectedBuffer Socket::Client::Receive(const std::size_t& max_size, const unsign
 	while (true) {
 		// Determine read buffer size based on effective recv buffer, fallback to BUFFER_SIZE
 		std::size_t read_capacity = BUFFER_SIZE;
-		if (m_effective_recv_buf > 0) {
-			read_capacity = static_cast<std::size_t>(m_effective_recv_buf);
-		}
-		read_capacity = std::min(read_capacity, MAX_SINGLE_IO);
+#ifdef LIMITS
+		//if (m_effective_recv_buf > 0) {
+		//	read_capacity = static_cast<std::size_t>(m_effective_recv_buf);
+		//}
+		//read_capacity = std::min(read_capacity, MAX_SINGLE_IO);
+#endif
 
 		const std::size_t bytes_to_read = (max_size > 0) ? std::min(read_capacity, max_size - total_bytes_read) : read_capacity;
 
@@ -427,10 +431,12 @@ ExpectedVoid Socket::Client::Write(std::span<const std::byte> data, const std::s
 
 		// Chunk using effective send buffer if available
 		std::size_t chunk_capacity = BUFFER_SIZE;
-		if (m_effective_send_buf > 0) {
-			chunk_capacity = static_cast<std::size_t>(m_effective_send_buf);
-		}
-		chunk_capacity = std::min(chunk_capacity, MAX_SINGLE_IO);
+#ifdef LIMITS
+		//if (m_effective_send_buf > 0) {
+		//	chunk_capacity = static_cast<std::size_t>(m_effective_send_buf);
+		//}
+		//chunk_capacity = std::min(chunk_capacity, MAX_SINGLE_IO);
+#endif
 
 		std::size_t to_write = std::min(chunk_capacity, current_data.size());
 		auto chunk = current_data.subspan(0, to_write);

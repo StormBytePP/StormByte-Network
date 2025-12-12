@@ -32,17 +32,17 @@ using Buf::Pipeline;
 using namespace StormByte::Logger;
 using namespace StormByte::Network;
 
-std::shared_ptr<Log> logger = std::make_shared<ThreadedLog>(std::cout, Level::LowLevel, "[%L] [T%i] %T:");
+std::shared_ptr<Log> logger = std::make_shared<ThreadedLog>(std::cout, Level::Info, "[%L] [T%i] %T:");
 constexpr const unsigned short timeout = 5; // 5 seconds
-constexpr const std::size_t large_data_size = 60 * 1024 * 1024; // 20 MB
+constexpr const std::size_t large_data_size = 20 * 1024 * 1024; // 20 MB
 constexpr const char large_data_repeat_char = 'x';
-constexpr const char* HOST = "10.55.1.20";
+constexpr const char* HOST = "localhost";
 constexpr const unsigned short PORT = 7080;
 
 namespace Test {
 	namespace Packet {
 		enum class Opcode: unsigned short {
-			C_MSG_ASKNAMELIST = 1, //Net::Transport::Packet::PROCESS_THRESHOLD,
+			C_MSG_ASKNAMELIST = Net::Transport::Packet::PROCESS_THRESHOLD,
 			S_MSG_RESPONDNAMELIST,
 			C_MSG_ASKRANDOMNUMBER,
 			S_MSG_RESPONDRANDOMNUMBER,
@@ -206,7 +206,7 @@ namespace Test {
 			logger << Level::Debug << "XOR Pipe: Starting processing data..." << std::endl;
 			while (!input.EoF()) {
 				const std::size_t available = input.AvailableBytes();
-				logger << Level::Debug << "XOR Pipe: Available bytes to read: " << available << std::endl;
+				logger << Level::Debug << "XOR Pipe: Available bytes to read: " << humanreadable_bytes << available << nohumanreadable << std::endl;
 				if (available == 0) {
 					//std::this_thread::sleep_for(std::chrono::milliseconds(10));
 					continue;
@@ -441,7 +441,7 @@ int TestRequestLargeDataEchoed() {
 	const std::string& data = data_expected.value();
 	ASSERT_EQUAL(fn_name, data.size(), large_data_size);
 	ASSERT_EQUAL(fn_name, data, large_data);
-	logger << Level::Info << fn_name << ": Received large data size: " << data.size() << std::endl;
+	logger << Level::Info << fn_name << ": Received large data size: " << humanreadable_bytes << data.size() << nohumanreadable << std::endl;
 	client.Disconnect();
 	server.Disconnect();
 	RETURN_TEST(fn_name, 0);
