@@ -34,7 +34,7 @@ using namespace StormByte::Network;
 
 std::shared_ptr<Log> logger = std::make_shared<ThreadedLog>(std::cout, Level::Info, "[%L] [T%i] %T:");
 constexpr const unsigned short timeout = 5; // 5 seconds
-constexpr const std::size_t large_data_size = 20 * 1024 * 1024; // 20 MB
+constexpr const std::size_t large_data_size = 100 * 1024 * 1024; // 100 MB
 constexpr const char large_data_repeat_char = 'x';
 constexpr const char* HOST = "localhost";
 constexpr const unsigned short PORT = 7080;
@@ -204,15 +204,17 @@ namespace Test {
 	Buf::PipeFunction CreateXorPipe() noexcept {
 		return [](Consumer input, Producer output, std::shared_ptr<Log> logger) {
 			logger << Level::Debug << "XOR Pipe: Starting processing data..." << std::endl;
+			constexpr const std::size_t max_chunk_size = 10 * 1024 * 1024; // 10 MB
 			while (!input.EoF()) {
-				const std::size_t available = input.AvailableBytes();
-				logger << Level::Debug << "XOR Pipe: Available bytes to read: " << humanreadable_bytes << available << nohumanreadable << std::endl;
-				if (available == 0) {
-					//std::this_thread::sleep_for(std::chrono::milliseconds(10));
+				const std::size_t chunk_size = std::min(input.AvailableBytes(), max_chunk_size);
+				if (chunk_size == 0) {
+					logger << Level::Debug << "XOR Pipe: No data available, yielding..." << std::endl;
+					std::this_thread::yield();
 					continue;
 				}
+				logger << Level::Debug << "XOR Pipe: Processing " << humanreadable_bytes << chunk_size << nohumanreadable << std::endl;
 				DataType data;
-				input.Extract(available, data);
+				input.Extract(chunk_size, data);
 				for (auto& byte : data) {
 					byte ^= std::byte{0xAB};
 				}

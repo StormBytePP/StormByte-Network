@@ -34,8 +34,7 @@ bool Endpoint::SendPacket(std::shared_ptr<Connection::Client> client_connection,
 		return false;
 	}
 
-	Transport::Frame frame(packet);
-	bool result = client_connection->Send(frame, m_logger);
+	bool result = client_connection->Send(packet, m_logger);
 	if (!result) {
 		m_logger << Logger::Level::Error << "Failed to send packet." << std::endl;
 		return false;
