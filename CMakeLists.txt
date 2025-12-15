@@ -13,8 +13,8 @@ project("StormByte C++ Library: Network module"
 include(cmake/asan.cmake)
 
 add_subdirectory(doc)
-add_subdirectory(thirdparty)
 add_subdirectory(lib)
+add_subdirectory(thirdparty)
 add_subdirectory(test)
 
 include(cmake/outputflags.cmake)

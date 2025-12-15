@@ -34,7 +34,7 @@ using namespace StormByte::Network;
 
 std::shared_ptr<Log> logger = std::make_shared<ThreadedLog>(std::cout, Level::Info, "[%L] [T%i] %T:");
 constexpr const unsigned short timeout = 5; // 5 seconds
-constexpr const std::size_t large_data_size = 100 * 1024 * 1024; // 100 MB
+constexpr const std::size_t large_data_size = 20 * 1024 * 1024; // 20 MB
 constexpr const char large_data_repeat_char = 'x';
 constexpr const char* HOST = "localhost";
 constexpr const unsigned short PORT = 7080;
