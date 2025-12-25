@@ -1,5 +1,8 @@
 name: Compile & Test
 
+permissions:
+  actions: write
+
 on:
   push:
     branches: [ "master" ]
@@ -33,6 +36,9 @@ jobs:
       uses: stormbytepp/githubactions/.github/actions/install-toolchain@master
       with:
         toolchain: ${{ matrix.compiler }}
+        ccache-key: '${{ matrix.compiler }}-v1'
+      env:
+        GITHUB_TOKEN: ${{ github.token }}
 
     - name: Build with CMake
       uses: ashutoshvarma/action-cmake-build@master
