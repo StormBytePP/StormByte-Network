@@ -85,12 +85,12 @@ jobs:
             -DWITH_STORMBYTE=BUNDLED
           build-type: ${{ env.BUILD_TYPE }}
 
-      - name: Copy DLLs
+      - name: Add DLL directory to PATH
         run: |
-          Copy-Item -Path "${{ github.workspace }}\build\thirdparty\StormByte\base\lib\StormByte.dll" -Destination "${{ github.workspace }}\build\test" -Force
-          Copy-Item -Path "${{ github.workspace }}\build\thirdparty\StormByte\buffer\lib\StormByte-Buffer.dll" -Destination "${{ github.workspace }}\build\test" -Force
-          Copy-Item -Path "${{ github.workspace }}\build\thirdparty\StormByte\logger\lib\StormByte-Logger.dll" -Destination "${{ github.workspace }}\build\test" -Force
-          Copy-Item -Path "${{ github.workspace }}\build\lib\StormByte-Network.dll" -Destination "${{ github.workspace }}\build\test" -Force
+          echo "${{ github.workspace }}\build\lib" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+          echo "${{ github.workspace }}\build\thirdparty\StormByte\buffer\lib" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+          echo "${{ github.workspace }}\build\thirdparty\StormByte\base\lib" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+          echo "${{ github.workspace }}\build\thirdparty\StormByte\logger\lib" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
 
       - name: Run unit tests
         run: ctest --output-on-failure --test-dir ${{ github.workspace }}\build\test --timeout 30
