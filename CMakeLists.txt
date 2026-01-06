@@ -12,6 +12,7 @@ project("StormByte C++ Library: Network module"
 
 include(cmake/optimizations.cmake)
 include(cmake/asan.cmake)
+cmake_policy(SET CMP0079 NEW)
 
 add_subdirectory(doc)
 add_subdirectory(lib)

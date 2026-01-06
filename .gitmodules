@@ -1,10 +1,6 @@
-[submodule "thirdparty/StormByte/base"]
-	path = thirdparty/StormByte/base
-	url = https://github.com/StormBytePP/StormByte.git
-
-[submodule "thirdparty/StormByte/buffer"]
-	path = thirdparty/StormByte/buffer
+[submodule "StormByte Suite - Buffer"]
+	path = thirdparty/StormByte/buffer/src
 	url = https://github.com/StormBytePP/StormByte-Buffer.git
-[submodule "thirdparty/StormByte/logger"]
-	path = thirdparty/StormByte/logger
-	url = https://github.com/StormBytePP/StormByte-Logger.git
+[submodule "StormByte BuildMaster"]
+	path = thirdparty/buildmaster
+	url = https://github.com/StormBytePP/StormByte-BuildMaster.git

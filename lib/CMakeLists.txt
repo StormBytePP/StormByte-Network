@@ -28,7 +28,7 @@ if(MSVC)
 	target_compile_options(StormByte-Network PRIVATE /EHsc)
 	target_compile_options(StormByte-Network PRIVATE $<$<CONFIG:Release>:/O2>)
 	target_compile_options(StormByte-Network PRIVATE $<$<CONFIG:Debug>:/Od>)
-	target_link_options(StormByte-Network PRIVATE $<$<CONFIG:Release>:/LTCG /GL>)
+	target_compile_definitions(StormByte-Network PUBLIC UNICODE NOMINMAX) # Create problems if disabled
 else()
 	set(CMAKE_CXX_FLAGS_DEBUG "-pipe -g -ggdb -Wall -Wextra -Wnon-virtual-dtor -pedantic -pedantic-errors -O0")
 endif()

@@ -1,5 +1,5 @@
 option(ENABLE_TEST "Enable Unit Tests" OFF)
-if(ENABLE_TEST AND NOT STORMBYTE_AS_DEPENDENCY)
+if(ENABLE_TEST)
 	enable_testing()
 	# Combined server/client socket test (multi-client)
 	# It is a private class, keep for internal testing only

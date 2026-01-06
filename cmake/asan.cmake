@@ -1,6 +1,6 @@
 option(ENABLE_ASAN "Enable AddressSanitizer (and UBSan) for debug builds" OFF)
 
-if(ENABLE_ASAN AND NOT STORMBYTE_AS_DEPENDENCY AND NOT WIN32)
+if(ENABLE_ASAN AND NOT WIN32)
 	# Recommend Debug builds for ASan
 	set(CMAKE_BUILD_TYPE Debug CACHE STRING "Build type" FORCE)
 
