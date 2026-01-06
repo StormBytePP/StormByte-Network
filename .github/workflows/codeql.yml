@@ -42,6 +42,7 @@ jobs:
       # 2. INSTALL TOOLCHAIN
       ###########################################################################
       - name: Install toolchain
+        if: matrix.language == 'c-cpp' && matrix.build-mode == 'manual'
         id: install-toolchain
         uses: stormbytepp/githubactions/.github/actions/install-toolchain@master
         with:
