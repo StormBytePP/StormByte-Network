@@ -12,7 +12,7 @@ Server::Server(const DeserializePacketFunction& deserialize_packet_function, std
 {}
 
 Server::~Server() noexcept {
-	Disconnect(); // Not really needed but explicit to make sure logger is not destructed before disconnection
+	Disconnect();
 }
 
 bool Server::Connect(const Connection::Protocol& protocol, const std::string& address, const unsigned short& port) {
@@ -25,14 +25,16 @@ bool Server::Connect(const Connection::Protocol& protocol, const std::string& ad
 		m_socket_server = std::make_unique<Socket::Server>(protocol, m_logger);
 
 		if (!m_socket_server->Listen(address, port)) {
-			m_logger << Logger::Level::Error << "Failed to listen on " << address << ":" << port << " using protocol " << Connection::ProtocolString(protocol) << std::endl;
+			m_logger << Logger::Level::Error << "Failed to listen on " << address << ":" << port
+					<< " using protocol " << Connection::ProtocolString(protocol) << std::endl;
 			m_socket_server.reset();
 			return false;
 		}
 
 		m_status.store(Connection::Status::Connected);
 		m_accept_thread = std::thread(&Server::AcceptClients, this);
-		m_logger << Logger::Level::LowLevel << "Server is listening on " << address << ":" << port << " using protocol " << Connection::ProtocolString(protocol) << std::endl;
+		m_logger << Logger::Level::LowLevel << "Server is listening on " << address << ":" << port
+				<< " using protocol " << Connection::ProtocolString(protocol) << std::endl;
 		return true;
 	} catch (const std::bad_alloc& bd) {
 		m_logger << Logger::Level::Error << "Failed to allocate memory for server socket: " << bd.what() << std::endl;
@@ -41,68 +43,82 @@ bool Server::Connect(const Connection::Protocol& protocol, const std::string& ad
 }
 
 void Server::Disconnect() noexcept {
-	if (m_socket_server) {
-		m_logger << Logger::Level::LowLevel << "Stopping server and disconnecting all clients." << std::endl;
-
-		// Update status
-		m_status.store(Connection::Status::Disconnecting);
-
-		// Disconnect early so no new clients are accepted
-		m_socket_server->Disconnect();
-
-		// Wait until accept thread finishes
-		if (m_accept_thread.joinable()) {
-			m_accept_thread.join();
-		}
-
-		// We snapshot the client UUIDs to avoid holding the mutex while disconnecting
-		std::vector<std::string> client_uuids;
-		{
-			std::scoped_lock lock_guard(m_mutex);
-			for (const auto& [uuid, _] : m_clients) {
-				client_uuids.push_back(uuid);
-			}
-		}
-
-		// Disconnect all clients
-		for (const auto& uuid : client_uuids)
-			DisconnectClient(uuid);
-
-		// Close server socket
-		m_socket_server.reset();
-
-		// Update status
-		m_status.store(Connection::Status::Disconnected);
+	if (!m_socket_server) {
+		return;
 	}
+
+	m_logger << Logger::Level::LowLevel << "Stopping server and disconnecting all clients." << std::endl;
+
+	m_status.store(Connection::Status::Disconnecting);
+
+	// Stop accept loop first
+	m_socket_server->Disconnect();
+
+	if (m_accept_thread.joinable()) {
+		m_accept_thread.join();
+	}
+
+	// Snapshot UUIDs so we do not hold the mutex while joining worker threads
+	std::vector<std::string> client_uuids;
+	{
+		std::scoped_lock lock_guard(m_mutex);
+		client_uuids.reserve(m_clients.size());
+		for (const auto& [uuid, _] : m_clients) {
+			client_uuids.push_back(uuid);
+		}
+	}
+
+	for (const auto& uuid : client_uuids) {
+		DisconnectClient(uuid);
+	}
+
+	m_socket_server.reset();
+	m_status.store(Connection::Status::Disconnected);
 }
 
 void Server::DisconnectClient(const std::string& uuid) noexcept {
-	std::scoped_lock lock_guard(m_mutex);
-	auto it = m_clients.find(uuid);
-	if (it != m_clients.end()) {
-		it->second->Socket()->Disconnect();
-		m_logger << Logger::Level::LowLevel << "Disconnected client: " << uuid << std::endl;
-		m_clients.erase(it);
-	}
+	std::thread thread_to_join;
+	std::shared_ptr<Connection::Client> client;
 
-	auto thread_it = m_handle_msg_threads.find(uuid);
-	if (thread_it != m_handle_msg_threads.end()) {
-		if (thread_it->second.joinable()) {
-			// Avoid attempting to join the current thread (would deadlock).
+	{
+		std::scoped_lock lock_guard(m_mutex);
+
+		auto it = m_clients.find(uuid);
+		if (it != m_clients.end()) {
+			client = it->second;
+			m_clients.erase(it);
+		}
+
+		auto thread_it = m_handle_msg_threads.find(uuid);
+		if (thread_it != m_handle_msg_threads.end()) {
 			if (thread_it->second.get_id() == std::this_thread::get_id()) {
-				thread_it->second.detach();
+				// Called from the worker itself: detach so we never self-join
+				if (thread_it->second.joinable()) {
+					thread_it->second.detach();
+				}
+				m_handle_msg_threads.erase(thread_it);
 			} else {
-				thread_it->second.join();
+				thread_to_join = std::move(thread_it->second);
+				m_handle_msg_threads.erase(thread_it);
 			}
 		}
-		m_handle_msg_threads.erase(thread_it);
+	}
+
+	// Socket I/O outside the map lock
+	if (client && client->Socket()) {
+		client->Socket()->Disconnect();
+		m_logger << Logger::Level::LowLevel << "Disconnected client: " << uuid << std::endl;
+	}
+
+	if (thread_to_join.joinable()) {
+		thread_to_join.join();
 	}
 }
 
 void Server::AcceptClients() noexcept {
-	constexpr const auto TIMEOUT = 1000000; // 1 second
+	constexpr auto TIMEOUT = 1000000; // 1 second
 	m_logger << Logger::Level::LowLevel << "Started accept clients thread" << std::endl;
-	
+
 	while (Connection::IsConnected(m_status.load())) {
 		auto expected_wait = m_socket_server->WaitForData(TIMEOUT);
 		if (!expected_wait) {
@@ -110,32 +126,38 @@ void Server::AcceptClients() noexcept {
 			return;
 		}
 
-		switch(expected_wait.value()) {
+		switch (expected_wait.value()) {
 			case Connection::Read::Result::Success: {
 				auto expected_client = m_socket_server->Accept();
 				if (!expected_client) {
-					m_logger << Logger::Level::Error << expected_client.error()->what() << std::endl;
-					return;
+					// Transient accept failure (e.g. raced with disconnect): keep listening
+					if (!Connection::IsConnected(m_status.load())) {
+						return;
+					}
+					m_logger << Logger::Level::LowLevel << expected_client.error()->what() << std::endl;
+					break;
 				}
 
 				const std::string client_uuid = expected_client.value()->UUID();
 				{
 					std::scoped_lock lock_guard(m_mutex);
 					m_clients.emplace(client_uuid, CreateConnection(expected_client.value()));
-					m_handle_msg_threads.emplace(client_uuid, std::thread(&Server::HandleClientCommunication, this, client_uuid));
+					m_handle_msg_threads.emplace(
+						client_uuid,
+						std::thread(&Server::HandleClientCommunication, this, client_uuid));
 				}
 				m_logger << Logger::Level::LowLevel << "AcceptClients: accepted client uuid=" << client_uuid << std::endl;
 				break;
 			}
 
 			case Connection::Read::Result::Timeout:
-				// No incoming connection within timeout; continue waiting
-				std::this_thread::yield();
+				// Idle listen socket — loop again without yield spin
 				continue;
+
 			case Connection::Read::Result::Closed:
-				// Listening socket was closed or became invalid — stop accepting
 				m_logger << Logger::Level::LowLevel << "Listening socket closed; stopping accept loop" << std::endl;
 				return;
+
 			default:
 				continue;
 		}
@@ -146,12 +168,14 @@ void Server::AcceptClients() noexcept {
 
 void Server::HandleClientCommunication(const std::string& client_uuid) noexcept {
 	m_logger << Logger::Level::LowLevel << "Started communication thread for client uuid=" << client_uuid << std::endl;
+
 	std::shared_ptr<Connection::Client> client;
 	{
 		std::scoped_lock lock_guard(m_mutex);
 		auto it = m_clients.find(client_uuid);
 		if (it == m_clients.end()) {
-			m_logger << Logger::Level::LowLevel << "Client uuid=" << client_uuid << " not found; ending communication thread" << std::endl;
+			m_logger << Logger::Level::LowLevel << "Client uuid=" << client_uuid
+					<< " not found; ending communication thread" << std::endl;
 			return;
 		}
 		client = it->second;
@@ -161,71 +185,57 @@ void Server::HandleClientCommunication(const std::string& client_uuid) noexcept 
 		auto expected_wait = client->Socket()->WaitForData();
 		if (!expected_wait) {
 			m_logger << Logger::Level::Error << expected_wait.error()->what() << std::endl;
-			goto end;
+			break;
 		}
 
-		switch(expected_wait.value()) {
+		switch (expected_wait.value()) {
 			case Connection::Read::Result::Success: {
-				m_logger << Logger::Level::LowLevel << "HandleClientCommunication: data ready for client=" << client_uuid << std::endl;
 				PacketPointer packet;
 				{
 					Transport::Frame frame = client->Receive(m_logger);
 					packet = frame.ProcessPacket(m_deserialize_packet_function, m_logger);
 				}
 				if (!packet) {
-					m_logger << Logger::Level::Error << "Failed to process packet from client=" << client_uuid << std::endl;
-					goto end;
+					m_logger << Logger::Level::Error << "Failed to process packet from client="
+							<< client_uuid << std::endl;
+					break;
 				}
-				m_logger << Logger::Level::LowLevel << "HandleClientCommunication: received packet opcode=" << packet->Opcode() << " from client=" << client_uuid << std::endl;
 
-				// Guard against server teardown races: if disconnecting, skip calling virtual handler
 				if (!Connection::IsConnected(m_status.load())) {
-					m_logger << Logger::Level::LowLevel << "HandleClientCommunication: server is disconnecting; skipping packet processing for client=" << client_uuid << std::endl;
-					goto end;
+					break;
 				}
 
 				PacketPointer response_packet = ProcessClientPacket(client_uuid, packet);
 				if (!response_packet) {
-					m_logger << Logger::Level::Error << "HandleClientCommunication: resonse packet was null" << std::endl;
-					goto end;
+					m_logger << Logger::Level::Error
+							<< "HandleClientCommunication: response packet was null" << std::endl;
 					break;
 				}
-				m_logger << Logger::Level::LowLevel << "HandleClientCommunication: processed packet successfully for client=" << client_uuid << std::endl;
 
-				// After processing, honour shutdown if requested
 				if (client->Socket()->HasShutdownRequest() || !Connection::IsConnected(m_status.load())) {
-					m_logger << Logger::Level::LowLevel << "Client has requested shutdown, disconnecting..." << std::endl;
-					goto end;
+					break;
 				}
-				else {
-					// Reply response packet
-					Reply(client, *response_packet);
-					m_logger << Logger::Level::LowLevel << "HandleClientCommunication: sent response packet opcode=" << response_packet->Opcode() << " to client=" << client_uuid << std::endl;
-				}
+
+				Reply(client, *response_packet);
+				continue; // success path: wait for next message
+			}
+
+			case Connection::Read::Result::Closed:
+			case Connection::Read::Result::ShutdownRequest:
 				break;
-			}
-
-			case Connection::Read::Result::Closed: {
-				m_logger << Logger::Level::LowLevel << "HandleClientCommunication: client=" << client_uuid << " has closed the connection" << std::endl;
-				goto end;
-			}
-
-			case Connection::Read::Result::ShutdownRequest: {
-				m_logger << Logger::Level::LowLevel << "HandleClientCommunication: client=" << client_uuid << " has requested shutdown" << std::endl;
-				goto end;
-			}
 
 			case Connection::Read::Result::Timeout:
-				m_logger << Logger::Level::LowLevel << "HandleClientCommunication: timeout waiting for data from client=" << client_uuid << std::endl;
-				std::this_thread::yield();
+				// No data this slice — keep waiting (no yield, no log spam)
 				continue;
+
 			default:
-				m_logger << Logger::Level::LowLevel << "HandleClientCommunication: unexpected wait result for client=" << client_uuid << std::endl;
 				continue;
 		}
+
+		break; // Closed / error / null packet
 	}
 
-	end:
 	DisconnectClient(client_uuid);
-	m_logger << Logger::Level::LowLevel << "Stopped communication thread for client uuid=" << client_uuid << std::endl;
+	m_logger << Logger::Level::LowLevel << "Stopped communication thread for client uuid="
+			<< client_uuid << std::endl;
 }

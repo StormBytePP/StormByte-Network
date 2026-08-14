@@ -59,7 +59,7 @@ Frame Frame::ProcessInput(std::shared_ptr<Socket::Client> client, Buffer::Pipeli
 			return Frame();
 		}
 
-		expected_payload_buffer->Extract(payload);
+		expected_payload_buffer->Extract(0, payload);
 
 		// Process payload if needed
 		if (opcode >= Packet::PROCESS_THRESHOLD) {

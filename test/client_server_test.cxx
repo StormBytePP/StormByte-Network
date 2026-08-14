@@ -210,36 +210,42 @@ namespace Test {
 	 */
 	Buf::Pipeline::PipeFunction CreateXorPipe() noexcept {
 		return [](ExternalReader& in, ExternalWriter& out, std::shared_ptr<Log> log) {
-			log << Level::Debug << "XOR Pipe: Starting processing data..." << std::endl;
-			constexpr const std::size_t max_chunk_size = 10 * 1024 * 1024; // 10 MB
+			log << Level::Debug << "XOR Pipe: Starting..." << std::endl;
+			constexpr std::size_t max_chunk = 10 * 1024 * 1024;
+
 			while (!in.EoF()) {
-				const std::size_t available = in.AvailableBytes();
-				const std::size_t chunk_size = std::min(available, max_chunk_size);
-				if (chunk_size == 0) {
-					// No data yet but stream still open — wait without busy-spinning hard
-					log << Level::Debug << "XOR Pipe: No data available, yielding..." << std::endl;
-					std::this_thread::yield();
-					continue;
-				}
-				log << Level::Debug << "XOR Pipe: Processing " << humanreadable_bytes << chunk_size
-					<< nohumanreadable << std::endl;
 				DataType data;
-				if (!in.Extract(chunk_size, data) || data.empty()) {
-					// Spurious wake / transient empty; retry until EoF
-					std::this_thread::yield();
+
+				// Blocks until ≥1 byte or EoF/error (no yield spin)
+				if (!in.Extract(1, data) || data.empty()) {
+					if (in.EoF())
+						break;
 					continue;
 				}
-				for (auto& byte : data) {
-					byte ^= std::byte{0xAB};
+
+				// Non-blocking grab of the rest of the current burst (capped)
+				const std::size_t extra = std::min(in.AvailableBytes(), max_chunk - data.size());
+				if (extra > 0) {
+					DataType more;
+					if (in.Extract(extra, more) && !more.empty()) {
+						data.insert(data.end(),
+							std::make_move_iterator(more.begin()),
+							std::make_move_iterator(more.end()));
+					}
 				}
+
+				for (auto& b : data)
+					b ^= std::byte{0xAB};
+
 				if (!out.Write(std::move(data))) {
-					log << Level::Error << "XOR Pipe: Write failed, aborting stage." << std::endl;
+					log << Level::Error << "XOR Pipe: Write failed" << std::endl;
 					out.SetError();
 					return;
 				}
 			}
+
 			out.Close();
-			log << Level::Debug << "XOR Pipe: Finished processing data." << std::endl;
+			log << Level::Debug << "XOR Pipe: Finished." << std::endl;
 		};
 	}
 
