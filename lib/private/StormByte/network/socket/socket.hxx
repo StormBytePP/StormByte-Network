@@ -9,6 +9,8 @@
 #include <StormByte/network/exception.hxx>
 #include <StormByte/network/typedefs.hxx>
 
+#include <atomic>
+
 /**
  * @namespace Socket
  * @brief The namespace containing all the socket related classes.
@@ -38,6 +40,8 @@ namespace StormByte::Network::Socket {
 	 * Thread-safety and ownership:
 	 * - `Socket` instances are moveable but not copyable. Move operations
 	 *   transfer ownership of the platform handle and associated state.
+	 * - `m_status` is atomic so concurrent Disconnect()/Status() from accept
+	 *   workers and the main thread are well-defined.
 	 * - The class uses `std::unique_ptr` for owned resources to make
 	 *   ownership semantics explicit.
 	 */
@@ -88,19 +92,19 @@ namespace StormByte::Network::Socket {
 			 * @brief Gracefully disconnect the socket.
 			 *
 			 * Perform protocol-level and OS-level shutdown/close operations. This
-			 * is safe to call multiple times and will not throw.
+			 * is safe to call multiple times (and from multiple threads) and will
+			 * not throw. Only the first caller performs the real close.
 			 */
 			virtual void 									Disconnect() noexcept;
 
 			/**
 			 * @brief Current connection status.
 			 *
-			 * Returns a reference to the `Connection::Status` describing the
-			 * current state (Connected/Disconnected/etc.). The reference remains
-			 * valid for the lifetime of the `Socket` object.
+			 * Returns a snapshot of the `Connection::Status` describing the
+			 * current state (Connected/Disconnected/etc.).
 			 */
-			constexpr const Connection::Status& 			Status() const noexcept {
-				return m_status;
+			Connection::Status 								Status() const noexcept {
+				return m_status.load(std::memory_order_acquire);
 			}
 
 			/**
@@ -146,7 +150,7 @@ namespace StormByte::Network::Socket {
 
 		protected:
 			Connection::Protocol m_protocol;				///< Protocol family/config
-			Connection::Status m_status;					///< Current connection status
+			std::atomic<Connection::Status> m_status;		///< Current connection status
 			Connection::HandlerType m_handle;				///< Owned connection handler
 			std::unique_ptr<Connection::Info> m_conn_info;	///< Optional connection metadata
 			unsigned long m_mtu;							///< Active MTU value

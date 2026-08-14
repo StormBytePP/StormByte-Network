@@ -39,7 +39,7 @@ m_UUID(StormByte::GenerateUUIDv4()) {
 
 Socket::Socket(Socket&& other) noexcept:
 	m_protocol(other.m_protocol),
-	m_status(other.m_status),
+	m_status(other.m_status.load(std::memory_order_relaxed)),
 	m_handle(std::move(other.m_handle)),
 	m_conn_info(std::move(other.m_conn_info)),
 	m_mtu(other.m_mtu),
@@ -48,7 +48,7 @@ Socket::Socket(Socket&& other) noexcept:
 	m_effective_send_buf(other.m_effective_send_buf),
 	m_effective_recv_buf(other.m_effective_recv_buf)
 {
-	other.m_status = Connection::Status::Disconnected;
+	other.m_status.store(Connection::Status::Disconnected, std::memory_order_relaxed);
 	other.m_effective_send_buf = 0;
 	other.m_effective_recv_buf = 0;
 }
@@ -56,7 +56,7 @@ Socket::Socket(Socket&& other) noexcept:
 Socket& Socket::operator=(Socket&& other) noexcept {
 	if (this != &other) {
 		m_protocol = other.m_protocol;
-		m_status = other.m_status;
+		m_status.store(other.m_status.load(std::memory_order_relaxed), std::memory_order_relaxed);
 		m_handle = std::move(other.m_handle);
 		m_conn_info = std::move(other.m_conn_info);
 		m_mtu = other.m_mtu;
@@ -65,7 +65,7 @@ Socket& Socket::operator=(Socket&& other) noexcept {
 		m_effective_send_buf = other.m_effective_send_buf;
 		m_effective_recv_buf = other.m_effective_recv_buf;
 
-		other.m_status = Connection::Status::Disconnected;
+		other.m_status.store(Connection::Status::Disconnected, std::memory_order_relaxed);
 		other.m_effective_send_buf = 0;
 		other.m_effective_recv_buf = 0;
 	}
@@ -77,10 +77,13 @@ Socket::~Socket() noexcept {
 }
 
 void Socket::Disconnect() noexcept {
-	if (!Connection::IsConnected(m_status))
+	// Only one thread performs the real close.
+	auto prev = m_status.exchange(Connection::Status::Disconnecting,
+								std::memory_order_acq_rel);
+	if (prev == Connection::Status::Disconnected ||
+		prev == Connection::Status::Disconnecting) {
 		return;
-
-	m_status = Connection::Status::Disconnecting;
+	}
 
 	if (m_handle > 0) {
 #ifdef LINUX
@@ -96,12 +99,12 @@ void Socket::Disconnect() noexcept {
 #endif
 	}
 
-	m_status = Connection::Status::Disconnected;
+	m_status.store(Connection::Status::Disconnected, std::memory_order_release);
 	m_logger << Logger::Level::LowLevel << "Disconnected socket " << m_UUID << std::endl;
 }
 
 StormByte::Network::ExpectedReadResult Socket::WaitForData(const long long& usecs) noexcept {
-	if (!Connection::IsConnected(m_status)) {
+	if (!Connection::IsConnected(m_status.load(std::memory_order_acquire))) {
 		return Unexpected<ConnectionClosed>("Failed to wait for data: Invalid connection status");
 	}
 
@@ -115,7 +118,7 @@ StormByte::Network::ExpectedReadResult Socket::WaitForData(const long long& usec
 
 	static std::atomic<long long> s_last_log_us{0};
 
-	while (Connection::IsConnected(m_status)) {
+	while (Connection::IsConnected(m_status.load(std::memory_order_acquire))) {
 		auto now = std::chrono::steady_clock::now();
 		long long now_us = std::chrono::duration_cast<std::chrono::microseconds>(now.time_since_epoch()).count();
 		long long prev = s_last_log_us.load(std::memory_order_relaxed);
@@ -161,7 +164,7 @@ StormByte::Network::ExpectedReadResult Socket::WaitForData(const long long& usec
 			}
 
 			if (evflags & (EPOLLHUP | EPOLLRDHUP)) {
-				if (m_status != Connection::Status::Connected)
+				if (m_status.load(std::memory_order_acquire) != Connection::Status::Connected)
 					return Connection::Read::Result::Closed;
 				if (evflags & EPOLLIN) {
 					char tmp;
@@ -180,7 +183,7 @@ StormByte::Network::ExpectedReadResult Socket::WaitForData(const long long& usec
 				return Connection::Read::Result::ShutdownRequest;
 			}
 
-			if (m_status != Connection::Status::Connected)
+			if (m_status.load(std::memory_order_acquire) != Connection::Status::Connected)
 				return Connection::Read::Result::Closed;
 			if (evflags & (EPOLLIN | EPOLLPRI))
 				return Connection::Read::Result::Success;
@@ -266,7 +269,7 @@ StormByte::Network::ExpectedReadResult Socket::WaitForData(const long long& usec
 			}
 
 			if (netev.lNetworkEvents & FD_READ) {
-				if (m_status != Connection::Status::Connected)
+				if (m_status.load(std::memory_order_acquire) != Connection::Status::Connected)
 					return Connection::Read::Result::Closed;
 				return Connection::Read::Result::Success;
 			}
@@ -274,7 +277,7 @@ StormByte::Network::ExpectedReadResult Socket::WaitForData(const long long& usec
 			m_logger << Logger::Level::LowLevel
 					<< "WSA wait signaled unknown network event (flags=0x" << std::hex
 					<< netev.lNetworkEvents << std::dec << ")" << std::endl;
-			if (m_status != Connection::Status::Connected)
+			if (m_status.load(std::memory_order_acquire) != Connection::Status::Connected)
 				return Connection::Read::Result::Closed;
 			return Connection::Read::Result::Success;
 		}
@@ -293,7 +296,7 @@ Socket::CreateSocket() noexcept {
 #else
 	if (handle == -1) {
 #endif
-		m_status = Connection::Status::Disconnected;
+		m_status.store(Connection::Status::Disconnected, std::memory_order_release);
 		return Unexpected<ConnectionError>(Connection::Handler::Instance().LastError());
 	}
 
@@ -301,7 +304,7 @@ Socket::CreateSocket() noexcept {
 }
 
 void Socket::InitializeAfterConnect() noexcept {
-	m_status = Connection::Status::Connecting;
+	m_status.store(Connection::Status::Connecting, std::memory_order_release);
 	m_mtu = GetMTU();
 	SetNonBlocking();
 
@@ -431,7 +434,7 @@ void Socket::InitializeAfterConnect() noexcept {
 		m_logger << Logger::Level::Warning << "setsockopt(TCP_NODELAY) failed: "
 				<< Connection::Handler::Instance().LastError() << std::endl;
 	}
-	m_status = Connection::Status::Connected;
+	m_status.store(Connection::Status::Connected, std::memory_order_release);
 }
 
 #ifdef LINUX

@@ -45,12 +45,12 @@ Socket::Client::Client(const Connection::Protocol& protocol, std::shared_ptr<Log
 ExpectedVoid Socket::Client::Connect(const std::string& hostname, const unsigned short& port) noexcept {
 	m_logger << Logger::Level::LowLevel << "Connecting to " << hostname << ":" << port << std::endl;
 
-	if (m_status != Connection::Status::Disconnected) {
+	if (m_status.load(std::memory_order_acquire) != Connection::Status::Disconnected) {
 		m_logger << Logger::Level::Error << "Client is already connected" << std::endl;
 		return Unexpected<ConnectionError>("Client is already connected");
 	}
 
-	m_status = Connection::Status::Connecting;
+	m_status.store(Connection::Status::Connecting, std::memory_order_release);
 
 	auto expected_socket = CreateSocket();
 	if (!expected_socket) {
@@ -94,7 +94,7 @@ ExpectedVoid Socket::Client::Send(const std::vector<std::byte>& buffer) noexcept
 }
 
 ExpectedVoid Socket::Client::Send(std::span<const std::byte> data) noexcept {
-	if (m_status != Connection::Status::Connected) {
+	if (m_status.load(std::memory_order_acquire) != Connection::Status::Connected) {
 		return Unexpected<ConnectionError>("Failed to send: Client is not connected");
 	}
 
@@ -186,7 +186,7 @@ ExpectedVoid Socket::Client::Send(std::span<const std::byte> data) noexcept {
 }
 
 ExpectedVoid Socket::Client::Send(Buffer::Consumer data) noexcept {
-	if (m_status != Connection::Status::Connected) {
+	if (m_status.load(std::memory_order_acquire) != Connection::Status::Connected) {
 		return Unexpected<ConnectionError>("Failed to send: Client is not connected");
 	}
 
@@ -402,7 +402,7 @@ ExpectedBuffer Socket::Client::Receive(const std::size_t& max_size, const unsign
 ExpectedVoid Socket::Client::Write(std::span<const std::byte> data, const std::size_t& size) noexcept {
 	m_logger << Logger::Level::LowLevel << "Starting to write data..." << std::endl;
 
-	if (m_status != Connection::Status::Connected) {
+	if (m_status.load(std::memory_order_acquire) != Connection::Status::Connected) {
 		m_logger << Logger::Level::LowLevel << "Failed to write: Client is not connected" << std::endl;
 		return Unexpected<ConnectionError>("Failed to write: Client is not connected");
 	}
@@ -457,7 +457,7 @@ ExpectedVoid Socket::Client::Write(std::span<const std::byte> data, const std::s
 }
 
 bool Socket::Client::Ping() noexcept {
-	if (m_status != Connection::Status::Connected) {
+	if (m_status.load(std::memory_order_acquire) != Connection::Status::Connected) {
 		return false;
 	}
 	bool ping_success = false;
@@ -491,7 +491,7 @@ bool Socket::Client::Ping() noexcept {
 		m_logger << Logger::Level::LowLevel << "Ping successful" << std::endl;
 	} else {
 		m_logger << Logger::Level::LowLevel << "Ping failed" << std::endl;
-		m_status = Connection::Status::Disconnected;
+		m_status.store(Connection::Status::Disconnected, std::memory_order_release);
 	}
 
 	return ping_success;

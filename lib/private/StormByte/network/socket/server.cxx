@@ -22,10 +22,10 @@ Socket(protocol, logger) {
 }
 
 ExpectedVoid Socket::Server::Listen(const std::string& hostname, const unsigned short& port) noexcept {
-	if (Connection::IsConnected(m_status))
+	if (Connection::IsConnected(m_status.load(std::memory_order_acquire)))
 		return Unexpected<ConnectionError>("Server is already connected");
 
-	m_status = Connection::Status::Connecting;
+	m_status.store(Connection::Status::Connecting, std::memory_order_release);
 
 	auto expected_socket = CreateSocket();
 	if (!expected_socket)
@@ -39,7 +39,7 @@ ExpectedVoid Socket::Server::Listen(const std::string& hostname, const unsigned 
 		BOOL exclusive = TRUE;
 		if (setsockopt(m_handle, SOL_SOCKET, SO_EXCLUSIVEADDRUSE,
 				reinterpret_cast<const char*>(&exclusive), sizeof(exclusive)) == SOCKET_ERROR) {
-			m_status = Connection::Status::Disconnected;
+			m_status.store(Connection::Status::Disconnected, std::memory_order_release);
 			m_handle = INVALID_SOCKET;
 			return Unexpected<ConnectionError>("Failed to set SO_EXCLUSIVEADDRUSE: {} (error code: {})",
 				Connection::Handler::Instance().LastError(),
@@ -49,7 +49,7 @@ ExpectedVoid Socket::Server::Listen(const std::string& hostname, const unsigned 
 #else
 	if (setsockopt(m_handle, SOL_SOCKET, SO_REUSEADDR,
 			reinterpret_cast<const char*>(&opt), sizeof(opt)) < 0) {
-		m_status = Connection::Status::Disconnected;
+		m_status.store(Connection::Status::Disconnected, std::memory_order_release);
 		m_handle = -1;
 		return Unexpected<ConnectionError>("Failed to set socket options: {} (error code: {})",
 			Connection::Handler::Instance().LastError(),
@@ -65,7 +65,7 @@ ExpectedVoid Socket::Server::Listen(const std::string& hostname, const unsigned 
 
 	auto bind_result = ::bind(m_handle, m_conn_info->SockAddr().get(), sizeof(*m_conn_info->SockAddr()));
 	if (bind_result == -1) {
-		m_status = Connection::Status::Disconnected;
+		m_status.store(Connection::Status::Disconnected, std::memory_order_release);
 #ifdef WINDOWS
 		m_handle = INVALID_SOCKET;
 #else
@@ -78,7 +78,7 @@ ExpectedVoid Socket::Server::Listen(const std::string& hostname, const unsigned 
 
 	auto listen_result = ::listen(m_handle, SOMAXCONN);
 	if (listen_result == -1) {
-		m_status = Connection::Status::Disconnected;
+		m_status.store(Connection::Status::Disconnected, std::memory_order_release);
 #ifdef WINDOWS
 		m_handle = INVALID_SOCKET;
 #else
@@ -97,7 +97,7 @@ ExpectedVoid Socket::Server::Listen(const std::string& hostname, const unsigned 
 }
 
 ExpectedClient Socket::Server::Accept() noexcept {
-	if (!Connection::IsConnected(m_status))
+	if (!Connection::IsConnected(m_status.load(std::memory_order_acquire)))
 		return Unexpected<ConnectionError>("Socket is not connected");
 
 #ifdef LINUX

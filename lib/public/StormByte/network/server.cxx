@@ -47,18 +47,30 @@ void Server::Disconnect() noexcept {
 		return;
 	}
 
-	m_logger << Logger::Level::LowLevel << "Stopping server and disconnecting all clients." << std::endl;
+	m_logger << Logger::Level::LowLevel
+			<< "Stopping server and disconnecting all clients." << std::endl;
 
-	m_status.store(Connection::Status::Disconnecting);
+	// 1) Signal stop so AcceptClients' while (IsConnected(...)) exits
+	m_status.store(Connection::Status::Disconnecting, std::memory_order_release);
 
-	// Stop accept loop first
-	m_socket_server->Disconnect();
+	// 2) Wake AcceptClients if blocked in WaitForData / Accept (without full teardown yet)
+	{
+		const auto& h = m_socket_server->Handle();
+#ifdef LINUX
+		if (h > 0)
+			::shutdown(h, SHUT_RDWR);
+#else
+		if (h != INVALID_SOCKET)
+			::shutdown(h, SD_BOTH);
+#endif
+	}
 
+	// 3) Wait until accept thread has left WaitForData / the loop
 	if (m_accept_thread.joinable()) {
 		m_accept_thread.join();
 	}
 
-	// Snapshot UUIDs so we do not hold the mutex while joining worker threads
+	// 4) Snapshot client UUIDs (no join under mutex)
 	std::vector<std::string> client_uuids;
 	{
 		std::scoped_lock lock_guard(m_mutex);
@@ -72,8 +84,10 @@ void Server::Disconnect() noexcept {
 		DisconnectClient(uuid);
 	}
 
+	// 5) Now safe: no accept thread using the listen fd
+	m_socket_server->Disconnect();
 	m_socket_server.reset();
-	m_status.store(Connection::Status::Disconnected);
+	m_status.store(Connection::Status::Disconnected, std::memory_order_release);
 }
 
 void Server::DisconnectClient(const std::string& uuid) noexcept {
