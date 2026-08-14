@@ -35,7 +35,7 @@ using Buf::Pipeline;
 using namespace StormByte::Logger;
 using namespace StormByte::Network;
 
-std::shared_ptr<Log> logger = std::make_shared<ThreadedLog>(std::cout, Level::Debug, "[%L] [T%i] %T:");
+std::shared_ptr<Log> logger = std::make_shared<ThreadedLog>(std::cout, Level::Info, "[%L] [T%i] %T:");
 constexpr const unsigned short timeout = 5; // 5 seconds
 constexpr const std::size_t large_data_size = 20 * 1024 * 1024; // 20 MB
 constexpr const char large_data_repeat_char = 'x';

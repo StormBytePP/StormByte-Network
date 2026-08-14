@@ -116,23 +116,49 @@ StormByte::Network::ExpectedReadResult Socket::WaitForData(const long long& usec
 	const auto deadline = (usecs > 0) ? (start_time + effective_usecs)
 									: std::chrono::steady_clock::time_point::max();
 
-	static std::atomic<long long> s_last_log_us{0};
+	// Progress log: first after 5s idle, then every 5s, with elapsed time for this wait.
+	constexpr auto PROGRESS_INTERVAL = std::chrono::seconds(5);
+	auto next_progress_log = start_time + PROGRESS_INTERVAL;
+	bool logged_waiting = false;
+
+	auto elapsed_ms = [&]() {
+		return std::chrono::duration_cast<std::chrono::milliseconds>(
+			std::chrono::steady_clock::now() - start_time).count();
+	};
+
+	auto log_progress_if_due = [&]() {
+		const auto now = std::chrono::steady_clock::now();
+		if (now < next_progress_log)
+			return;
+		logged_waiting = true;
+		m_logger << Logger::Level::LowLevel
+				<< "Still waiting for data on socket " << m_UUID
+				<< " (elapsed " << elapsed_ms() << " ms)" << std::endl;
+		next_progress_log = now + PROGRESS_INTERVAL;
+	};
+
+	auto log_wait_done = [&](const char* reason) {
+		// Only emit completion if we had been waiting long enough to care,
+		// or if we already printed a "still waiting" line.
+		const auto ms = elapsed_ms();
+		if (!logged_waiting && ms < 1000)
+			return;
+		m_logger << Logger::Level::LowLevel
+				<< "Wait for data on socket " << m_UUID << ": " << reason
+				<< " after " << ms << " ms" << std::endl;
+	};
 
 	while (Connection::IsConnected(m_status.load(std::memory_order_acquire))) {
-		auto now = std::chrono::steady_clock::now();
-		long long now_us = std::chrono::duration_cast<std::chrono::microseconds>(now.time_since_epoch()).count();
-		long long prev = s_last_log_us.load(std::memory_order_relaxed);
-		if (now_us - prev >= 1000000) {
-			if (s_last_log_us.compare_exchange_strong(prev, now_us, std::memory_order_acq_rel)) {
-				m_logger << Logger::Level::LowLevel << "Waiting for data on socket..." << std::endl;
-			}
-		}
+		log_progress_if_due();
 
 #ifdef LINUX
 		int timeout_ms = -1;
 		if (usecs > 0) {
 			auto now2 = std::chrono::steady_clock::now();
-			if (now2 >= deadline) return Connection::Read::Result::Timeout;
+			if (now2 >= deadline) {
+				log_wait_done("timeout");
+				return Connection::Read::Result::Timeout;
+			}
 			auto remaining = std::chrono::duration_cast<std::chrono::milliseconds>(deadline - now2);
 			timeout_ms = static_cast<int>(remaining.count());
 			if (timeout_ms < 0) timeout_ms = 0;
@@ -170,25 +196,32 @@ StormByte::Network::ExpectedReadResult Socket::WaitForData(const long long& usec
 					char tmp;
 					ssize_t r = recv(m_handle, &tmp, 1, MSG_PEEK | MSG_DONTWAIT);
 					if (r > 0) {
+						log_wait_done("data available");
 						return Connection::Read::Result::Success;
 					} else if (r == 0) {
+						log_wait_done("peer shutdown");
 						return Connection::Read::Result::ShutdownRequest;
 					} else {
 						if (errno == EWOULDBLOCK || errno == EAGAIN) {
+							log_wait_done("data available");
 							return Connection::Read::Result::Success;
 						}
 						return Unexpected<ConnectionClosed>("recv(MSG_PEEK) error while checking shutdown");
 					}
 				}
+				log_wait_done("peer shutdown");
 				return Connection::Read::Result::ShutdownRequest;
 			}
 
 			if (m_status.load(std::memory_order_acquire) != Connection::Status::Connected)
 				return Connection::Read::Result::Closed;
-			if (evflags & (EPOLLIN | EPOLLPRI))
+			if (evflags & (EPOLLIN | EPOLLPRI)) {
+				log_wait_done("data available");
 				return Connection::Read::Result::Success;
+			}
 			return Unexpected<ConnectionClosed>("Unknown epoll event while waiting for data");
 		} else if (nfds == 0) {
+			log_wait_done("timeout");
 			return Connection::Read::Result::Timeout;
 		} else {
 			if (errno == ECONNRESET || errno == EBADF) {
@@ -200,7 +233,10 @@ StormByte::Network::ExpectedReadResult Socket::WaitForData(const long long& usec
 		int timeout_ms = -1;
 		if (usecs > 0) {
 			auto now2 = std::chrono::steady_clock::now();
-			if (now2 >= deadline) return Connection::Read::Result::Timeout;
+			if (now2 >= deadline) {
+				log_wait_done("timeout");
+				return Connection::Read::Result::Timeout;
+			}
 			auto remaining = std::chrono::duration_cast<std::chrono::milliseconds>(deadline - now2);
 			timeout_ms = static_cast<int>(remaining.count());
 			if (timeout_ms < 0) timeout_ms = 0;
@@ -225,6 +261,7 @@ StormByte::Network::ExpectedReadResult Socket::WaitForData(const long long& usec
 		if (wait_res == WSA_WAIT_TIMEOUT) {
 			WSAEventSelect(m_handle, NULL, 0);
 			WSACloseEvent(ev);
+			log_wait_done("timeout");
 			return Connection::Read::Result::Timeout;
 		} else if (wait_res == WSA_WAIT_FAILED) {
 			int wsa_err = WSAGetLastError();
@@ -254,23 +291,28 @@ StormByte::Network::ExpectedReadResult Socket::WaitForData(const long long& usec
 					char tmp;
 					int r = recv(m_handle, &tmp, 1, MSG_PEEK);
 					if (r > 0) {
+						log_wait_done("data available");
 						return Connection::Read::Result::Success;
 					} else if (r == 0) {
+						log_wait_done("peer shutdown");
 						return Connection::Read::Result::ShutdownRequest;
 					} else {
 						int wsaerr = WSAGetLastError();
 						if (wsaerr == WSAEWOULDBLOCK) {
+							log_wait_done("data available");
 							return Connection::Read::Result::Success;
 						}
 						return Unexpected<ConnectionClosed>("recv(MSG_PEEK) failed while checking shutdown");
 					}
 				}
+				log_wait_done("peer shutdown");
 				return Connection::Read::Result::ShutdownRequest;
 			}
 
 			if (netev.lNetworkEvents & FD_READ) {
 				if (m_status.load(std::memory_order_acquire) != Connection::Status::Connected)
 					return Connection::Read::Result::Closed;
+				log_wait_done("data available");
 				return Connection::Read::Result::Success;
 			}
 
@@ -279,6 +321,7 @@ StormByte::Network::ExpectedReadResult Socket::WaitForData(const long long& usec
 					<< netev.lNetworkEvents << std::dec << ")" << std::endl;
 			if (m_status.load(std::memory_order_acquire) != Connection::Status::Connected)
 				return Connection::Read::Result::Closed;
+			log_wait_done("data available");
 			return Connection::Read::Result::Success;
 		}
 #endif
