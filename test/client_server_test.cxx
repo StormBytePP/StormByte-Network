@@ -27,6 +27,9 @@ using NetExpected = SB::Expected<T, Net::Exception>;
 using Buf::DataType;
 using Buf::Consumer;
 using Buf::Producer;
+using Buf::ExternalReader;
+using Buf::ExternalWriter;
+using Buf::ExecutionMode;
 using SBLog::ThreadedLog;
 using Buf::Pipeline;
 using namespace StormByte::Logger;
@@ -121,9 +124,9 @@ namespace Test {
 
 			private:
 				std::string m_data;
-			};
+		};
 
-			class AnswerLargeDataEchoed: public Generic {
+		class AnswerLargeDataEchoed: public Generic {
 			public:
 				AnswerLargeDataEchoed(const std::string& data): Generic(Opcode::S_MSG_REPLYLARGEDATAECHOED), m_data(data) {}
 				DataType DoSerialize() const noexcept override {
@@ -171,9 +174,7 @@ namespace Test {
 				}
 				case Packet::Opcode::C_MSG_SENDLARGEDATA: {
 					// Don't deserialize the full string - just consume the bytes and use the size
-					// The size already tells us how big the data was; no need to reconstruct the entire string
 					// The serialized string format is: [size(8 bytes)][string_data]
-					// We need to extract the size from the first 8 bytes to know the actual string length
 					if (data.size() < sizeof(std::size_t)) {
 						return nullptr;
 					}
@@ -201,27 +202,44 @@ namespace Test {
 	using ExpectedRandomNumber = NetExpected<int>;
 	using ExpectedLargeData = NetExpected<std::string>;
 
-	Buf::PipeFunction CreateXorPipe() noexcept {
-		return [](Consumer input, Producer output, std::shared_ptr<Log> logger) {
-			logger << Level::Debug << "XOR Pipe: Starting processing data..." << std::endl;
+	/**
+	 * @brief XOR transform stage compatible with the new Pipeline PipeFunction signature.
+	 *
+	 * Uses ExternalReader / ExternalWriter (not Consumer / Producer directly).
+	 * Chunked Extract so intermediate LockFreeRings can stream under Async / Parallel Process.
+	 */
+	Buf::Pipeline::PipeFunction CreateXorPipe() noexcept {
+		return [](ExternalReader& in, ExternalWriter& out, std::shared_ptr<Log> log) {
+			log << Level::Debug << "XOR Pipe: Starting processing data..." << std::endl;
 			constexpr const std::size_t max_chunk_size = 10 * 1024 * 1024; // 10 MB
-			while (!input.EoF()) {
-				const std::size_t chunk_size = std::min(input.AvailableBytes(), max_chunk_size);
+			while (!in.EoF()) {
+				const std::size_t available = in.AvailableBytes();
+				const std::size_t chunk_size = std::min(available, max_chunk_size);
 				if (chunk_size == 0) {
-					logger << Level::Debug << "XOR Pipe: No data available, yielding..." << std::endl;
+					// No data yet but stream still open — wait without busy-spinning hard
+					log << Level::Debug << "XOR Pipe: No data available, yielding..." << std::endl;
 					std::this_thread::yield();
 					continue;
 				}
-				logger << Level::Debug << "XOR Pipe: Processing " << humanreadable_bytes << chunk_size << nohumanreadable << std::endl;
+				log << Level::Debug << "XOR Pipe: Processing " << humanreadable_bytes << chunk_size
+					<< nohumanreadable << std::endl;
 				DataType data;
-				input.Extract(chunk_size, data);
+				if (!in.Extract(chunk_size, data) || data.empty()) {
+					// Spurious wake / transient empty; retry until EoF
+					std::this_thread::yield();
+					continue;
+				}
 				for (auto& byte : data) {
 					byte ^= std::byte{0xAB};
 				}
-				output.Write(std::move(data));
+				if (!out.Write(std::move(data))) {
+					log << Level::Error << "XOR Pipe: Write failed, aborting stage." << std::endl;
+					out.SetError();
+					return;
+				}
 			}
-			output.Close();
-			logger << Level::Debug << "XOR Pipe: Finished processing data." << std::endl;
+			out.Close();
+			log << Level::Debug << "XOR Pipe: Finished processing data." << std::endl;
 		};
 	}
 
@@ -230,6 +248,7 @@ namespace Test {
 			Client(std::shared_ptr<Log> logger) noexcept:
 			Net::Client(DeserializeFunction(), logger) {}
 			~Client() noexcept = default;
+
 			Pipeline InputPipeline() const noexcept override {
 				Pipeline pipeline;
 				pipeline.AddPipe(CreateXorPipe());
@@ -242,7 +261,6 @@ namespace Test {
 			}
 
 			ExpectedNameList RequestNameList(const std::size_t& amount) noexcept {
-				// Send request
 				Packet::AskNameList request_packet(amount);
 				auto received_packet = Send(request_packet);
 				if (!received_packet) {
@@ -257,7 +275,6 @@ namespace Test {
 			}
 
 			ExpectedRandomNumber RequestRandomNumber() noexcept {
-				// Send request
 				Packet::AskRandomNumber request_packet;
 				auto response_packet = Send(request_packet);
 				if (!response_packet) {
@@ -272,7 +289,6 @@ namespace Test {
 			}
 
 			ExpectedLargeData RequestLargeDataEcho(const std::size_t& size) noexcept {
-				// Send request
 				Packet::LargeData request_packet(size);
 				auto response_packet = Send(request_packet);
 				if (!response_packet) {
@@ -292,6 +308,7 @@ namespace Test {
 			Server(std::shared_ptr<Log> logger) noexcept:
 			Net::Server(DeserializeFunction(), logger) {}
 			~Server() noexcept = default;
+
 			Pipeline InputPipeline() const noexcept override {
 				Pipeline pipeline;
 				pipeline.AddPipe(CreateXorPipe());
@@ -305,6 +322,7 @@ namespace Test {
 
 		private:
 			PacketPointer ProcessClientPacket(const std::string& client_uuid, PacketPointer packet) noexcept override {
+				(void)client_uuid;
 				switch(static_cast<Packet::Opcode>(packet->Opcode())) {
 					case Packet::Opcode::C_MSG_ASKNAMELIST: {
 						auto ask_packet = std::dynamic_pointer_cast<Packet::AskNameList>(packet);
@@ -313,7 +331,6 @@ namespace Test {
 						}
 						std::size_t amount = ask_packet->GetAmount();
 
-						// Create dummy name list
 						std::vector<std::string> names;
 						for (std::size_t i = 0; i < amount; ++i) {
 							names.push_back("Name_" + std::to_string(i + 1));
@@ -321,7 +338,6 @@ namespace Test {
 						return std::make_shared<Packet::AnswerNameList>(names);
 					}
 					case Packet::Opcode::C_MSG_ASKRANDOMNUMBER: {
-						// Generate random number using C++ RNG (per-thread engine)
 						static thread_local std::mt19937 gen{[](){
 							std::random_device rd;
 							unsigned int seed = rd();
@@ -356,7 +372,6 @@ int TestRequestNameList() {
 		RETURN_TEST(fn_name, 1);
 	}
 
-	// Small delay to ensure server is listening
 	std::this_thread::sleep_for(std::chrono::milliseconds(100));
 
 	Test::Client client(logger);
@@ -394,7 +409,6 @@ int TestRequestRandomNumber() {
 		RETURN_TEST(fn_name, 1);
 	}
 
-	// Small delay to ensure server is listening
 	std::this_thread::sleep_for(std::chrono::milliseconds(100));
 
 	Test::Client client(logger);
@@ -426,7 +440,6 @@ int TestRequestLargeDataEchoed() {
 		RETURN_TEST(fn_name, 1);
 	}
 
-	// Small delay to ensure server is listening
 	std::this_thread::sleep_for(std::chrono::milliseconds(100));
 
 	Test::Client client(logger);
@@ -443,7 +456,8 @@ int TestRequestLargeDataEchoed() {
 	const std::string& data = data_expected.value();
 	ASSERT_EQUAL(fn_name, data.size(), large_data_size);
 	ASSERT_EQUAL(fn_name, data, large_data);
-	logger << Level::Info << fn_name << ": Received large data size: " << humanreadable_bytes << data.size() << nohumanreadable << std::endl;
+	logger << Level::Info << fn_name << ": Received large data size: " << humanreadable_bytes << data.size()
+		<< nohumanreadable << std::endl;
 	client.Disconnect();
 	server.Disconnect();
 	RETURN_TEST(fn_name, 0);

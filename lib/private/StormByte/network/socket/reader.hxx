@@ -12,83 +12,100 @@
 namespace StormByte::Network::Socket {
 	class Client;
 
+	/**
+	 * @class Reader
+	 * @brief @ref Buffer::ExternalReader adapter over a socket @ref Client.
+	 *
+	 * Socket I/O is inherently destructive (bytes leave the kernel buffer).
+	 * @c Read / @c Extract behave the same; @c Peek is not supported and fails.
+	 */
 	class STORMBYTE_NETWORK_PRIVATE Reader final: public Buffer::ExternalReader {
 		public:
 			/**
-			 * @brief The constructor of the Reader class.
-			 * @param client The client socket to read from.
+			 * @brief Construct a reader bound to @p client.
+			 * @param client Non-owning client socket.
 			 */
-			inline Reader(Client& client) noexcept:
-			m_client(client) {}
+			inline Reader(Client& client) noexcept
+				: m_client(client) {}
 
-			/**
-			 * @brief Copy constructor
-			 * @param other The other Reader to copy from.
-			 */
 			Reader(const Reader& other) noexcept				= default;
+			Reader(Reader&& other) noexcept					= default;
+			~Reader() noexcept override						= default;
 
-			/**
-			 * @brief Move constructor
-			 * @param other The other Reader to move from.
-			 */
-			Reader(Reader&& other) noexcept						= default;
+			Reader& operator=(const Reader& other) noexcept	= default;
+			Reader& operator=(Reader&& other) noexcept		= default;
 
-			/**
-			 * @brief Destructor
-			 */
-			~Reader() noexcept									= default;
-
-			/**
-			 * @brief Copy assignment operator
-			 * @param other The other Reader to copy from.
-			 * @return Reference to this Reader.
-			 */
-			Reader& operator=(const Reader& other) noexcept		= default;
-
-			/**
-			 * @brief Move assignment operator
-			 * @param other The other Reader to move from.
-			 * @return Reference to this Reader.
-			 */
-			Reader& operator=(Reader&& other) noexcept			= default;
-
-			/**
-			 * @brief Create a copy of this Reader.
-			 * @return A unique pointer to the copied Reader.
-			 */
-			inline PointerType 									Clone() const noexcept override {
+			inline PointerType Clone() const noexcept override {
 				return MakePointer<Reader>(*this);
 			}
 
-			/**
-			 * @brief Create a moved instance of this Reader.
-			 * @return A unique pointer to the moved Reader.
-			 */
-			inline PointerType 									Move() noexcept override {
+			inline PointerType Move() noexcept override {
 				return MakePointer<Reader>(std::move(*this));
 			}
 
+			/** @name Queries */
+			/** @{ */
+
 			/**
-			 * @brief Read data into the provided buffer.
-			 * @param bytes Number of bytes to read.
-			 * @param out DataType to fill with read data.
-			 * @return true if data was successfully read, false otherwise.
-			 * @note Const version do the same for sockets than non-const version.
+			 * @brief Bytes known to be available without blocking.
+			 * @return Always @c 0 for this adapter (sockets do not expose a cheap reliable count).
+			 * @note Callers should @ref Read with an explicit size or loop until @ref EoF.
 			 */
-			inline bool 										Read(std::size_t bytes, Buffer::DataType& out) const noexcept override {
-				return const_cast<Reader*>(this)->Read(bytes, out);
-			}
-			
+			std::size_t AvailableBytes() const noexcept override;
+
 			/**
-			 * @brief Read data into the provided buffer.
-			 * @param bytes Number of bytes to read.
-			 * @param out DataType to fill with read data.
-			 * @return true if data was successfully read, false otherwise.
-			 * @note Non-const version do the same as the const version.
+			 * @brief Whether no buffered application data is pending.
+			 * @return @c true (same limitation as @ref AvailableBytes).
 			 */
-			bool 												Read(std::size_t bytes, Buffer::DataType& out) noexcept override;
+			bool Empty() const noexcept override;
+
+			/**
+			 * @brief End-of-stream (connection no longer readable).
+			 */
+			bool EoF() const noexcept override;
+
+			/**
+			 * @brief Whether further reads may succeed.
+			 */
+			bool IsReadable() const noexcept override;
+
+			/** @} */
+
+			/** @name Read / Extract / Peek */
+			/** @{ */
+
+			/**
+			 * @brief Receive up to @p bytes into @p out (const interface required by ExternalReader).
+			 * @param bytes Requested size; implementation forwards to @c Client::Receive.
+			 * @param out   Destination buffer (appended/filled by Extract from the receive buffer).
+			 * @return @c true on success, @c false on error or disconnect.
+			 */
+			bool Read(std::size_t bytes, Buffer::DataType& out) const noexcept override;
+
+			/**
+			 * @brief Same as @ref Read (socket receives are destructive).
+			 */
+			bool Extract(std::size_t count, Buffer::DataType& out) noexcept override;
+
+			/**
+			 * @brief Not supported on raw sockets without MSG_PEEK plumbing.
+			 * @return Always @c false.
+			 */
+			bool Peek(std::size_t count, Buffer::DataType& out) const noexcept override;
+
+			/**
+			 * @brief Read until the peer closes or an error occurs.
+			 */
+			void ReadUntilEoF(Buffer::DataType& out) const noexcept override;
+
+			/**
+			 * @brief Same as @ref ReadUntilEoF for sockets.
+			 */
+			void ExtractUntilEoF(Buffer::DataType& out) noexcept override;
+
+			/** @} */
 
 		private:
-			std::reference_wrapper<Client> m_client;		///< Non owning reference to the client socket.
+			std::reference_wrapper<Client> m_client;	///< Non-owning reference to the client socket.
 	};
 }
