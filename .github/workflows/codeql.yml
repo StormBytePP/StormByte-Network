@@ -16,7 +16,7 @@ jobs:
     permissions:
       security-events: write
       packages: read
-      actions: read
+      actions: write
       contents: read
 
     strategy:
@@ -29,18 +29,12 @@ jobs:
             build-mode: manual
 
     steps:
-      ###########################################################################
-      # 1. CHECKOUT
-      ###########################################################################
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: stormbytepp/githubactions/.github/actions/checkout-cached@master
         with:
           fetch-depth: 0
           submodules: recursive
 
-      ###########################################################################
-      # 2. INSTALL TOOLCHAIN
-      ###########################################################################
       - name: Install toolchain
         if: matrix.language == 'c-cpp' && matrix.build-mode == 'manual'
         id: install-toolchain
@@ -48,39 +42,27 @@ jobs:
         with:
           toolchain: clang
 
-      ###########################################################################
-      # 4. INITIALIZE CODEQL
-      ###########################################################################
       - name: Initialize CodeQL
         uses: github/codeql-action/init@v4
         with:
           languages: ${{ matrix.language }}
           build-mode: ${{ matrix.build-mode }}
 
-      ###########################################################################
-      # 5. BUILD WITH CMAKE (solo para C/C++ con build-mode manual)
-      ###########################################################################
-      - name: Build with CMake
+      - name: Configure & Build (for CodeQL)
         if: matrix.language == 'c-cpp' && matrix.build-mode == 'manual'
-        uses: ashutoshvarma/action-cmake-build@master
-        with:
-          build-dir: ${{ github.workspace }}/build
-          cc: ${{ steps.install-toolchain.outputs.c_compiler }}
-          cxx: ${{ steps.install-toolchain.outputs.cxx_compiler }}
-          configure-options: >-
-            -G Ninja
-            -DENABLE_ASAN=ON
-            -DENABLE_TEST=ON
-            -DWITH_SQLITE=SYSTEM
-            -DWITH_POSTGRES=SYSTEM
-            -DWITH_MARIADB=SYSTEM
+        shell: bash
+        run: |
+          set -euo pipefail
+          cmake -S . -B build \
+            -G Ninja \
+            -DCMAKE_BUILD_TYPE=Debug \
+            -DCMAKE_C_COMPILER="${{ steps.install-toolchain.outputs.c_compiler }}" \
+            -DCMAKE_CXX_COMPILER="${{ steps.install-toolchain.outputs.cxx_compiler }}" \
+            -DENABLE_ASAN=ON \
+            -DENABLE_TEST=ON \
             -DWITH_STORMBYTE=BUNDLED
-          build-type: Debug
-          run-test: false
+          cmake --build build --parallel
 
-      ###########################################################################
-      # 6. PERFORM CODEQL ANALYSIS
-      ###########################################################################
       - name: Perform CodeQL Analysis
         uses: github/codeql-action/analyze@v4
         with:
