@@ -75,12 +75,16 @@ namespace StormByte::Network::Connection {
 			}
 
 			/**
-			 * @brief Send a Frame to the connected client.
-			 * @param frame The Frame to send.
-			 * @param logger The logger to use.
-			 * @return The expected result of the operation.
+			 * @brief Send a frame to the peer.
+			 * @param frame Frame to send; ownership is taken (payload is moved).
+			 * @param logger Logger instance.
+			 * @return true on success.
+			 *
+			 * @note After a successful or attempted send path that consumes the frame,
+			 *       @p frame is left in a valid but unspecified state (typically empty payload).
+			 *       Callers must use std::move: @c Send(std::move(frame), logger).
 			 */
-			bool 														Send(const Transport::Frame& frame, std::shared_ptr<Logger::Log> logger) noexcept;
+			bool Send(Transport::Frame&& frame, std::shared_ptr<Logger::Log> logger) noexcept;
 
 			/**
 			 * @brief Get the current connection status.

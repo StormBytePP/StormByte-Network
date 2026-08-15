@@ -85,7 +85,7 @@ namespace StormByte::Network::Transport {
 			 * @param logger The logger to use.
 			 * @return An PacketPointer containing the processed Packet.
 			 */
-			PacketPointer 											ProcessPacket(const DeserializePacketFunction& packet_fn, std::shared_ptr<Logger::Log> logger) const noexcept;
+			PacketPointer 											ProcessPacket(const DeserializePacketFunction& packet_fn, std::shared_ptr<Logger::Log> logger) noexcept;
 			
 			/**
 			 * @brief Process a Packet and serialize it into a Frame.
@@ -94,7 +94,7 @@ namespace StormByte::Network::Transport {
 			 * @param logger The logger to use.
 			 * @return A DataType containing the processed Frame as raw bytes.
 			 */
-			Buffer::Consumer 										ProcessOutput(Buffer::Pipeline& out_pipeline, std::shared_ptr<Logger::Log> logger) const noexcept;
+			Buffer::Consumer 										ProcessOutput(Buffer::Pipeline& out_pipeline, std::shared_ptr<Logger::Log> logger) noexcept;
 
 		private:
 			Packet::OpcodeType m_opcode;							///< The opcode of the Frame.

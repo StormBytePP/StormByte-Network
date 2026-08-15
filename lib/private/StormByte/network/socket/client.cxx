@@ -295,34 +295,49 @@ ExpectedBuffer Socket::Client::ReadOnce(const std::size_t& size, int flags) noex
 	}
 }
 
-ExpectedBuffer Socket::Client::Receive(const std::size_t& max_size, const unsigned short& timeout_seconds) noexcept {
-	m_logger << Logger::Level::LowLevel << "Starting to read data with max_size: "
-			<< humanreadable_bytes << max_size << nohumanreadable << std::endl;
-
+ExpectedVoid Socket::Client::ReceiveLoop(const std::size_t& max_size, Buffer::DataType& out,
+	const unsigned short& timeout_seconds, bool require_exact) noexcept {
 	if (!m_handle) {
 		return Unexpected<ConnectionError>("Receive failed: Invalid socket handle");
 	}
 
-	Buffer::FIFO buffer;
-	std::size_t total_bytes_read = 0;
-	const auto start_time = std::chrono::steady_clock::now();
+	// Exact mode with 0 bytes: nothing to do
+	if (require_exact && max_size == 0) {
+		return {};
+	}
 
 	const std::size_t preferred = (m_effective_recv_buf > 0)
 		? static_cast<std::size_t>(m_effective_recv_buf)
 		: DEFAULT_IO_CHUNK;
 
-	// Reuse one heap buffer across iterations (sized to max chunk, not 200 MiB).
+	if (max_size > 0) {
+		out.reserve(out.size() + max_size);
+	}
+
+	std::size_t total_bytes_read = 0;
+	const auto start_time = std::chrono::steady_clock::now();
+
 	const std::size_t buf_cap = ClampChunk(preferred, max_size > 0 ? max_size : MAX_SINGLE_IO);
 	std::vector<char> internal_buffer(buf_cap);
 
-	while (true) {
-		const std::size_t remaining = (max_size > 0) ? (max_size - total_bytes_read) : buf_cap;
-		if (max_size > 0 && remaining == 0)
-			break;
+	auto timed_out = [&]() -> bool {
+		if (timeout_seconds == 0) {
+			return false;
+		}
+		const auto now = std::chrono::steady_clock::now();
+		return std::chrono::duration_cast<std::chrono::seconds>(now - start_time).count() >= timeout_seconds;
+	};
 
+	while (true) {
+		if (max_size > 0 && total_bytes_read >= max_size) {
+			break;
+		}
+
+		const std::size_t remaining = (max_size > 0) ? (max_size - total_bytes_read) : buf_cap;
 		const std::size_t bytes_to_read = ClampChunk(preferred, remaining);
-		if (internal_buffer.size() < bytes_to_read)
+		if (internal_buffer.size() < bytes_to_read) {
 			internal_buffer.resize(bytes_to_read);
+		}
 
 #ifdef LINUX
 		const ssize_t valread = recv(m_handle, internal_buffer.data(), bytes_to_read, 0);
@@ -333,21 +348,19 @@ ExpectedBuffer Socket::Client::Receive(const std::size_t& max_size, const unsign
 		if (valread > 0) {
 			m_logger << Logger::Level::Debug << "Chunk received. Size: "
 					<< humanreadable_bytes << valread << nohumanreadable << std::endl;
-			(void)buffer.Write(std::span<const std::byte>(
-				reinterpret_cast<const std::byte*>(internal_buffer.data()),
-				static_cast<std::size_t>(valread)));
+			const auto* p = reinterpret_cast<const std::byte*>(internal_buffer.data());
+			out.insert(out.end(), p, p + static_cast<std::size_t>(valread));
 			total_bytes_read += static_cast<std::size_t>(valread);
-			if (max_size > 0 && total_bytes_read >= max_size) {
-				m_logger << Logger::Level::LowLevel << "Reached requested max_size: "
-						<< humanreadable_bytes << total_bytes_read << nohumanreadable
-						<< ". Exiting loop." << std::endl;
-				break;
-			}
 			continue;
 		}
 
 		if (valread == 0) {
 			m_logger << Logger::Level::Debug << "Connection closed by peer. Exiting read loop." << std::endl;
+			if (require_exact && total_bytes_read < max_size) {
+				return Unexpected<ConnectionError>(
+					"Receive failed: connection closed by peer (got {} of {} bytes)",
+					total_bytes_read, max_size);
+			}
 			break;
 		}
 
@@ -358,30 +371,23 @@ ExpectedBuffer Socket::Client::Receive(const std::size_t& max_size, const unsign
 		if (Connection::Handler::Instance().LastErrorCode() == EAGAIN ||
 			Connection::Handler::Instance().LastErrorCode() == EWOULDBLOCK) {
 #endif
-			if (timeout_seconds > 0) {
-				auto now = std::chrono::steady_clock::now();
-				if (std::chrono::duration_cast<std::chrono::seconds>(now - start_time).count() >= timeout_seconds) {
-					m_logger << Logger::Level::LowLevel << "Receive timed out after "
-							<< timeout_seconds << " seconds" << std::endl;
-					return Unexpected<ConnectionError>("Receive timed out");
-				}
+			if (timed_out()) {
+				return Unexpected<ConnectionError>("Receive timed out");
 			}
 
 			auto wait_res = WaitForData(100000); // 100ms
 			if (!wait_res) {
+				if (require_exact) {
+					return Unexpected<ConnectionError>("Receive failed: wait error");
+				}
 				break;
 			}
 			if (wait_res.value() == Connection::Read::Result::Timeout) {
-				if (timeout_seconds > 0) {
-					auto now = std::chrono::steady_clock::now();
-					if (std::chrono::duration_cast<std::chrono::seconds>(now - start_time).count() >= timeout_seconds) {
-						m_logger << Logger::Level::LowLevel << "Receive timed out after "
-								<< timeout_seconds << " seconds" << std::endl;
-						return Unexpected<ConnectionError>("Receive timed out");
-					}
+				if (timed_out()) {
+					return Unexpected<ConnectionError>("Receive timed out");
 				}
-				// max_size > 0 (frame reads): keep waiting until full size or peer close
-				if (max_size == 0 && total_bytes_read > 0) {
+				// Unlimited mode: some data already read → stop on idle timeout of wait
+				if (!require_exact && max_size == 0 && total_bytes_read > 0) {
 					break;
 				}
 				continue;
@@ -389,14 +395,39 @@ ExpectedBuffer Socket::Client::Receive(const std::size_t& max_size, const unsign
 			continue;
 		}
 
-		m_logger << Logger::Level::LowLevel << "Read error: "
-				<< Connection::Handler::Instance().LastError() << std::endl;
 		return Unexpected<ConnectionError>("Receive failed: {}", Connection::Handler::Instance().LastError());
 	}
 
 	m_logger << Logger::Level::LowLevel << "Total data received: "
-			<< humanreadable_bytes << buffer.Size() << nohumanreadable << std::endl;
+			<< humanreadable_bytes << total_bytes_read << nohumanreadable << std::endl;
+	return {};
+}
+
+ExpectedBuffer Socket::Client::Receive(const std::size_t& max_size, const unsigned short& timeout_seconds) noexcept {
+	m_logger << Logger::Level::LowLevel << "Starting to read data with max_size: "
+			<< humanreadable_bytes << max_size << nohumanreadable << std::endl;
+
+	Buffer::DataType bytes;
+	auto loop = ReceiveLoop(max_size, bytes, timeout_seconds, /*require_exact=*/false);
+	if (!loop) {
+		return Unexpected<ConnectionError>(loop.error()->what());
+	}
+
+	Buffer::FIFO buffer;
+	if (!bytes.empty()) {
+		(void)buffer.Write(std::span<const std::byte>(bytes.data(), bytes.size()));
+		// Prefer move if FIFO has Write(DataType&&):
+		// (void)buffer.Write(std::move(bytes));
+	}
 	return buffer;
+}
+
+ExpectedVoid Socket::Client::ReceiveInto(const std::size_t& max_size, Buffer::DataType& out,
+	const unsigned short& timeout_seconds) noexcept {
+	m_logger << Logger::Level::LowLevel << "Starting ReceiveInto with max_size: "
+			<< humanreadable_bytes << max_size << nohumanreadable << std::endl;
+
+	return ReceiveLoop(max_size, out, timeout_seconds, /*require_exact=*/true);
 }
 
 ExpectedVoid Socket::Client::Write(std::span<const std::byte> data, const std::size_t& size) noexcept {

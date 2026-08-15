@@ -74,11 +74,6 @@ namespace StormByte::Network::Socket {
 			}
 			
 			/**
-			 * @brief The function to receive data from the socket.
-			 * @param size The size of the data to receive.
-			 * @return The expected result of the operation.
-			 */
-			/**
 			 * @brief Receive data (blocking) — kept for compatibility.
 			 *
 			 * This overload is a convenience wrapper that forwards to the
@@ -95,6 +90,19 @@ namespace StormByte::Network::Socket {
 			 * @return ExpectedBuffer with the received data or an error on timeout/failure.
 			 */
 			ExpectedBuffer 													Receive(const std::size_t& size, const unsigned short& timeout_seconds) noexcept;
+
+			/**
+			 * @brief Receive exactly @p size bytes into @p out (no intermediate FIFO).
+			 *
+			 * Appends to @p out. Prefer @c out.reserve(out.size() + size) when the
+			 * size is known (e.g. frame payloads) to avoid reallocations.
+			 *
+			 * @param size Number of bytes required (must be > 0 for a full payload).
+			 * @param out Destination buffer (appended).
+			 * @param timeout_seconds Timeout in seconds (0 = wait forever between chunks).
+			 * @return Empty Expected on success, or ConnectionError.
+			 */
+			ExpectedVoid 													ReceiveInto(const std::size_t& size, Buffer::DataType& out, const unsigned short& timeout_seconds = 0) noexcept;
 
 			/**
 			 * @brief Peek data from the socket without consuming it.
@@ -171,6 +179,16 @@ namespace StormByte::Network::Socket {
 			 * @return The result of the operation.
 			 */
 			Connection::Read::Result 										ReadNonBlocking(Buffer::FIFO& buffer) noexcept;
+
+			/**
+			 * @brief Shared recv loop for Receive / ReceiveInto.
+			 * @param max_size 0 = read until peer close (only if @p require_exact is false).
+			 * @param out Append target (must not be null).
+			 * @param timeout_seconds 0 = wait forever between chunks.
+			 * @param require_exact If true, peer close before @p max_size is an error;
+			 *                      if false, peer close ends the read successfully.
+			 */
+			ExpectedVoid 													ReceiveLoop(const std::size_t& max_size, Buffer::DataType& out, const unsigned short& timeout_seconds, bool require_exact) noexcept;
 
 			/**
 			 * @brief Function to write data to the socket.

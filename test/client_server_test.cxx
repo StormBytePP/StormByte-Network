@@ -10,6 +10,7 @@
 #include <iostream>
 #include <thread>
 #include <random>
+#include <utility>
 
 // Namespace aliases and commonly used types to reduce verbosity
 namespace SB = StormByte;
@@ -112,14 +113,27 @@ namespace Test {
 
 		class LargeData: public Generic {
 			public:
-				LargeData(const std::size_t& size): Generic(Opcode::C_MSG_SENDLARGEDATA), m_data(std::string(size, large_data_repeat_char)) {}
+				/** Build from size (fills with repeat char). */
+				explicit LargeData(std::size_t size) noexcept
+					: Generic(Opcode::C_MSG_SENDLARGEDATA),
+					m_data(std::string(size, large_data_repeat_char)) {}
+
+				/** Take ownership of existing data (deserialize / echo path). */
+				explicit LargeData(std::string data) noexcept
+					: Generic(Opcode::C_MSG_SENDLARGEDATA),
+					m_data(std::move(data)) {}
+
 				DataType DoSerialize() const noexcept override {
-					// The test is designed to test transfers so we create the big string
 					return Serializable<std::string>(m_data).Serialize();
 				}
 
 				const std::string& GetData() const noexcept {
 					return m_data;
+				}
+
+				/** Move payload out (server echo without extra copy). */
+				std::string TakeData() noexcept {
+					return std::move(m_data);
 				}
 
 			private:
@@ -128,13 +142,20 @@ namespace Test {
 
 		class AnswerLargeDataEchoed: public Generic {
 			public:
-				AnswerLargeDataEchoed(const std::string& data): Generic(Opcode::S_MSG_REPLYLARGEDATAECHOED), m_data(data) {}
+				explicit AnswerLargeDataEchoed(std::string data) noexcept
+					: Generic(Opcode::S_MSG_REPLYLARGEDATAECHOED),
+					m_data(std::move(data)) {}
+
 				DataType DoSerialize() const noexcept override {
 					return Serializable<std::string>(m_data).Serialize();
 				}
 
 				const std::string& GetData() const noexcept {
 					return m_data;
+				}
+
+				std::string TakeData() noexcept {
+					return std::move(m_data);
 				}
 
 			private:
@@ -144,6 +165,7 @@ namespace Test {
 
 	DeserializePacketFunction DeserializeFunction() {
 		return [](Transport::Packet::OpcodeType opcode, Consumer consumer, std::shared_ptr<Log> logger) -> PacketPointer {
+			(void)logger;
 			DataType data;
 			consumer.ExtractUntilEoF(data);
 			switch(static_cast<Packet::Opcode>(opcode)) {
@@ -162,7 +184,6 @@ namespace Test {
 					return std::make_shared<Packet::AnswerNameList>(*expected_names);
 				}
 				case Packet::Opcode::C_MSG_ASKRANDOMNUMBER: {
-					// No data to read
 					return std::make_shared<Packet::AskRandomNumber>();
 				}
 				case Packet::Opcode::S_MSG_RESPONDRANDOMNUMBER: {
@@ -173,24 +194,19 @@ namespace Test {
 					return std::make_shared<Packet::AnswerRandomNumber>(*expected_number);
 				}
 				case Packet::Opcode::C_MSG_SENDLARGEDATA: {
-					// Don't deserialize the full string - just consume the bytes and use the size
-					// The serialized string format is: [size(8 bytes)][string_data]
-					if (data.size() < sizeof(std::size_t)) {
+					// Real payload (moved into packet) — no second synthetic 20 MiB string
+					auto expected_data = Serializable<std::string>::Deserialize(data);
+					if (!expected_data) {
 						return nullptr;
 					}
-					std::vector<std::byte> size_bytes(data.begin(), data.begin() + sizeof(std::size_t));
-					auto size_expected = Serializable<std::size_t>::Deserialize(size_bytes);
-					if (!size_expected) {
-						return nullptr;
-					}
-					return std::make_shared<Packet::LargeData>(*size_expected);
+					return std::make_shared<Packet::LargeData>(std::move(*expected_data));
 				}
 				case Packet::Opcode::S_MSG_REPLYLARGEDATAECHOED: {
 					auto expected_data = Serializable<std::string>::Deserialize(data);
 					if (!expected_data) {
 						return nullptr;
 					}
-					return std::make_shared<Packet::AnswerLargeDataEchoed>(*expected_data);
+					return std::make_shared<Packet::AnswerLargeDataEchoed>(std::move(*expected_data));
 				}
 				default:
 					return nullptr;
@@ -305,7 +321,8 @@ namespace Test {
 				if (!answer_packet) {
 					return SB::Unexpected<Net::Exception>("Client::RequestLargeDataSize: received unexpected packet opcode ({})", response_packet->Opcode());
 				}
-				return answer_packet->GetData();
+				// Move data out of the packet so the shared_ptr can die without retaining 20 MiB
+				return answer_packet->TakeData();
 			}
 	};
 
@@ -357,9 +374,9 @@ namespace Test {
 						return std::make_shared<Packet::AnswerRandomNumber>(random_number);
 					}
 					case Packet::Opcode::C_MSG_SENDLARGEDATA: {
-						auto large_data_packet = std::static_pointer_cast<const Packet::LargeData>(packet);
-						const std::string& data = large_data_packet->GetData();
-						return std::make_shared<Packet::AnswerLargeDataEchoed>(data);
+						auto large_data_packet = std::static_pointer_cast<Packet::LargeData>(packet);
+						// Move payload into the answer — no extra 20 MiB copy
+						return std::make_shared<Packet::AnswerLargeDataEchoed>(large_data_packet->TakeData());
 					}
 					default:
 						return nullptr;
@@ -438,7 +455,6 @@ int TestRequestRandomNumber() {
 
 int TestRequestLargeDataEchoed() {
 	const std::string fn_name = "TestRequestLargeDataEchoed";
-	const std::string large_data = std::string(large_data_size, large_data_repeat_char);
 
 	Test::Server server(logger);
 	if (!server.Connect(Net::Connection::Protocol::IPv4, HOST, PORT)) {
@@ -459,9 +475,12 @@ int TestRequestLargeDataEchoed() {
 		logger << Level::Error << fn_name << ": RequestLargeDataEcho failed: " << data_expected.error()->what() << std::endl;
 		RETURN_TEST(fn_name, 1);
 	}
+
+	// Single 20 MiB buffer: size + content check without a second reference string
 	const std::string& data = data_expected.value();
 	ASSERT_EQUAL(fn_name, data.size(), large_data_size);
-	ASSERT_EQUAL(fn_name, data, large_data);
+	ASSERT_TRUE(fn_name, data.find_first_not_of(large_data_repeat_char) == std::string::npos);
+
 	logger << Level::Info << fn_name << ": Received large data size: " << humanreadable_bytes << data.size()
 		<< nohumanreadable << std::endl;
 	client.Disconnect();

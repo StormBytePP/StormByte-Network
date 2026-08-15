@@ -8,7 +8,7 @@ Client::Client(std::shared_ptr<Socket::Client> socket, Buffer::Pipeline in_pipel
 	m_out_pipeline(out_pipeline)
 {}
 
-bool Client::Send(const Transport::Frame& frame, std::shared_ptr<Logger::Log> logger) noexcept {
+bool Client::Send(Transport::Frame&& frame, std::shared_ptr<Logger::Log> logger) noexcept {
 	ExpectedVoid result = m_socket->Send(frame.ProcessOutput(m_out_pipeline, logger));
 	if (!result) {
 		logger << Logger::Level::Error << "Failed to send frame to socket: " << result.error()->what();

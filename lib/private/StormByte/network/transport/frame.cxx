@@ -7,6 +7,7 @@ using StormByte::Buffer::DataType;
 using StormByte::Buffer::FIFO;
 using StormByte::Buffer::Pipeline;
 using StormByte::Buffer::Producer;
+using StormByte::Network::PacketPointer;
 using namespace StormByte::Network::Transport;
 
 Frame::Frame(const Packet& packet) noexcept {
@@ -48,20 +49,18 @@ Frame Frame::ProcessInput(std::shared_ptr<Socket::Client> client, Buffer::Pipeli
 		logger << Logger::Level::Error << "Failed to deserialize payload size from socket: insufficient data" << std::endl;
 		return Frame();
 	}
-	std::size_t payload_size = expected_payload_size.value();
+	const std::size_t payload_size = expected_payload_size.value();
 	DataType payload;
 
 	if (payload_size > 0) {
-		// Read payload data
-		ExpectedBuffer expected_payload_buffer = client->Receive(payload_size);
-		if (!expected_payload_buffer) {
-			logger << Logger::Level::Error << "Failed to read full frame from socket: " << expected_payload_buffer.error()->what() << std::endl;
+		// Direct into vector — no intermediate FIFO of payload_size
+		payload.reserve(payload_size);
+		auto into = client->ReceiveInto(payload_size, payload);
+		if (!into) {
+			logger << Logger::Level::Error << "Failed to read full frame from socket: " << into.error()->what() << std::endl;
 			return Frame();
 		}
 
-		expected_payload_buffer->Extract(0, payload);
-
-		// Process payload if needed
 		if (opcode >= Packet::PROCESS_THRESHOLD) {
 			Producer payload_producer;
 			payload_producer.Write(std::move(payload));
@@ -75,25 +74,21 @@ Frame Frame::ProcessInput(std::shared_ptr<Socket::Client> client, Buffer::Pipeli
 	return Frame(opcode, std::move(payload));
 }
 
-StormByte::Network::PacketPointer Frame::ProcessPacket(const DeserializePacketFunction& packet_fn, std::shared_ptr<Logger::Log> logger) const noexcept {
+PacketPointer Frame::ProcessPacket(const DeserializePacketFunction& packet_fn, std::shared_ptr<Logger::Log> logger) noexcept {
 	Producer payload_producer;
-	payload_producer.Write(m_payload);
+	payload_producer.Write(std::move(m_payload));
 	payload_producer.Close();
 
-	PacketPointer packet = packet_fn(m_opcode, payload_producer.Consumer(), logger);
-
-	return packet;
+	return packet_fn(m_opcode, payload_producer.Consumer(), logger);
 }
 
-Consumer Frame::ProcessOutput(Buffer::Pipeline& pipeline, std::shared_ptr<Logger::Log> logger) const noexcept {
+Consumer Frame::ProcessOutput(Buffer::Pipeline& pipeline, std::shared_ptr<Logger::Log> logger) noexcept {
 	Producer producer;
 
-	// Write opcode
 	producer.Write(sizeof(Packet::OpcodeType), Serializable<Packet::OpcodeType>(m_opcode).Serialize());
 
-	DataType payload = m_payload;
+	DataType payload = std::move(m_payload);
 
-	// Process payload if needed
 	if (m_opcode >= Packet::PROCESS_THRESHOLD) {
 		Producer payload_producer;
 		payload_producer.Write(std::move(payload));
@@ -102,16 +97,13 @@ Consumer Frame::ProcessOutput(Buffer::Pipeline& pipeline, std::shared_ptr<Logger
 		payload.clear();
 		processed_payload.ExtractUntilEoF(payload);
 	}
-	
-	// Write payload size
+
 	producer.Write(sizeof(std::size_t), Serializable<std::size_t>(payload.size()).Serialize());
 
-	// Write payload data
 	if (!payload.empty()) {
 		producer.Write(std::move(payload));
 	}
 
-	// Close producer and return consumer
 	producer.Close();
 	return producer.Consumer();
 }
