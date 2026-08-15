@@ -44,9 +44,9 @@ Socket::Socket(Socket&& other) noexcept:
 	m_conn_info(std::move(other.m_conn_info)),
 	m_mtu(other.m_mtu),
 	m_logger(other.m_logger),
-	m_UUID(std::move(other.m_UUID)),
 	m_effective_send_buf(other.m_effective_send_buf),
-	m_effective_recv_buf(other.m_effective_recv_buf)
+	m_effective_recv_buf(other.m_effective_recv_buf),
+	m_UUID(std::move(other.m_UUID))
 {
 	other.m_status.store(Connection::Status::Disconnected, std::memory_order_relaxed);
 	other.m_effective_send_buf = 0;
