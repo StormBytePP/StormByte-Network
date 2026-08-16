@@ -56,7 +56,7 @@ void Server::Disconnect() noexcept {
 	// 2) Wake AcceptClients if blocked in WaitForData / Accept (without full teardown yet)
 	{
 		const auto& h = m_socket_server->Handle();
-#ifdef LINUX
+#ifdef UNIX
 		if (h > 0)
 			::shutdown(h, SHUT_RDWR);
 #else

@@ -1,27 +1,27 @@
-#include <StormByte/network/connection/handler.hxx>
 #include <StormByte/network/socket/client.hxx>
 
-#ifdef LINUX
-#include <arpa/inet.h>
+#ifdef UNIX
 #include <netinet/in.h>
+#include <netinet/tcp.h>
 #include <fcntl.h>
-#include <sys/ioctl.h>
 #include <sys/socket.h>
-#include <poll.h>
 #include <unistd.h>
+#include <errno.h>
+#include <poll.h>
+#else
+#include <winsock2.h>
+#include <ws2tcpip.h>
 #endif
 
-#include <algorithm>
+#include <StormByte/network/connection/handler.hxx>
+#include <StormByte/system.hxx>
 #include <chrono>
-#include <span>
-#include <cerrno>
 #include <cstring>
+#include <span>
 #include <vector>
-#include <thread>
 
-// Hard cap per syscall — never allocate/send 200 MiB in one go.
-constexpr std::size_t MAX_SINGLE_IO     = 4 * 1024 * 1024; // 4 MiB
-constexpr std::size_t DEFAULT_IO_CHUNK  = 64 * 1024;        // 64 KiB fallback
+constexpr std::size_t MAX_SINGLE_IO     = 4 * 1024 * 1024;
+constexpr std::size_t DEFAULT_IO_CHUNK  = 64 * 1024;
 
 using namespace StormByte::Logger;
 using namespace StormByte::Network;
@@ -33,7 +33,7 @@ namespace {
 		preferred = std::min(preferred, MAX_SINGLE_IO);
 		if (remaining > 0)
 			preferred = std::min(preferred, remaining);
-		return std::max<std::size_t>(preferred, 1);
+		return std::max(preferred, static_cast<std::size_t>(1));
 	}
 }
 
@@ -55,7 +55,7 @@ ExpectedVoid Socket::Client::Connect(const std::string& hostname, const unsigned
 	auto expected_socket = CreateSocket();
 	if (!expected_socket) {
 		m_logger << Logger::Level::Error << "Failed to create socket: " << expected_socket.error()->what() << std::endl;
-		return Unexpected(expected_socket.error());
+		return Unexpected<ConnectionError>(expected_socket.error()->what());
 	}
 
 	m_handle = expected_socket.value();
@@ -66,8 +66,7 @@ ExpectedVoid Socket::Client::Connect(const std::string& hostname, const unsigned
 		return Unexpected<ConnectionError>(expected_conn_info.error()->what());
 	}
 
-	m_conn_info =
-		std::make_unique<Connection::Info>(std::move(expected_conn_info.value()));
+	m_conn_info = std::make_unique<Connection::Info>(std::move(expected_conn_info.value()));
 
 #ifdef WINDOWS
 	if (::connect(m_handle, m_conn_info->SockAddr().get(), sizeof(*m_conn_info->SockAddr())) == SOCKET_ERROR) {
@@ -108,28 +107,28 @@ ExpectedVoid Socket::Client::Send(std::span<const std::byte> data) noexcept {
 		: DEFAULT_IO_CHUNK;
 
 	while (!data.empty()) {
-#ifdef LINUX
+#ifdef UNIX
 		struct pollfd pfd;
 		pfd.fd = m_handle;
 		pfd.events = POLLOUT;
-		int pol = poll(&pfd, 1, 50); // 50ms
+		int pol = poll(&pfd, 1, 50);
 		if (pol < 0) {
 			return Unexpected<ConnectionError>(
 				"Poll error: {} (error code: {})",
 				Connection::Handler::Instance().LastError(),
 				Connection::Handler::Instance().LastErrorCode());
 		} else if (pol == 0) {
-			continue; // wait again — no busy yield
+			continue;
 		} else if (!(pfd.revents & POLLOUT)) {
 			continue;
 		}
-#else // WINDOWS
+#else
 		fd_set writefds;
 		FD_ZERO(&writefds);
 		FD_SET(m_handle, &writefds);
 		TIMEVAL tv;
 		tv.tv_sec  = 0;
-		tv.tv_usec = 50000; // 50ms
+		tv.tv_usec = 50000;
 		int sel = select(0, nullptr, &writefds, nullptr, &tv);
 		if (sel == SOCKET_ERROR) {
 			return Unexpected<ConnectionError>(
@@ -158,7 +157,7 @@ ExpectedVoid Socket::Client::Send(std::span<const std::byte> data) noexcept {
 #ifdef WINDOWS
 			const int wsa = Connection::Handler::Instance().LastErrorCode();
 			if (wsa == WSAEWOULDBLOCK) {
-				continue; // not ready; wait again
+				continue;
 			}
 #else
 			if (errno == EAGAIN || errno == EWOULDBLOCK) {
@@ -194,7 +193,6 @@ ExpectedVoid Socket::Client::Send(Buffer::Consumer data) noexcept {
 		return Unexpected<ConnectionError>("Failed to send: Invalid socket handle");
 	}
 
-	// Block on buffer semantics (Extract(0) waits for data or EoF) — no yield spin.
 	while (true) {
 		Buffer::DataType byte_data;
 		if (!data.Extract(0, byte_data) || byte_data.empty()) {
@@ -205,7 +203,7 @@ ExpectedVoid Socket::Client::Send(Buffer::Consumer data) noexcept {
 
 		auto expected_send = Send(std::span<const std::byte>(byte_data.data(), byte_data.size()));
 		if (!expected_send) {
-			return Unexpected<ConnectionError>(expected_send.error()->what());
+			return Unexpected(expected_send.error());
 		}
 	}
 
@@ -214,7 +212,7 @@ ExpectedVoid Socket::Client::Send(Buffer::Consumer data) noexcept {
 
 bool Socket::Client::HasShutdownRequest() noexcept {
 	char buffer[1];
-#ifdef LINUX
+#ifdef UNIX
 	ssize_t result = ::recv(m_handle, buffer, sizeof(buffer), MSG_PEEK | MSG_DONTWAIT);
 #else
 	int result = ::recv(m_handle, buffer, sizeof(buffer), MSG_PEEK);
@@ -230,7 +228,7 @@ bool Socket::Client::HasShutdownRequest() noexcept {
 	if (result == 0) {
 		return true;
 	} else if (result < 0) {
-#ifdef LINUX
+#ifdef UNIX
 		if (Connection::Handler::Instance().LastErrorCode() == EAGAIN ||
 			Connection::Handler::Instance().LastErrorCode() == EWOULDBLOCK) {
 			return false;
@@ -266,7 +264,7 @@ ExpectedBuffer Socket::Client::ReadOnce(const std::size_t& size, int flags) noex
 	const std::size_t bytes_to_read = ClampChunk(preferred, size);
 
 	std::vector<char> internal_buffer(bytes_to_read);
-#ifdef LINUX
+#ifdef UNIX
 	const ssize_t valread = ::recv(m_handle, internal_buffer.data(), bytes_to_read, flags);
 #else
 	const int valread = ::recv(m_handle, internal_buffer.data(), static_cast<int>(bytes_to_read), flags);
@@ -274,14 +272,14 @@ ExpectedBuffer Socket::Client::ReadOnce(const std::size_t& size, int flags) noex
 
 	if (valread > 0) {
 		Buffer::FIFO buffer;
-		(void)buffer.Write(std::span<const std::byte>(
+		(void)buffer.Write(std::span(
 			reinterpret_cast<const std::byte*>(internal_buffer.data()),
 			static_cast<std::size_t>(valread)));
 		return buffer;
 	} else if (valread == 0) {
 		return Unexpected<ConnectionError>("Read failed: connection closed by peer");
 	} else {
-#ifdef LINUX
+#ifdef UNIX
 		if (Connection::Handler::Instance().LastErrorCode() == EAGAIN ||
 			Connection::Handler::Instance().LastErrorCode() == EWOULDBLOCK) {
 			return Unexpected<ConnectionError>("Read would block: no data available");
@@ -301,7 +299,6 @@ ExpectedVoid Socket::Client::ReceiveLoop(const std::size_t& max_size, Buffer::Da
 		return Unexpected<ConnectionError>("Receive failed: Invalid socket handle");
 	}
 
-	// Exact mode with 0 bytes: nothing to do
 	if (require_exact && max_size == 0) {
 		return {};
 	}
@@ -339,7 +336,7 @@ ExpectedVoid Socket::Client::ReceiveLoop(const std::size_t& max_size, Buffer::Da
 			internal_buffer.resize(bytes_to_read);
 		}
 
-#ifdef LINUX
+#ifdef UNIX
 		const ssize_t valread = recv(m_handle, internal_buffer.data(), bytes_to_read, 0);
 #else
 		const int valread = recv(m_handle, internal_buffer.data(), static_cast<int>(bytes_to_read), 0);
@@ -364,7 +361,6 @@ ExpectedVoid Socket::Client::ReceiveLoop(const std::size_t& max_size, Buffer::Da
 			break;
 		}
 
-		// valread < 0
 #ifdef WINDOWS
 		if (Connection::Handler::Instance().LastErrorCode() == WSAEWOULDBLOCK) {
 #else
@@ -375,7 +371,7 @@ ExpectedVoid Socket::Client::ReceiveLoop(const std::size_t& max_size, Buffer::Da
 				return Unexpected<ConnectionError>("Receive timed out");
 			}
 
-			auto wait_res = WaitForData(100000); // 100ms
+			auto wait_res = WaitForData(100000);
 			if (!wait_res) {
 				if (require_exact) {
 					return Unexpected<ConnectionError>("Receive failed: wait error");
@@ -386,7 +382,6 @@ ExpectedVoid Socket::Client::ReceiveLoop(const std::size_t& max_size, Buffer::Da
 				if (timed_out()) {
 					return Unexpected<ConnectionError>("Receive timed out");
 				}
-				// Unlimited mode: some data already read → stop on idle timeout of wait
 				if (!require_exact && max_size == 0 && total_bytes_read > 0) {
 					break;
 				}
@@ -408,16 +403,14 @@ ExpectedBuffer Socket::Client::Receive(const std::size_t& max_size, const unsign
 			<< humanreadable_bytes << max_size << nohumanreadable << std::endl;
 
 	Buffer::DataType bytes;
-	auto loop = ReceiveLoop(max_size, bytes, timeout_seconds, /*require_exact=*/false);
+	auto loop = ReceiveLoop(max_size, bytes, timeout_seconds, false);
 	if (!loop) {
-		return Unexpected<ConnectionError>(loop.error()->what());
+		return Unexpected(loop.error());
 	}
 
 	Buffer::FIFO buffer;
 	if (!bytes.empty()) {
-		(void)buffer.Write(std::span<const std::byte>(bytes.data(), bytes.size()));
-		// Prefer move if FIFO has Write(DataType&&):
-		// (void)buffer.Write(std::move(bytes));
+		(void)buffer.Write(std::span(bytes.data(), bytes.size()));
 	}
 	return buffer;
 }
@@ -427,7 +420,7 @@ ExpectedVoid Socket::Client::ReceiveInto(const std::size_t& max_size, Buffer::Da
 	m_logger << Logger::Level::LowLevel << "Starting ReceiveInto with max_size: "
 			<< humanreadable_bytes << max_size << nohumanreadable << std::endl;
 
-	return ReceiveLoop(max_size, out, timeout_seconds, /*require_exact=*/true);
+	return ReceiveLoop(max_size, out, timeout_seconds, true);
 }
 
 ExpectedVoid Socket::Client::Write(std::span<const std::byte> data, const std::size_t& size) noexcept {
@@ -493,7 +486,7 @@ bool Socket::Client::Ping() noexcept {
 	}
 	bool ping_success = false;
 	char buffer[1];
-#ifdef LINUX
+#ifdef UNIX
 	ssize_t result = ::recv(m_handle, buffer, sizeof(buffer), MSG_PEEK | MSG_DONTWAIT);
 #else
 	int result = ::recv(m_handle, buffer, sizeof(buffer), MSG_PEEK);
@@ -508,7 +501,7 @@ bool Socket::Client::Ping() noexcept {
 	} else if (result == 0) {
 		ping_success = false;
 	} else {
-#ifdef LINUX
+#ifdef UNIX
 		if (Connection::Handler::Instance().LastErrorCode() == EAGAIN ||
 			Connection::Handler::Instance().LastErrorCode() == EWOULDBLOCK) {
 			ping_success = true;

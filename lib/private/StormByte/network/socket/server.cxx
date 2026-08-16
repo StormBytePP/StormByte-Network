@@ -1,18 +1,18 @@
-#include <StormByte/network/connection/handler.hxx>
 #include <StormByte/network/socket/server.hxx>
-#include <StormByte/system.hxx>
+#include <StormByte/network/socket/client.hxx>
 
-#ifdef LINUX
+#ifdef UNIX
+#include <sys/socket.h>
 #include <netinet/in.h>
 #include <unistd.h>
 #include <poll.h>
 #else
-#include <ws2tcpip.h>
+#include <winsock2.h>
 #endif
 
-#include <format>
-#include <vector>
+#include <StormByte/network/connection/handler.hxx>
 #include <algorithm>
+#include <memory>
 
 using namespace StormByte::Network;
 
@@ -100,12 +100,11 @@ ExpectedClient Socket::Server::Accept() noexcept {
 	if (!Connection::IsConnected(m_status.load(std::memory_order_acquire)))
 		return Unexpected<ConnectionError>("Socket is not connected");
 
-#ifdef LINUX
-	// poll avoids FD_SETSIZE issues and is cheaper than select for one fd
+#ifdef UNIX
 	struct pollfd pfd;
 	pfd.fd = m_handle;
 	pfd.events = POLLIN;
-	int pr = poll(&pfd, 1, 200); // 200ms — same responsiveness as before
+	int pr = poll(&pfd, 1, 200);
 	if (pr == 0) {
 		return Unexpected<ConnectionError>("Timeout occurred while waiting to accept connection.");
 	} else if (pr < 0) {
@@ -115,8 +114,7 @@ ExpectedClient Socket::Server::Accept() noexcept {
 	fd_set read_fds;
 	FD_ZERO(&read_fds);
 	FD_SET(m_handle, &read_fds);
-	struct timeval timeout = {0, 200000}; // 200ms
-	// On Windows the nfds argument is ignored
+	struct timeval timeout = {0, 200000};
 	int select_result = select(0, &read_fds, nullptr, nullptr, &timeout);
 	if (select_result == 0) {
 		return Unexpected<ConnectionError>("Timeout occurred while waiting to accept connection.");

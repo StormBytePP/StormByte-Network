@@ -1,14 +1,13 @@
 #include <StormByte/network/connection/handler.hxx>
-#include <StormByte/string.hxx>
 
-#ifdef LINUX
-#include <cerrno> // For errno
-#include <cstring> // For strerror_r
+#ifdef UNIX
+#include <cerrno>		// For errno
+#include <cstring>		// For strerror_r
 #else
-#include <windows.h>
+#include <winsock2.h>
 #endif
 
-#include <cstring>
+#include <StormByte/string.hxx>
 
 using namespace StormByte::Network::Connection;
 
@@ -64,18 +63,18 @@ int Handler::LastErrorCode() const noexcept {
 
 std::string Handler::ErrnoToString(int errnum) const noexcept {
 	#ifdef WINDOWS
-    char buf[256] = {0};
-    if (strerror_s(buf, sizeof(buf), errnum) == 0) return std::string(buf);
-    return std::to_string(errnum);
+	char buf[256] = {0};
+	if (strerror_s(buf, sizeof(buf), errnum) == 0) return std::string(buf);
+	return std::to_string(errnum);
 	#else
-    char buf[256] = {0};
-    // Handle both GNU (returns char*) and POSIX (returns int) strerror_r variants
+	char buf[256] = {0};
+	// Handle both GNU (returns char*) and POSIX (returns int) strerror_r variants
 	#if defined(__GLIBC__) && !defined(__APPLE__)
-    char *msg = strerror_r(errnum, buf, sizeof(buf));
-    return std::string(msg ? msg : "Unknown error");
+	char *msg = strerror_r(errnum, buf, sizeof(buf));
+	return std::string(msg ? msg : "Unknown error");
 	#else
-    if (strerror_r(errnum, buf, sizeof(buf)) == 0) return std::string(buf);
-    return std::to_string(errnum);
+	if (strerror_r(errnum, buf, sizeof(buf)) == 0) return std::string(buf);
+	return std::to_string(errnum);
 	#endif
 	#endif
 }

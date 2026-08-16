@@ -25,7 +25,7 @@ namespace StormByte::Network {																		///< The connection info class (
 		class Client;																				///< The client socket class (forward declaration).
 	}
 	namespace Connection {
-		#ifdef LINUX
+		#ifdef UNIX
 			using HandlerType = int; 																///< The type of the socket.
 		#else
 			using HandlerType = SOCKET; 															///< The type of the socket.

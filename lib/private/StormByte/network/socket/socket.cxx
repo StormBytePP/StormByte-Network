@@ -3,14 +3,18 @@
 #include <StormByte/system.hxx>
 #include <StormByte/uuid.hxx>
 
-#ifdef LINUX
+#ifdef UNIX
 #include <netinet/in.h>
 #include <netinet/tcp.h>
 #include <fcntl.h>
 #include <sys/socket.h>
 #include <unistd.h>
-#include <sys/epoll.h>
 #include <errno.h>
+#ifdef LINUX
+#include <sys/epoll.h>
+#else
+#include <poll.h>
+#endif
 #else
 #include <winsock2.h>
 #include <ws2tcpip.h>
@@ -86,7 +90,7 @@ void Socket::Disconnect() noexcept {
 	}
 
 	if (m_handle > 0) {
-#ifdef LINUX
+#ifdef UNIX
 		shutdown(m_handle, SHUT_RDWR);
 		StormByte::System::Sleep(std::chrono::milliseconds(100));
 		close(m_handle);
@@ -138,8 +142,6 @@ StormByte::Network::ExpectedReadResult Socket::WaitForData(const long long& usec
 	};
 
 	auto log_wait_done = [&](const char* reason) {
-		// Only emit completion if we had been waiting long enough to care,
-		// or if we already printed a "still waiting" line.
 		const auto ms = elapsed_ms();
 		if (!logged_waiting && ms < 1000)
 			return;
@@ -229,7 +231,81 @@ StormByte::Network::ExpectedReadResult Socket::WaitForData(const long long& usec
 			}
 			return Unexpected<ConnectionClosed>("Failed to wait for data: epoll_wait error");
 		}
+#elifdef UNIX
+		// macOS / other POSIX: poll (máxima portabilidad)
+		int timeout_ms = -1;
+		if (usecs > 0) {
+			auto now2 = std::chrono::steady_clock::now();
+			if (now2 >= deadline) {
+				log_wait_done("timeout");
+				return Connection::Read::Result::Timeout;
+			}
+			auto remaining = std::chrono::duration_cast<std::chrono::milliseconds>(deadline - now2);
+			timeout_ms = static_cast<int>(remaining.count());
+			if (timeout_ms < 0) timeout_ms = 0;
+		}
+
+		struct pollfd pfd;
+		pfd.fd = m_handle;
+		pfd.events = POLLIN | POLLPRI | POLLHUP | POLLERR;
+#ifdef POLLRDHUP
+		pfd.events |= POLLRDHUP;		// solo si el sistema lo define
+#endif
+		pfd.revents = 0;
+
+		int nfds = poll(&pfd, 1, timeout_ms);
+
+		if (nfds > 0) {
+			if (pfd.revents & POLLERR) {
+				return Unexpected<ConnectionClosed>("Socket error while waiting for data");
+			}
+
+			if (pfd.revents & (POLLHUP
+#ifdef POLLRDHUP
+				| POLLRDHUP
+#endif
+				)) {
+				if (m_status.load(std::memory_order_acquire) != Connection::Status::Connected)
+					return Connection::Read::Result::Closed;
+				if (pfd.revents & POLLIN) {
+					char tmp;
+					ssize_t r = recv(m_handle, &tmp, 1, MSG_PEEK | MSG_DONTWAIT);
+					if (r > 0) {
+						log_wait_done("data available");
+						return Connection::Read::Result::Success;
+					} else if (r == 0) {
+						log_wait_done("peer shutdown");
+						return Connection::Read::Result::ShutdownRequest;
+					} else {
+						if (errno == EWOULDBLOCK || errno == EAGAIN) {
+							log_wait_done("data available");
+							return Connection::Read::Result::Success;
+						}
+						return Unexpected<ConnectionClosed>("recv(MSG_PEEK) error while checking shutdown");
+					}
+				}
+				log_wait_done("peer shutdown");
+				return Connection::Read::Result::ShutdownRequest;
+			}
+
+			if (m_status.load(std::memory_order_acquire) != Connection::Status::Connected)
+				return Connection::Read::Result::Closed;
+			if (pfd.revents & (POLLIN | POLLPRI)) {
+				log_wait_done("data available");
+				return Connection::Read::Result::Success;
+			}
+			return Unexpected<ConnectionClosed>("Unknown poll event while waiting for data");
+		} else if (nfds == 0) {
+			log_wait_done("timeout");
+			return Connection::Read::Result::Timeout;
+		} else {
+			if (errno == ECONNRESET || errno == EBADF) {
+				return Unexpected<ConnectionClosed>("Connection closed or invalid socket");
+			}
+			return Unexpected<ConnectionClosed>("Failed to wait for data: poll error");
+		}
 #else
+		// Windows
 		int timeout_ms = -1;
 		if (usecs > 0) {
 			auto now2 = std::chrono::steady_clock::now();
@@ -393,7 +469,31 @@ void Socket::InitializeAfterConnect() noexcept {
 		m_logger << Logger::Level::Warning << "setsockopt(SO_RCVBUF) failed: "
 				<< Connection::Handler::Instance().LastError() << std::endl;
 	}
+#elifdef UNIX
+	// macOS / other POSIX (no /proc)
+	int send_buf = desired_buf;
+	int recv_buf = desired_buf;
+
+	rc = setsockopt(m_handle, SOL_SOCKET, SO_SNDBUF, &send_buf, sizeof(send_buf));
+	if (rc != 0) {
+		m_logger << Logger::Level::Warning << "setsockopt(SO_SNDBUF) failed: "
+				<< Connection::Handler::Instance().LastError() << std::endl;
+	}
+	rc = setsockopt(m_handle, SOL_SOCKET, SO_RCVBUF, &recv_buf, sizeof(recv_buf));
+	if (rc != 0) {
+		m_logger << Logger::Level::Warning << "setsockopt(SO_RCVBUF) failed: "
+				<< Connection::Handler::Instance().LastError() << std::endl;
+	}
+
+	// Prevent SIGPIPE on send (macOS/BSD equivalent of MSG_NOSIGNAL)
+	int nosigpipe = 1;
+	rc = setsockopt(m_handle, SOL_SOCKET, SO_NOSIGPIPE, &nosigpipe, sizeof(nosigpipe));
+	if (rc != 0) {
+		m_logger << Logger::Level::Warning << "setsockopt(SO_NOSIGPIPE) failed: "
+				<< Connection::Handler::Instance().LastError() << std::endl;
+	}
 #else
+	// Windows
 	constexpr int WINDOWS_DESIRED_MAX = 8 * 1024 * 1024; // 8 MiB request (OS will clamp)
 	int try_send = WINDOWS_DESIRED_MAX;
 	int try_recv = WINDOWS_DESIRED_MAX;
@@ -480,15 +580,20 @@ void Socket::InitializeAfterConnect() noexcept {
 	m_status.store(Connection::Status::Connected, std::memory_order_release);
 }
 
-#ifdef LINUX
+#ifdef UNIX
 int Socket::GetMTU() const noexcept {
-	if (!m_conn_info || !m_handle)
+	if (!m_conn_info || m_handle <= 0)
 		return DEFAULT_MTU;
 
-	int mtu;
+#ifdef LINUX
+	int mtu = 0;
 	socklen_t optlen = sizeof(mtu);
-	if (getsockopt(m_handle, IPPROTO_IP, IP_MTU, &mtu, &optlen) >= 0)
+	if (getsockopt(m_handle, IPPROTO_IP, IP_MTU, &mtu, &optlen) >= 0 && mtu > 0)
 		return mtu;
+#endif
+
+	// macOS / otros UNIX: devolvemos el valor por defecto
+	// (el stack de macOS gestiona el PMTU de forma transparente)
 	return DEFAULT_MTU;
 }
 #else
