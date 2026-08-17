@@ -18,6 +18,7 @@ set_target_properties(StormByte-Network PROPERTIES
 	CXX_VISIBILITY_PRESET            hidden
 	VISIBILITY_INLINES_HIDDEN        ON
 )
+
 # Link against the Winsock library (for Windows)
 if(WIN32)
 	target_link_libraries(StormByte-Network PRIVATE ws2_32.dll iphlpapi.dll)
