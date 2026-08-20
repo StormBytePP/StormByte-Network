@@ -13,7 +13,7 @@
 
 /**
  * @namespace Socket
- * @brief The namespace containing all the socket related classes.
+ * @brief Low-level socket wrappers.
  */
 namespace StormByte::Network::Socket {
 	class Server;
@@ -21,201 +21,125 @@ namespace StormByte::Network::Socket {
 
 	/**
 	 * @class Socket
-	 * @brief Low-level socket wrapper used by the connection `Server`.
+	 * @brief Platform socket: create, configure, wait, disconnect.
 	 *
-	 * Although this class lives in the private API surface, it encapsulates
-	 * platform-specific socket creation/configuration and provides a small,
-	 * well-documented interface used by higher-level connection code. The
-	 * `Server` class is declared a friend and is the intended owner of
-	 * `Socket` instances.
-	 *
-	 * Responsibilities:
-	 * - Create and configure the underlying OS socket according to the
-	 *   specified `Protocol`.
-	 * - Expose status and runtime properties (MTU, effective buffer sizes).
-	 * - Provide a `WaitForData` helper used by the event loop to poll for
-	 *   incoming data with an optional timeout.
-	 * - Perform proper teardown via `Disconnect()` and destructor.
-	 *
-	 * Thread-safety and ownership:
-	 * - `Socket` instances are moveable but not copyable. Move operations
-	 *   transfer ownership of the platform handle and associated state.
-	 * - `m_status` is atomic so concurrent Disconnect()/Status() from accept
-	 *   workers and the main thread are well-defined.
-	 * - The class uses `std::unique_ptr` for owned resources to make
-	 *   ownership semantics explicit.
+	 * Move-only. Owned by Client/Server (friends). `m_status` is atomic for
+	 * concurrent Disconnect/Status.
 	 */
 	class STORMBYTE_NETWORK_PRIVATE Socket {
 		friend class Server;
 		friend class Client;
 		public:
 			/**
-			 * @brief Copy constructor.
-			 *
-			 * Deleted to prevent copying of socket instances.
+			 * Copy constructor (deleted).
 			 */
 			Socket(const Socket& other) = delete;
 
 			/**
-			 * @brief Move constructor.
-			 *
-			 * Transfers ownership of the underlying socket handle and
-			 * associated connection state. The moved-from instance is left in a
-			 * valid but unspecified state where `Disconnect()` is a no-op.
+			 * Move constructor.
 			 */
 			Socket(Socket&& other) noexcept;
 
 			/**
-			 * @brief Destructor.
-			 *
-			 * Ensures the socket handle is closed and resources released. The
-			 * destructor never throws (`noexcept`).
+			 * Destructor (calls Disconnect).
 			 */
 			virtual ~Socket() noexcept;
 
 			/**
-			 * @brief Copy assignment.
-			 *
-			 * Deleted to prevent copying of socket instances.
+			 * Copy assignment (deleted).
 			 */
-			Socket& operator=(const Socket& other) 			= delete;
+			Socket& operator=(const Socket& other) = delete;
 
 			/**
-			 * @brief Move assignment.
-			 *
-			 * Move-assigns the socket, transferring ownership semantics as with
-			 * the move constructor.
+			 * Move assignment.
 			 */
 			Socket& operator=(Socket&& other) noexcept;
 
 			/**
-			 * @brief Gracefully disconnect the socket.
-			 *
-			 * Perform protocol-level and OS-level shutdown/close operations. This
-			 * is safe to call multiple times (and from multiple threads) and will
-			 * not throw. Only the first caller performs the real close.
+			 * Graceful shutdown and close (idempotent, thread-safe first-caller wins).
 			 */
-			virtual void 									Disconnect() noexcept;
+			virtual void Disconnect() noexcept;
 
 			/**
-			 * @brief Current connection status.
-			 *
-			 * Returns a snapshot of the `Connection::Status` describing the
-			 * current state (Connected/Disconnected/etc.).
+			 * @return Current connection status.
 			 */
-			Connection::Status 								Status() const noexcept {
+			Connection::Status Status() const noexcept {
 				return m_status.load(std::memory_order_acquire);
 			}
 
 			/**
-			 * @brief Report the current MTU in bytes.
-			 *
-			 * Returns the effective MTU used for packet size decisions. The
-			 * returned reference aliases an internal member — the value itself is
-			 * a small integer (unsigned long) and safe to read.
+			 * @return Effective MTU.
 			 */
-			constexpr const unsigned long& 					MTU() const noexcept {
+			constexpr const unsigned long& MTU() const noexcept {
 				return m_mtu;
 			}
 
 			/**
-			 * @brief Access the underlying connection handler.
-			 *
-			 * Returns a reference to the connection handler type owned by this
-			 * instance. The returned reference is valid while the `Socket` is
-			 * alive and holds the handler.
+			 * @return Native handle.
 			 */
-			inline const Connection::HandlerType& 			Handle() const noexcept { return m_handle; }
+			inline const Connection::HandlerType& Handle() const noexcept {
+				return m_handle;
+			}
 
 			/**
-			 * @brief Access the UUID associated with the socket.
-			 *
-			 * Returns a constant reference to the UUID string assigned to this
-			 * socket instance.
+			 * @return Socket UUID.
 			 */
-			inline const std::string& 						UUID() const noexcept { return m_UUID; }
+			inline const std::string& UUID() const noexcept {
+				return m_UUID;
+			}
 
 			/**
-			 * @brief Poll the socket for incoming data.
-			 *
-			 * Waits up to `usecs` microseconds for data to become available and
-			 * returns an `ExpectedReadResult` describing readiness or an error.
-			 * Passing `0` performs a non-blocking poll; negative values indicate
-			 * an indefinite wait depending on platform support.
-			 *
-			 * @param usecs Timeout in microseconds (default 0).
-			 * @return `ExpectedReadResult` with readiness or error.
+			 * Waits for readable data (or peer close / timeout).
+			 * @param usecs Timeout in microseconds (0 = non-blocking style wait policy as implemented).
+			 * @return Read result or ConnectionClosed.
 			 */
-			ExpectedReadResult 								WaitForData(const long long& usecs = 0) noexcept;
+			ExpectedReadResult WaitForData(const long long& usecs = 0) noexcept;
 
 		protected:
-			Connection::Protocol m_protocol;				///< Protocol family/config
-			std::atomic<Connection::Status> m_status;		///< Current connection status
-			Connection::HandlerType m_handle;				///< Owned connection handler
-			std::unique_ptr<Connection::Info> m_conn_info;	///< Optional connection metadata
-			unsigned long m_mtu;							///< Active MTU value
-			mutable std::shared_ptr<Logger::Log> m_logger;	///< Logger used for socket diagnostics
+			Connection::Protocol m_protocol;					///< Protocol
+			std::atomic<Connection::Status> m_status;			///< Status
+			Connection::HandlerType m_handle;					///< Native handle
+			std::unique_ptr<Connection::Info> m_conn_info;		///< Peer info
+			unsigned long m_mtu;								///< MTU
+			mutable std::shared_ptr<Logger::Log> m_logger;		///< Logger
 
-			// Effective socket buffer sizes as reported by the OS (bytes).
-			// Initialized to a sensible default; updated in InitializeAfterConnect().
-			int m_effective_send_buf = 65536;
-			int m_effective_recv_buf = 65536;
+			int m_effective_send_buf = 65536;	///< SO_SNDBUF effective
+			int m_effective_recv_buf = 65536;	///< SO_RCVBUF effective
 
 			/**
-			 * @brief Protected constructor.
-			 *
-			 * Create a socket instance configured for `protocol`. A logger can
-			 * be supplied to receive diagnostic messages. The constructor does
-			 * not throw and leaves the object ready for `CreateSocket()`.
+			 * @param protocol Address family.
+			 * @param logger Logger.
 			 */
 			Socket(const Connection::Protocol& protocol, std::shared_ptr<Logger::Log> logger) noexcept;
 
 			/**
-			 * @brief Create and configure the underlying OS socket.
-			 *
-			 * Returns either a `Connection::HandlerType` on success or a
-			 * `ConnectionError` describing failure. This function encapsulates
-			 * platform-dependent socket calls and returns an `Expected` to avoid
-			 * exceptions in the networking layer.
+			 * Creates the OS socket.
+			 * @return Handle or ConnectionError.
 			 */
-			Expected<Connection::HandlerType, ConnectionError> 	CreateSocket() noexcept;
+			Expected<Connection::HandlerType, ConnectionError> CreateSocket() noexcept;
 
 			/**
-			 * @brief Perform initialization that requires a connected socket.
-			 *
-			 * Called after a successful connect to query OS-level properties
-			 * (effective buffer sizes, MTU, etc.) and to apply runtime socket
-			 * options. This method is noexcept.
+			 * Post-connect options: non-blocking, buffers, TCP_NODELAY, MTU.
 			 */
-			void 												InitializeAfterConnect() noexcept;
+			void InitializeAfterConnect() noexcept;
 
 			/**
-			 * @brief Ensures the socket is closed.
-			 *
-			 * Internal helper to close and release the underlying socket
-			 * handle. This enabled handle to be closed as late as possible
+			 * Ensures the handle is closed (internal helper if used).
 			 */
-			void 												EnsureIsClosed() noexcept;
+			void EnsureIsClosed() noexcept;
 
 		private:
 			constexpr static const unsigned short DEFAULT_MTU = 1500;
-			std::string m_UUID;									///< UUID associated with the socket
+			std::string m_UUID;	///< Instance UUID
 
 			/**
-			 * @brief Query the path MTU for the connected peer.
-			 *
-			 * Returns the MTU used for decision-making about packet sizes. The
-			 * function is `noexcept` and falls back to `DEFAULT_MTU` on error.
+			 * @return Path MTU or DEFAULT_MTU.
 			 */
-			int 												GetMTU() const noexcept;
+			int GetMTU() const noexcept;
 
 			/**
-			 * @brief Set the socket to non-blocking mode.
-			 *
-			 * Applies platform-specific calls to mark the underlying socket as
-			 * non-blocking. This method is used during initialization and is
-			 * `noexcept`.
+			 * Sets non-blocking mode.
 			 */
-			void 												SetNonBlocking() noexcept;
-		};
+			void SetNonBlocking() noexcept;
+	};
 }

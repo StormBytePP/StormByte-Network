@@ -7,100 +7,94 @@
 
 /**
  * @namespace Socket
- * @brief The namespace containing all the socket related classes.
+ * @brief Low-level socket wrappers.
  */
 namespace StormByte::Network::Socket {
 	class Client;
 
 	/**
 	 * @class Writer
-	 * @brief @ref Buffer::ExternalWriter adapter over a socket @ref Client.
+	 * @brief Buffer::ExternalWriter adapter over Client.
 	 */
 	class STORMBYTE_NETWORK_PRIVATE Writer final: public Buffer::ExternalWriter {
 		public:
 			/**
-			 * @brief Construct a writer bound to @p client.
-			 * @param client Non-owning client socket.
+			 * @param client Non-owning client reference.
 			 */
 			inline Writer(Client& client) noexcept
 				: m_client(client) {}
 
-			Writer(const Writer& other) noexcept				= default;
-			Writer(Writer&& other) noexcept					= default;
-			~Writer() noexcept override						= default;
+			Writer(const Writer& other) noexcept = default;
+			Writer(Writer&& other) noexcept = default;
+			~Writer() noexcept override = default;
 
-			Writer& operator=(const Writer& other) noexcept	= default;
-			Writer& operator=(Writer&& other) noexcept		= default;
+			Writer& operator=(const Writer& other) noexcept = default;
+			Writer& operator=(Writer&& other) noexcept = default;
 
 			/**
-			 * @brief Create a copy of this Writer.
-			 * @return Unique pointer to the copied instance.
+			 * @return Cloned writer.
 			 */
 			inline PointerType Clone() const noexcept override {
 				return MakePointer<Writer>(*this);
 			}
 
 			/**
-			 * @brief Create a moved instance of this Writer.
-			 * @return Unique pointer to the moved instance.
+			 * @return Moved writer instance.
 			 */
 			inline PointerType Move() noexcept override {
 				return MakePointer<Writer>(std::move(*this));
 			}
 
 			/**
-			 * @brief Whether the socket still accepts writes.
-			 * @return @c false after @ref Close or @ref SetError.
+			 * @return false after Close or SetError.
 			 */
 			bool IsWritable() const noexcept override;
 
 			/**
-			 * @brief Send the full contents of @p data.
-			 * @param data Bytes to send.
-			 * @return @c true on success.
+			 * Sends all of @p data.
+			 * @param data Bytes.
+			 * @return true on success.
 			 */
 			bool Write(const Buffer::DataType& data) noexcept override;
 
 			/**
-			 * @brief Send the full contents of @p data (move).
-			 * @param data Bytes to send.
-			 * @return @c true on success.
-			 * @note Required pure virtual on @ref Buffer::ExternalWriter.
+			 * Sends all of @p data (move).
+			 * @param data Bytes.
+			 * @return true on success.
 			 */
 			bool Write(Buffer::DataType&& data) noexcept override;
 
 			/**
-			 * @brief Send up to @p count bytes from @p data.
-			 * @param count Maximum bytes to send.
-			 * @param data  Source buffer.
-			 * @return @c true on success.
+			 * Sends up to @p count bytes from @p data.
+			 * @param count Max bytes.
+			 * @param data Source.
+			 * @return true on success.
 			 */
 			bool Write(std::size_t count, const Buffer::DataType& data) noexcept override;
 
 			/**
-			 * @brief Send up to @p count bytes from @p data (rvalue).
-			 * @param count Maximum bytes to send.
-			 * @param data  Source buffer.
-			 * @return @c true on success.
+			 * Sends up to @p count bytes from @p data (rvalue).
+			 * @param count Max bytes.
+			 * @param data Source.
+			 * @return true on success.
 			 */
 			bool Write(std::size_t count, Buffer::DataType&& data) noexcept override;
 
 			/**
-			 * @brief Disallow further writes (local flag).
+			 * Disallows further writes (local flag).
 			 */
 			void Close() noexcept override;
 
 			/**
-			 * @brief Enter permanent error state (local flag).
+			 * Marks permanent error (local flag).
 			 */
 			void SetError() noexcept override;
 
-			/** Convenience overloads from the base (string, span, …). */
 			using Buffer::ExternalWriter::Write;
 
 		private:
-			std::reference_wrapper<Client> m_client;	///< Non-owning reference to the client socket.
-			bool m_writable = true;						///< Cleared by Close / SetError.
-			bool m_error    = false;					///< Set by SetError.
+			std::reference_wrapper<Client> m_client;	///< Client socket
+			bool m_writable = true;						///< Writable flag
+			bool m_error = false;						///< Error flag
 	};
 }

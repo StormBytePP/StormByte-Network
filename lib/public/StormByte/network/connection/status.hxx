@@ -6,28 +6,28 @@
 
 /**
  * @namespace Connection
- * @brief The namespace containing connection items
+ * @brief Connection-level types (protocol, status, read/write results).
  */
 namespace StormByte::Network::Connection {
 	/**
 	 * @enum Status
-	 * @brief The enumeration representing the status of the connection.
+	 * @brief Lifecycle state of a connection or listener.
 	 */
 	enum class STORMBYTE_NETWORK_PUBLIC Status: unsigned short {
-		Connected,			///< The connection is established.
-		Disconnected,		///< The connection is closed.
-		Connecting,			///< The connection is being established.
-		Disconnecting,		///< The connection is being closed.
-		Negotiating,		///< The connection is being negotiated.
-		Rejected,			///< The connection is rejected.
-		PeerClosed,			///< The peer closed the connection.
-		Error				///< An error occurred in the connection.
+		Connected,		///< Connection established
+		Disconnected,	///< Closed / idle
+		Connecting,		///< Connect or listen in progress
+		Disconnecting,	///< Shutdown in progress
+		Negotiating,	///< Application-level handshake
+		Rejected,		///< Peer or local rejection
+		PeerClosed,		///< Peer closed the connection
+		Error			///< Error state
 	};
 
 	/**
-	 * @brief The function to convert the status to a string.
-	 * @param status The status to convert.
-	 * @return The string representation of the status.
+	 * Converts Status to a string.
+	 * @param status Status value.
+	 * @return Human-readable name.
 	 */
 	constexpr STORMBYTE_NETWORK_PUBLIC std::string StatusToString(const Status& status) {
 		switch (status) {
@@ -39,15 +39,12 @@ namespace StormByte::Network::Connection {
 			case Status::Rejected:		return "Rejected";
 			case Status::PeerClosed:	return "PeerClosed";
 			case Status::Error:
-			default:
-										return "Error";
+			default:					return "Error";
 		}
 	}
 
 	/**
-	 * @brief The function to check if the connection is connected.
-	 * @param status The status to check.
-	 * @return True if the connection is connected, false otherwise.
+	 * @return true if the connection is usable for I/O (Connected or Negotiating).
 	 */
 	constexpr STORMBYTE_NETWORK_PUBLIC bool IsConnected(const Status& status) noexcept {
 		return status == Status::Connected || status == Status::Negotiating;

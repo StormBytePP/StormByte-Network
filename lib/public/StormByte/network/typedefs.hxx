@@ -13,32 +13,39 @@
 #include <winsock2.h>
 #endif
 
+#include <functional>
 #include <memory>
 
 /**
  * @namespace Network
- * @brief The namespace containing all the network related classes.
+ * @brief StormByte networking subsystem.
  */
-namespace StormByte::Network {																		///< The connection info class (forward declaration).
+namespace StormByte::Network {
 	namespace Socket {
-		class Socket;																				///< The socket class (forward declaration).
-		class Client;																				///< The client socket class (forward declaration).
+		class Socket;	///< Forward declaration
+		class Client;	///< Forward declaration
 	}
+
 	namespace Connection {
 		#ifdef UNIX
-			using HandlerType = int; 																///< The type of the socket.
+			using HandlerType = int;		///< Native socket handle (POSIX)
 		#else
-			using HandlerType = SOCKET; 															///< The type of the socket.
+			using HandlerType = SOCKET;		///< Native socket handle (Winsock)
 		#endif
 	}
-	using ExpectedBuffer = StormByte::Expected<Buffer::FIFO, ConnectionError>;						///< The expected buffer type.
-	using ExpectedVoid = StormByte::Expected<void, ConnectionError>;								///< The expected void type.
-	using ExpectedClient = StormByte::Expected<std::shared_ptr<Socket::Client>, ConnectionError>;	///< The expected client type.
-	using ExpectedReadResult = StormByte::Expected<Connection::Read::Result, ConnectionClosed>;		///< The expected read result type.
-	using PacketPointer = std::shared_ptr<Transport::Packet>;										///< The packet pointer type.
+
+	using ExpectedBuffer = StormByte::Expected<Buffer::FIFO, ConnectionError>;				///< Receive buffer result
+	using ExpectedVoid = StormByte::Expected<void, ConnectionError>;						///< Void operation result
+	using ExpectedClient = StormByte::Expected<std::shared_ptr<Socket::Client>, ConnectionError>;	///< Accept result
+	using ExpectedReadResult = StormByte::Expected<Connection::Read::Result, ConnectionClosed>;	///< Wait-for-data result
+	using PacketPointer = std::shared_ptr<Transport::Packet>;								///< Shared packet
+
+	/**
+	 * @brief Callback that builds a Packet from opcode + payload consumer.
+	 */
 	using DeserializePacketFunction = std::function<PacketPointer(
 		Transport::Packet::OpcodeType,
 		Buffer::Consumer,
 		std::shared_ptr<Logger::Log>
-	)>; 																							///< The deserialize packet function type.
+	)>;
 }

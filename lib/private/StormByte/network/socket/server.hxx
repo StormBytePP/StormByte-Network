@@ -6,75 +6,72 @@
 
 /**
  * @namespace Socket
- * @brief The namespace containing all the socket related classes.
+ * @brief Low-level socket wrappers.
  */
 namespace StormByte::Network::Socket {
 	/**
 	 * @class Server
-	 * @brief The class representing a server socket.
+	 * @brief Listening socket: bind, listen, accept.
 	 */
 	class STORMBYTE_NETWORK_PRIVATE Server final: public Socket {
 		public:
 			/**
-			 * @brief The constructor of the Server class.
-			 * @param protocol The protocol of the socket.
+			 * @param protocol Address family.
+			 * @param logger Logger.
 			 */
 			Server(const Connection::Protocol& protocol, std::shared_ptr<Logger::Log> logger) noexcept;
 
 			/**
-			 * @brief The copy constructor of the Server class.
-			 * @param other The other socket to copy.
+			 * Copy constructor (deleted).
 			 */
-			Server(const Server& other) 									= delete;
+			Server(const Server& other) = delete;
 
 			/**
-			 * @brief The move constructor of the Server class.
-			 * @param other The other socket to move.
+			 * Move constructor.
 			 */
-			Server(Server&& other) noexcept									= default;
+			Server(Server&& other) noexcept = default;
 
 			/**
-			 * @brief The destructor of the Server class.
+			 * Destructor.
 			 */
-			~Server() noexcept override										= default;
+			~Server() noexcept override = default;
 
 			/**
-			 * @brief The assignment operator of the Server class.
-			 * @param other The other socket to assign.
-			 * @return The reference to the assigned socket.
+			 * Copy assignment (deleted).
 			 */
-			Server& operator=(const Server& other) 							= delete;
+			Server& operator=(const Server& other) = delete;
 
 			/**
-			 * @brief The move assignment operator of the Server class.
-			 * @param other The other socket to assign.
-			 * @return The reference to the assigned socket.
+			 * Move assignment.
 			 */
-			Server& operator=(Server&& other) noexcept						= default;
+			Server& operator=(Server&& other) noexcept = default;
 
 			/**
-			 * @brief The function to listen for incoming connections.
-			 * @return The expected result of the operation.
+			 * Binds and listens on host:port.
+			 * @param hostname Bind address.
+			 * @param port Port.
+			 * @return Empty Expected on success.
 			 */
-			ExpectedVoid													Listen(const std::string& hostname, const unsigned short& port) noexcept;
+			ExpectedVoid Listen(const std::string& hostname, const unsigned short& port) noexcept;
 
 			/**
-			 * @brief The function to accept a client connection.
-			 * @return The expected result of the operation.
+			 * Accepts one client (with short poll/select wait).
+			 * @return Shared Client or error.
 			 */
-			ExpectedClient													Accept() noexcept;
+			ExpectedClient Accept() noexcept;
 
 			/**
-			 * @brief Disconnect the server and any active clients.
+			 * Disconnects all accepted clients then the listener.
 			 */
-			void 															Disconnect() noexcept override;
+			void Disconnect() noexcept override;
 
 			/**
-			 * @brief Disconnect a client by its UUID.
+			 * Disconnects one accepted client by UUID.
+			 * @param client_uuid Client UUID.
 			 */
-			void 															DisconnectClient(const std::string& client_uuid) noexcept;
+			void DisconnectClient(const std::string& client_uuid) noexcept;
 
 		private:
-			std::vector<std::shared_ptr<Client>> m_active_clients;			///< Active accepted client handles
+			std::vector<std::shared_ptr<Client>> m_active_clients;	///< Accepted clients
 	};
 }

@@ -6,104 +6,93 @@
 
 /**
  * @namespace Connection
- * @brief The namespace containing connection items
+ * @brief Connection helpers (handler, info, client wrapper).
  */
 namespace StormByte::Network::Connection {
+	/**
+	 * @class Client
+	 * @brief High-level connection over a Socket::Client with I/O pipelines.
+	 */
 	class STORMBYTE_NETWORK_PRIVATE Client final {
 		public:
 			/**
-			 * @brief Constructor for the Client connection.
-			 * @param socket The underlying socket client.
-			 * @param in_pipeline The input buffer pipeline.
-			 * @param out_pipeline The output buffer pipeline.
+			 * @param socket Underlying socket client.
+			 * @param in_pipeline Input pipeline.
+			 * @param out_pipeline Output pipeline.
 			 */
 			Client(std::shared_ptr<Socket::Client> socket, Buffer::Pipeline in_pipeline, Buffer::Pipeline out_pipeline) noexcept;
 
 			/**
-			 * @brief Copy constructor (deleted)
-			 * @param other The Client to copy from.
+			 * Copy constructor (deleted).
 			 */
-			Client(const Client& other) 								= delete;
+			Client(const Client& other) = delete;
 
 			/**
-			 * @brief Move constructor.
-			 * @param other The Client to move from.
+			 * Move constructor.
 			 */
-			Client(Client&& other) noexcept 							= default;
+			Client(Client&& other) noexcept = default;
 
 			/**
-			 * @brief Destructor.
+			 * Destructor.
 			 */
-			~Client() noexcept 											= default;
+			~Client() noexcept = default;
 
 			/**
-			 * @brief Copy-assignment operator (deleted)
-			 * @param other The Client to copy from.
-			 * @return Reference to this Client.
+			 * Copy assignment (deleted).
 			 */
-			Client& operator=(const Client& other) 						= delete;
+			Client& operator=(const Client& other) = delete;
 
 			/**
-			 * @brief Move-assignment operator.
-			 * @param other The Client to move from.
-			 * @return Reference to this Client.
+			 * Move assignment.
 			 */
-			Client& operator=(Client&& other) noexcept 					= default;
+			Client& operator=(Client&& other) noexcept = default;
 
 			/**
-			 * @brief Get the input buffer pipeline.
-			 * @return Reference to the input pipeline.
+			 * @return Input pipeline.
 			 */
-			inline Buffer::Pipeline& 									InputPipeline() noexcept {
+			inline Buffer::Pipeline& InputPipeline() noexcept {
 				return m_in_pipeline;
 			}
 
 			/**
-			 * @brief Get the output buffer pipeline.
-			 * @return Reference to the output pipeline.
+			 * @return Output pipeline.
 			 */
-			inline Buffer::Pipeline& 									OutputPipeline() noexcept {
+			inline Buffer::Pipeline& OutputPipeline() noexcept {
 				return m_out_pipeline;
 			}
 
 			/**
-			 * @brief Get the underlying socket client.
-			 * @return Shared pointer to the socket client.
+			 * @return Underlying socket client.
 			 */
-			inline std::shared_ptr<Socket::Client>& 					Socket() noexcept {
+			inline std::shared_ptr<Socket::Client>& Socket() noexcept {
 				return m_socket;
 			}
 
 			/**
-			 * @brief Send a frame to the peer.
-			 * @param frame Frame to send; ownership is taken (payload is moved).
-			 * @param logger Logger instance.
+			 * Sends a frame (moves payload through the output pipeline).
+			 * @param frame Frame to send (use std::move).
+			 * @param logger Logger.
 			 * @return true on success.
-			 *
-			 * @note After a successful or attempted send path that consumes the frame,
-			 *       @p frame is left in a valid but unspecified state (typically empty payload).
-			 *       Callers must use std::move: @c Send(std::move(frame), logger).
 			 */
 			bool Send(Transport::Frame&& frame, std::shared_ptr<Logger::Log> logger) noexcept;
 
 			/**
-			 * @brief Get the current connection status.
-			 * @return The current connection status.
+			 * @return Connection status from the socket (or Disconnected).
 			 */
-			inline Connection::Status 									Status() const noexcept {
+			inline Connection::Status Status() const noexcept {
 				return m_socket ? m_socket->Status() : Connection::Status::Disconnected;
 			}
-			
+
 			/**
-			 * @brief Receive a Frame from the connected client.
-			 * @param logger The logger to use.
-			 * @return The received Frame.
+			 * Receives one framed message.
+			 * @param logger Logger.
+			 * @return Frame (empty on failure).
 			 */
-			Transport::Frame 											Receive(std::shared_ptr<Logger::Log> logger) noexcept;
+			Transport::Frame Receive(std::shared_ptr<Logger::Log> logger) noexcept;
 
 		private:
-			std::shared_ptr<Socket::Client> m_socket;					///< The underlying socket.
-			Buffer::Pipeline m_in_pipeline;								///< The input pipeline.
-			Buffer::Pipeline m_out_pipeline;							///< The output pipeline.
+			std::shared_ptr<Socket::Client> m_socket;	///< Socket
+			Buffer::Pipeline m_in_pipeline;				///< Input pipeline
+			Buffer::Pipeline m_out_pipeline;			///< Output pipeline
 	};
 }

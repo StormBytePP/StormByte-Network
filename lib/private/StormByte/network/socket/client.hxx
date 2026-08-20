@@ -10,192 +10,170 @@
 
 /**
  * @namespace Socket
- * @brief The namespace containing all the socket related classes.
+ * @brief Low-level socket wrappers.
  */
 namespace StormByte::Network::Socket {
 	/**
 	 * @class Client
-	 * @brief The class representing a client socket.
+	 * @brief Connected client socket (connect, send, receive, peek).
 	 */
 	class STORMBYTE_NETWORK_PRIVATE Client final: public Socket {
 		public:
 			/**
-			 * @brief The constructor of the Client class.
-			 * @param protocol The protocol of the socket.
-			 * @param logger The logger to use.
+			 * @param protocol Address family.
+			 * @param logger Logger.
 			 */
 			Client(const Connection::Protocol& protocol, std::shared_ptr<Logger::Log> logger) noexcept;
 
 			/**
-			 * @brief The copy constructor of the Client class.
-			 * @param other The other socket to copy.
+			 * Copy constructor (deleted).
 			 */
-			Client(const Client& other) 									= delete;
+			Client(const Client& other) = delete;
 
 			/**
-			 * @brief The move constructor of the Client class.
-			 * @param other The other socket to move.
+			 * Move constructor.
 			 */
-			Client(Client&& other) noexcept 								= default;
+			Client(Client&& other) noexcept = default;
 
 			/**
-			 * @brief The destructor of the Client class.
+			 * Destructor.
 			 */
-			~Client() noexcept override 									= default;
+			~Client() noexcept override = default;
 
 			/**
-			 * @brief The assignment operator of the Client class.
-			 * @param other The other socket to assign.
-			 * @return The reference to the assigned socket.
+			 * Copy assignment (deleted).
 			 */
-			Client& operator=(const Client& other) 							= delete;
+			Client& operator=(const Client& other) = delete;
 
 			/**
-			 * @brief The move assignment operator of the Client class.
-			 * @param other The other socket to assign.
-			 * @return The reference to the assigned socket.
+			 * Move assignment.
 			 */
-			Client& operator=(Client&& other) noexcept 						= default;
+			Client& operator=(Client&& other) noexcept = default;
 
 			/**
-			 * @brief The function to connect to a server.
-			 * @param hostname The hostname of the server.
-			 * @param port The port of the server.
-			 * @return The expected result of the operation.
+			 * Connects to host:port.
+			 * @param hostname Host name.
+			 * @param port Port.
+			 * @return Empty Expected on success.
 			 */
-			ExpectedVoid 													Connect(const std::string& hostname, const unsigned short& port) noexcept;
+			ExpectedVoid Connect(const std::string& hostname, const unsigned short& port) noexcept;
 
 			/**
-			 * @brief Creates a Reader associated with this Client.
-			 * @return A Reader instance.
+			 * @return Reader adapter for this client.
 			 */
-			inline Reader 													Reader() noexcept {
+			inline Reader Reader() noexcept {
 				return { *this };
 			}
-			
-			/**
-			 * @brief Receive data (blocking) — kept for compatibility.
-			 *
-			 * This overload is a convenience wrapper that forwards to the
-			 * timeout-enabled variant with `timeout_seconds == 0` (disable
-			 * timeout, wait forever).
-			 */
-			ExpectedBuffer 													Receive(const std::size_t& size = 0) noexcept;
 
 			/**
-			 * @brief Receive data with a timeout.
-			 *
-			 * @param size Maximum number of bytes to receive (0 = unlimited).
-			 * @param timeout_seconds Timeout in seconds (0 = wait forever).
-			 * @return ExpectedBuffer with the received data or an error on timeout/failure.
+			 * Receives up to @p size bytes (no timeout).
+			 * @param size Max bytes (0 = implementation default / until close policy).
+			 * @return Buffer or error.
 			 */
-			ExpectedBuffer 													Receive(const std::size_t& size, const unsigned short& timeout_seconds) noexcept;
+			ExpectedBuffer Receive(const std::size_t& size = 0) noexcept;
 
 			/**
-			 * @brief Receive exactly @p size bytes into @p out (no intermediate FIFO).
-			 *
-			 * Appends to @p out. Prefer @c out.reserve(out.size() + size) when the
-			 * size is known (e.g. frame payloads) to avoid reallocations.
-			 *
-			 * @param size Number of bytes required (must be > 0 for a full payload).
-			 * @param out Destination buffer (appended).
-			 * @param timeout_seconds Timeout in seconds (0 = wait forever between chunks).
-			 * @return Empty Expected on success, or ConnectionError.
+			 * Receives with timeout.
+			 * @param size Max bytes (0 = unlimited until close if not require_exact).
+			 * @param timeout_seconds 0 = wait forever between chunks.
+			 * @return Buffer or error.
 			 */
-			ExpectedVoid 													ReceiveInto(const std::size_t& size, Buffer::DataType& out, const unsigned short& timeout_seconds = 0) noexcept;
+			ExpectedBuffer Receive(const std::size_t& size, const unsigned short& timeout_seconds) noexcept;
 
 			/**
-			 * @brief Peek data from the socket without consuming it.
-			 *
-			 * Uses OS-level MSG_PEEK to read up to `size` bytes from the
-			 * socket receive buffer without removing them. Returns the data
-			 * in a Buffer::FIFO for convenient processing.
-			 *
-			 * @param size Number of bytes to peek (must be > 0).
-			 * @return ExpectedBuffer with the peeked data or an error.
+			 * Receives exactly into @p out (append).
+			 * @param size Required byte count.
+			 * @param out Destination.
+			 * @param timeout_seconds Timeout between chunks (0 = forever).
+			 * @return Empty Expected on success.
 			 */
-			ExpectedBuffer 													Peek(const std::size_t& size) const noexcept;
+			ExpectedVoid ReceiveInto(const std::size_t& size, Buffer::DataType& out, const unsigned short& timeout_seconds = 0) noexcept;
 
 			/**
-			 * @brief Function to send data to the socket using a FIFO buffer.
-			 * @param buffer The buffer containing the data to send.
-			 * @return The expected result of the operation.
+			 * Peeks without consuming (MSG_PEEK).
+			 * @param size Bytes to peek.
+			 * @return Buffer or error.
 			 */
-			ExpectedVoid 													Send(const Buffer::FIFO& buffer) noexcept;
+			ExpectedBuffer Peek(const std::size_t& size) const noexcept;
 
 			/**
-			 * @brief Function to send data to the socket using a byte vector
-			 * @param buffer The vector containing the data to send.
-			 * @return The expected result of the operation.
+			 * Sends a FIFO buffer.
+			 * @param buffer Data.
+			 * @return Empty Expected on success.
 			 */
-			ExpectedVoid 													Send(const std::vector<std::byte>& buffer) noexcept;
+			ExpectedVoid Send(const Buffer::FIFO& buffer) noexcept;
 
 			/**
-			 * @brief Function to send data to the socket using a byte span.
-			 * @param data The span containing the data to send.
-			 * @return The expected result of the operation.
+			 * Sends a byte vector.
+			 * @param buffer Data.
+			 * @return Empty Expected on success.
 			 */
-			ExpectedVoid 													Send(std::span<const std::byte> data) noexcept;
+			ExpectedVoid Send(const std::vector<std::byte>& buffer) noexcept;
 
 			/**
-			 * @brief Function to send data to the socket using a Buffer::Consumer.
-			 * @param data A consumer of the data to send.
-			 * @return The expected result of the operation.
+			 * Sends a byte span.
+			 * @param data Data.
+			 * @return Empty Expected on success.
 			 */
-			ExpectedVoid 													Send(Buffer::Consumer data) noexcept;
+			ExpectedVoid Send(std::span<const std::byte> data) noexcept;
 
 			/**
-			 * @brief Function to check if a shutdown request has been made.
-			 * @return True if a shutdown request has been made, false otherwise.
+			 * Sends from a Consumer until EoF.
+			 * @param data Consumer.
+			 * @return Empty Expected on success.
 			 */
-			bool 															HasShutdownRequest() noexcept;
+			ExpectedVoid Send(Buffer::Consumer data) noexcept;
 
 			/**
-			 * @brief Pings a connected client, updates the connection status, and returns the result.
-			 * @return True if the ping was successful, false otherwise.
+			 * @return true if peer has requested shutdown (peek).
 			 */
-			bool 															Ping() noexcept;
+			bool HasShutdownRequest() noexcept;
 
 			/**
-			 * @brief Creates a Writer associated with this Client.
-			 * @return A Writer instance.
+			 * Lightweight connectivity check; may mark Disconnected on failure.
+			 * @return true if still up.
 			 */
-			inline Writer 													Writer() noexcept {
+			bool Ping() noexcept;
+
+			/**
+			 * @return Writer adapter for this client.
+			 */
+			inline Writer Writer() noexcept {
 				return { *this };
 			}
 
 		private:
 			/**
-			 * @brief Perform a single recv with custom flags.
-			 *
-			 * Wraps ::recv and maps common errors to ExpectedBuffer.
-			 * Used by Peek and can be reused by other single-shot reads.
+			 * Single recv with flags.
+			 * @param size Max bytes.
+			 * @param flags recv flags.
+			 * @return Buffer or error.
 			 */
-			ExpectedBuffer 													ReadOnce(const std::size_t& size, int flags) noexcept;
-			/**
-			 * @brief Function to read data from the socket (non-blocking version).
-			 * @param buffer The buffer to read the data into.
-			 * @param size The requested size of data.
-			 * @return The result of the operation.
-			 */
-			Connection::Read::Result 										ReadNonBlocking(Buffer::FIFO& buffer) noexcept;
+			ExpectedBuffer ReadOnce(const std::size_t& size, int flags) noexcept;
 
 			/**
-			 * @brief Shared recv loop for Receive / ReceiveInto.
-			 * @param max_size 0 = read until peer close (only if @p require_exact is false).
-			 * @param out Append target (must not be null).
-			 * @param timeout_seconds 0 = wait forever between chunks.
-			 * @param require_exact If true, peer close before @p max_size is an error;
-			 *                      if false, peer close ends the read successfully.
+			 * Non-blocking read helper (if used by implementation).
+			 * @param buffer Destination FIFO.
+			 * @return Read result.
 			 */
-			ExpectedVoid 													ReceiveLoop(const std::size_t& max_size, Buffer::DataType& out, const unsigned short& timeout_seconds, bool require_exact) noexcept;
+			Connection::Read::Result ReadNonBlocking(Buffer::FIFO& buffer) noexcept;
 
 			/**
-			 * @brief Function to write data to the socket.
-			 * @param data A view of the data to be written.
-			 * @param size The number of bytes to write.
-			 * @return The expected result of the operation.
+			 * Shared receive loop for Receive / ReceiveInto.
+			 * @param max_size Cap (0 = until peer close if !require_exact).
+			 * @param out Append target.
+			 * @param timeout_seconds Inter-chunk timeout.
+			 * @param require_exact Peer close early is error when true.
+			 * @return Empty Expected on success.
 			 */
-			ExpectedVoid 													Write(std::span<const std::byte> data, const std::size_t& size) noexcept;
+			ExpectedVoid ReceiveLoop(const std::size_t& max_size, Buffer::DataType& out, const unsigned short& timeout_seconds, bool require_exact) noexcept;
+
+			/**
+			 * Low-level write of @p size bytes from @p data.
+			 * @param data Source span.
+			 * @param size Bytes to write.
+			 * @return Empty Expected on success.
+			 */
+			ExpectedVoid Write(std::span<const std::byte> data, const std::size_t& size) noexcept;
 	};
 }
