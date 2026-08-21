@@ -1,6 +1,7 @@
 [submodule "StormByte Suite - Buffer"]
 	path = thirdparty/StormByte/buffer/src
 	url = https://github.com/StormBytePP/StormByte-Buffer.git
+	branch = master
 [submodule "StormByte BuildMaster"]
 	path = thirdparty/buildmaster
 	url = https://github.com/StormBytePP/StormByte-BuildMaster.git
