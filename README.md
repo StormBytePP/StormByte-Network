@@ -2,7 +2,7 @@
 ![Linux](https://img.shields.io/badge/Linux-Supported-1793D1?logo=linux&logoColor=white)
 ![Windows](https://img.shields.io/badge/Windows-Supported-0078D6?logo=windows&logoColor=white)
 ![macOS](https://img.shields.io/badge/macOS-Supported-0078D6?logo=apple&logoColor=white)
-![C++23](https://img.shields.io/badge/C%2B%2B-23-00599C?logo=c%2B%2B&logoColor=white)
+![C++26](https://img.shields.io/badge/C%2B%2B-26-00599C?logo=c%2B%2B&logoColor=white)
 ![CMake](https://img.shields.io/badge/CMake-3.12+-064F8C?logo=cmake&logoColor=white)
 ![License: LGPL v3](https://img.shields.io/badge/License-LGPL_v3-blue.svg)
 [![CI](https://github.com/StormBytePP/StormByte-Network/actions/workflows/ci.yml/badge.svg)](https://github.com/StormBytePP/StormByte-Buffer/actions/workflows/ci.yml)
