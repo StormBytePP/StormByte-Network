@@ -122,7 +122,7 @@ jobs:
   build-windows:
     needs: [checkout-bootstrap]
     runs-on: windows-latest
-    name: windows-msvc
+    name: windows-clang-cl
 
     steps:
       - name: Checkout repository and submodules
@@ -140,8 +140,8 @@ jobs:
       - name: Build with toolchain
         uses: stormbytepp/githubactions/.github/actions/build-with-toolchain@master
         with:
-          toolchain: msvc
-          ccache-key: v1-msvc
+          toolchain: clang-cl
+          ccache-key: v1-clang-cl
           build-type: ${{ env.BUILD_TYPE }}
           configure-options: >-
             -DENABLE_TEST=ON
