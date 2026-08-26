@@ -3,10 +3,11 @@ if(WIN32)
 else()
 	set(WITH_STORMBYTE "BUNDLED" CACHE STRING "Use StormByte components (SYSTEM/BUNDLED)")
 endif()
+
 if(WITH_STORMBYTE STREQUAL "SYSTEM")
 	find_package(StormByte REQUIRED Buffer Logger)
 else()
 	add_subdirectory(buffer)
 endif()
 
-target_link_libraries(StormByte-Network PUBLIC StormByte::Buffer)
+buildmaster_link(StormByte-Network StormByte-Buffer)

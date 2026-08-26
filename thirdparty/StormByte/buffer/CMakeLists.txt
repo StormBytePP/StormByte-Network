@@ -1,20 +1,15 @@
-set(STORMBYTE_BUFFER_SRCDIR "${CMAKE_CURRENT_LIST_DIR}/src")
-ensure_build_dir(STORMBYTE_BUFFER_BUILDDIR)
-set(STORMBYTE_BUFFER_COMPONENT "StormByte Suite - Buffer")
-set(STORMBYTE_BUFFER_OPTIONS
-	"-DWITH_STORMBYTE=BUNDLED"
-)
-create_cmake_component(
-	STORMBYTE_BUFFER_LIBRARY_CREATE_FILE
+if(MSVC)
+	set(STORMBYTE_BUFFER_OPTSTR "TOOLCHAIN=clang-cl;ALIAS=StormByte::Buffer")
+else()
+	set(STORMBYTE_BUFFER_OPTSTR "ALIAS=StormByte::Buffer")
+endif()
+
+buildmaster_component(
+	StormByte-Buffer
+	"StormByte Suite - Buffer"
+	"${CMAKE_CURRENT_LIST_DIR}/src"
+	"WITH_STORMBYTE=BUNDLED"
+	shared
 	"StormByte-Buffer"
-	"${STORMBYTE_BUFFER_COMPONENT}"
-	"${STORMBYTE_BUFFER_SRCDIR}"
-	"${STORMBYTE_BUFFER_BUILDDIR}"
-	"${STORMBYTE_BUFFER_OPTIONS}"
-	"shared"
-	"StormByte-Buffer;StormByte-Logger;StormByte"
-	1
+	"${STORMBYTE_BUFFER_OPTSTR}"
 )
-include("${STORMBYTE_BUFFER_LIBRARY_CREATE_FILE}")
-add_dependencies(StormByte-Network StormByte-Buffer_install)
-add_library(StormByte::Buffer ALIAS StormByte-Buffer)
