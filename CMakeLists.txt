@@ -19,5 +19,4 @@ add_subdirectory(lib)
 add_subdirectory(thirdparty)
 add_subdirectory(test)
 
-include(cmake/outputflags.cmake)
 include(cmake/install.cmake)
