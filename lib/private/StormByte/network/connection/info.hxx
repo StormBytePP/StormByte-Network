@@ -1,21 +1,21 @@
 /*
- * Copyright (C) 2024-2026 David C. Manuelda (StormBytePP)
- *
- * This file is part of StormByte-Network.
- *
- * StormByte-Network is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Lesser General Public License version 3
- * or later, as published by the Free Software Foundation.
- *
- * StormByte-Network is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
- * GNU Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with StormByte-Network. If not, see
- * <https://www.gnu.org/licenses/lgpl-3.0.html>.
- */
+* Copyright (C) 2024-2026 David C. Manuelda (StormBytePP)
+*
+* This file is part of StormByte-Network.
+*
+* StormByte-Network is free software: you can redistribute it and/or modify
+* it under the terms of the GNU Lesser General Public License version 3
+* or later, as published by the Free Software Foundation.
+*
+* StormByte-Network is distributed in the hope that it will be useful,
+* but WITHOUT ANY WARRANTY; without even the implied warranty of
+* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+* GNU Lesser General Public License for more details.
+*
+* You should have received a copy of the GNU Lesser General Public License
+* along with StormByte-Network. If not, see
+* <https://www.gnu.org/licenses/lgpl-3.0.html>.
+*/
 
 #pragma once
 
@@ -33,8 +33,7 @@
 #include <string>
 
 /**
- * @namespace Connection
- * @brief Connection helpers (handler, info, client wrapper).
+ * @brief Connection helpers of the Network module.
  */
 namespace StormByte::Network::Connection {
 	constexpr const unsigned short DEFAULT_MTU = 1500;	///< Default MTU
@@ -46,32 +45,32 @@ namespace StormByte::Network::Connection {
 	class STORMBYTE_NETWORK_PRIVATE Info {
 		public:
 			/**
-			 * Copy constructor (deleted).
+			 * @brief Copy constructor (deleted).
 			 */
 			Info(const Info& other) noexcept = delete;
 
 			/**
-			 * Move constructor.
+			 * @brief Move constructor.
 			 */
 			Info(Info&& other) noexcept = default;
 
 			/**
-			 * Destructor.
+			 * @brief Destructor.
 			 */
 			~Info() noexcept = default;
 
 			/**
-			 * Copy assignment (deleted).
+			 * @brief Copy assignment (deleted).
 			 */
 			Info& operator=(const Info& other) noexcept = delete;
 
 			/**
-			 * Move assignment.
+			 * @brief Move assignment.
 			 */
 			Info& operator=(Info&& other) noexcept = default;
 
 			/**
-			 * Resolves hostname and builds Info.
+			 * @brief Resolve a hostname and build Info.
 			 * @param hostname Host name.
 			 * @param port Port.
 			 * @param protocol Address family.
@@ -80,28 +79,31 @@ namespace StormByte::Network::Connection {
 			static StormByte::Expected<Info, Exception> FromHost(const std::string& hostname, const unsigned short& port, const Protocol& protocol) noexcept;
 
 			/**
-			 * Builds Info from an existing sockaddr.
+			 * @brief Build Info from an existing sockaddr.
 			 * @param sockaddr Socket address.
 			 * @return Info or error.
 			 */
 			static StormByte::Expected<Info, Exception> FromSockAddr(std::shared_ptr<sockaddr> sockaddr) noexcept;
 
 			/**
-			 * @return Resolved IP string.
+			 * @brief Resolved IP string.
+			 * @return IP.
 			 */
 			constexpr const std::string& IP() const noexcept {
 				return m_ip;
 			}
 
 			/**
-			 * @return Port number.
+			 * @brief Port number.
+			 * @return Port.
 			 */
 			constexpr const unsigned short& Port() const noexcept {
 				return m_port;
 			}
 
 			/**
-			 * @return Shared sockaddr.
+			 * @brief Shared sockaddr.
+			 * @return Address.
 			 */
 			inline std::shared_ptr<const sockaddr> SockAddr() const noexcept {
 				return m_sock_addr;
@@ -114,12 +116,13 @@ namespace StormByte::Network::Connection {
 			unsigned short m_port;					///< Port
 
 			/**
+			 * @brief Construct from a sockaddr.
 			 * @param sock_addr Socket address.
 			 */
 			Info(std::shared_ptr<sockaddr> sock_addr) noexcept;
 
 			/**
-			 * Hostname resolution helper.
+			 * @brief Hostname resolution helper.
 			 * @param hostname Host name.
 			 * @param port Port.
 			 * @param protocol Address family.
@@ -128,7 +131,7 @@ namespace StormByte::Network::Connection {
 			static StormByte::Expected<std::shared_ptr<sockaddr>, Exception> ResolveHostname(const std::string& hostname, const unsigned short& port, const Protocol& protocol) noexcept;
 
 			/**
-			 * Fills IP/port from sockaddr.
+			 * @brief Fill IP/port from sockaddr.
 			 * @param sock_addr Socket address.
 			 */
 			void Initialize(std::shared_ptr<sockaddr> sock_addr) noexcept;

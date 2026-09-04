@@ -1,21 +1,21 @@
 /*
- * Copyright (C) 2024-2026 David C. Manuelda (StormBytePP)
- *
- * This file is part of StormByte-Network.
- *
- * StormByte-Network is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Lesser General Public License version 3
- * or later, as published by the Free Software Foundation.
- *
- * StormByte-Network is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
- * GNU Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with StormByte-Network. If not, see
- * <https://www.gnu.org/licenses/lgpl-3.0.html>.
- */
+* Copyright (C) 2024-2026 David C. Manuelda (StormBytePP)
+*
+* This file is part of StormByte-Network.
+*
+* StormByte-Network is free software: you can redistribute it and/or modify
+* it under the terms of the GNU Lesser General Public License version 3
+* or later, as published by the Free Software Foundation.
+*
+* StormByte-Network is distributed in the hope that it will be useful,
+* but WITHOUT ANY WARRANTY; without even the implied warranty of
+* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+* GNU Lesser General Public License for more details.
+*
+* You should have received a copy of the GNU Lesser General Public License
+* along with StormByte-Network. If not, see
+* <https://www.gnu.org/licenses/lgpl-3.0.html>.
+*/
 
 #pragma once
 
@@ -24,8 +24,7 @@
 #include <StormByte/network/transport/frame.hxx>
 
 /**
- * @namespace Connection
- * @brief Connection helpers (handler, info, client wrapper).
+ * @brief Connection helpers of the Network module.
  */
 namespace StormByte::Network::Connection {
 	/**
@@ -35,6 +34,7 @@ namespace StormByte::Network::Connection {
 	class STORMBYTE_NETWORK_PRIVATE Client final {
 		public:
 			/**
+			 * @brief Bind a socket and two pipelines.
 			 * @param socket Underlying socket client.
 			 * @param in_pipeline Input pipeline.
 			 * @param out_pipeline Output pipeline.
@@ -42,53 +42,56 @@ namespace StormByte::Network::Connection {
 			Client(std::shared_ptr<Socket::Client> socket, Buffer::Pipeline in_pipeline, Buffer::Pipeline out_pipeline) noexcept;
 
 			/**
-			 * Copy constructor (deleted).
+			 * @brief Copy constructor (deleted).
 			 */
 			Client(const Client& other) = delete;
 
 			/**
-			 * Move constructor.
+			 * @brief Move constructor.
 			 */
 			Client(Client&& other) noexcept = default;
 
 			/**
-			 * Destructor.
+			 * @brief Destructor.
 			 */
 			~Client() noexcept = default;
 
 			/**
-			 * Copy assignment (deleted).
+			 * @brief Copy assignment (deleted).
 			 */
 			Client& operator=(const Client& other) = delete;
 
 			/**
-			 * Move assignment.
+			 * @brief Move assignment.
 			 */
 			Client& operator=(Client&& other) noexcept = default;
 
 			/**
-			 * @return Input pipeline.
+			 * @brief Input pipeline.
+			 * @return Pipeline.
 			 */
 			inline Buffer::Pipeline& InputPipeline() noexcept {
 				return m_in_pipeline;
 			}
 
 			/**
-			 * @return Output pipeline.
+			 * @brief Output pipeline.
+			 * @return Pipeline.
 			 */
 			inline Buffer::Pipeline& OutputPipeline() noexcept {
 				return m_out_pipeline;
 			}
 
 			/**
-			 * @return Underlying socket client.
+			 * @brief Underlying socket client.
+			 * @return Socket.
 			 */
 			inline std::shared_ptr<Socket::Client>& Socket() noexcept {
 				return m_socket;
 			}
 
 			/**
-			 * Sends a frame (moves payload through the output pipeline).
+			 * @brief Send a frame (payload through the output pipeline).
 			 * @param frame Frame to send (use std::move).
 			 * @param logger Logger.
 			 * @return true on success.
@@ -96,14 +99,15 @@ namespace StormByte::Network::Connection {
 			bool Send(Transport::Frame&& frame, std::shared_ptr<Logger::Log> logger) noexcept;
 
 			/**
-			 * @return Connection status from the socket (or Disconnected).
+			 * @brief Status from the socket (or Disconnected).
+			 * @return Status.
 			 */
 			inline Connection::Status Status() const noexcept {
 				return m_socket ? m_socket->Status() : Connection::Status::Disconnected;
 			}
 
 			/**
-			 * Receives one framed message.
+			 * @brief Receive one framed message.
 			 * @param logger Logger.
 			 * @return Frame (empty on failure).
 			 */
