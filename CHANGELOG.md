@@ -12,7 +12,7 @@ StormByte Network is the C++26 networking layer of the StormByte suite.
 Inherit `Client` or `Server`, define packets, and attach Buffer pipelines.
 IPv4 and IPv6, framed request/response, POSIX and Winsock stay behind the public API.
 
-## [1.0.0] - 2026-09-04
+## [1.0.0] - 2026-09-05
 
 Initial public release of StormByte-Network.
 
