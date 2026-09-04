@@ -1,21 +1,21 @@
 /*
- * Copyright (C) 2024-2026 David C. Manuelda (StormBytePP)
- *
- * This file is part of StormByte-Network.
- *
- * StormByte-Network is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Lesser General Public License version 3
- * or later, as published by the Free Software Foundation.
- *
- * StormByte-Network is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
- * GNU Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with StormByte-Network. If not, see
- * <https://www.gnu.org/licenses/lgpl-3.0.html>.
- */
+* Copyright (C) 2024-2026 David C. Manuelda (StormBytePP)
+*
+* This file is part of StormByte-Network.
+*
+* StormByte-Network is free software: you can redistribute it and/or modify
+* it under the terms of the GNU Lesser General Public License version 3
+* or later, as published by the Free Software Foundation.
+*
+* StormByte-Network is distributed in the hope that it will be useful,
+* but WITHOUT ANY WARRANTY; without even the implied warranty of
+* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+* GNU Lesser General Public License for more details.
+*
+* You should have received a copy of the GNU Lesser General Public License
+* along with StormByte-Network. If not, see
+* <https://www.gnu.org/licenses/lgpl-3.0.html>.
+*/
 
 #pragma once
 
@@ -31,8 +31,7 @@
 #include <atomic>
 
 /**
- * @namespace Socket
- * @brief Low-level socket wrappers.
+ * @brief Socket wrappers of the Network module.
  */
 namespace StormByte::Network::Socket {
 	class Server;
@@ -42,74 +41,77 @@ namespace StormByte::Network::Socket {
 	 * @class Socket
 	 * @brief Platform socket: create, configure, wait, disconnect.
 	 *
-	 * Move-only. Owned by Client/Server (friends). `m_status` is atomic for
-	 * concurrent Disconnect/Status.
+	 * Move-only. Owned by Client/Server (friends). m_status is atomic for concurrent Disconnect/Status.
 	 */
 	class STORMBYTE_NETWORK_PRIVATE Socket {
 		friend class Server;
 		friend class Client;
 		public:
 			/**
-			 * Copy constructor (deleted).
+			 * @brief Copy constructor (deleted).
 			 */
 			Socket(const Socket& other) = delete;
 
 			/**
-			 * Move constructor.
+			 * @brief Move constructor.
 			 */
 			Socket(Socket&& other) noexcept;
 
 			/**
-			 * Destructor (calls Disconnect).
+			 * @brief Destructor (calls Disconnect).
 			 */
 			virtual ~Socket() noexcept;
 
 			/**
-			 * Copy assignment (deleted).
+			 * @brief Copy assignment (deleted).
 			 */
 			Socket& operator=(const Socket& other) = delete;
 
 			/**
-			 * Move assignment.
+			 * @brief Move assignment.
 			 */
 			Socket& operator=(Socket&& other) noexcept;
 
 			/**
-			 * Graceful shutdown and close (idempotent, thread-safe first-caller wins).
+			 * @brief Graceful shutdown and close (idempotent).
 			 */
 			virtual void Disconnect() noexcept;
 
 			/**
-			 * @return Current connection status.
+			 * @brief Current connection status.
+			 * @return Status.
 			 */
 			Connection::Status Status() const noexcept {
 				return m_status.load(std::memory_order_acquire);
 			}
 
 			/**
-			 * @return Effective MTU.
+			 * @brief Effective MTU.
+			 * @return MTU.
 			 */
 			constexpr const unsigned long& MTU() const noexcept {
 				return m_mtu;
 			}
 
 			/**
-			 * @return Native handle.
+			 * @brief Native handle.
+			 * @return Handle.
 			 */
 			inline const Connection::HandlerType& Handle() const noexcept {
 				return m_handle;
 			}
 
 			/**
-			 * @return Socket UUID.
+			 * @brief Socket UUID.
+			 * @return UUID.
 			 */
 			inline const std::string& UUID() const noexcept {
 				return m_UUID;
 			}
 
 			/**
-			 * Waits for readable data (or peer close / timeout).
-			 * @param usecs Timeout in microseconds (0 = non-blocking style wait policy as implemented).
+			 * @brief Wait for readable data (or peer close / timeout).
+			 * @param usecs Timeout in microseconds.
 			 * @return Read result or ConnectionClosed.
 			 */
 			ExpectedReadResult WaitForData(const long long& usecs = 0) noexcept;
@@ -126,38 +128,40 @@ namespace StormByte::Network::Socket {
 			int m_effective_recv_buf = 65536;	///< SO_RCVBUF effective
 
 			/**
+			 * @brief Construct with protocol and logger.
 			 * @param protocol Address family.
 			 * @param logger Logger.
 			 */
 			Socket(const Connection::Protocol& protocol, std::shared_ptr<Logger::Log> logger) noexcept;
 
 			/**
-			 * Creates the OS socket.
+			 * @brief Create the OS socket.
 			 * @return Handle or ConnectionError.
 			 */
 			Expected<Connection::HandlerType, ConnectionError> CreateSocket() noexcept;
 
 			/**
-			 * Post-connect options: non-blocking, buffers, TCP_NODELAY, MTU.
+			 * @brief Post-connect options: non-blocking, buffers, TCP_NODELAY, MTU.
 			 */
 			void InitializeAfterConnect() noexcept;
 
 			/**
-			 * Ensures the handle is closed (internal helper if used).
+			 * @brief Ensure the handle is closed.
 			 */
 			void EnsureIsClosed() noexcept;
 
 		private:
-			constexpr static const unsigned short DEFAULT_MTU = 1500;
+			constexpr static const unsigned short DEFAULT_MTU = 1500;	///< Fallback MTU
 			std::string m_UUID;	///< Instance UUID
 
 			/**
-			 * @return Path MTU or DEFAULT_MTU.
+			 * @brief Path MTU or DEFAULT_MTU.
+			 * @return MTU.
 			 */
 			int GetMTU() const noexcept;
 
 			/**
-			 * Sets non-blocking mode.
+			 * @brief Set non-blocking mode.
 			 */
 			void SetNonBlocking() noexcept;
 	};

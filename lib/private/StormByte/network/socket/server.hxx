@@ -1,31 +1,31 @@
 /*
- * Copyright (C) 2024-2026 David C. Manuelda (StormBytePP)
- *
- * This file is part of StormByte-Network.
- *
- * StormByte-Network is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Lesser General Public License version 3
- * or later, as published by the Free Software Foundation.
- *
- * StormByte-Network is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
- * GNU Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with StormByte-Network. If not, see
- * <https://www.gnu.org/licenses/lgpl-3.0.html>.
- */
+* Copyright (C) 2024-2026 David C. Manuelda (StormBytePP)
+*
+* This file is part of StormByte-Network.
+*
+* StormByte-Network is free software: you can redistribute it and/or modify
+* it under the terms of the GNU Lesser General Public License version 3
+* or later, as published by the Free Software Foundation.
+*
+* StormByte-Network is distributed in the hope that it will be useful,
+* but WITHOUT ANY WARRANTY; without even the implied warranty of
+* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+* GNU Lesser General Public License for more details.
+*
+* You should have received a copy of the GNU Lesser General Public License
+* along with StormByte-Network. If not, see
+* <https://www.gnu.org/licenses/lgpl-3.0.html>.
+*/
 
 #pragma once
 
 #include <StormByte/network/socket/client.hxx>
 #include <StormByte/network/typedefs.hxx>
+
 #include <vector>
 
 /**
- * @namespace Socket
- * @brief Low-level socket wrappers.
+ * @brief Socket wrappers of the Network module.
  */
 namespace StormByte::Network::Socket {
 	/**
@@ -35,38 +35,39 @@ namespace StormByte::Network::Socket {
 	class STORMBYTE_NETWORK_PRIVATE Server final: public Socket {
 		public:
 			/**
+			 * @brief Construct with protocol and logger.
 			 * @param protocol Address family.
 			 * @param logger Logger.
 			 */
 			Server(const Connection::Protocol& protocol, std::shared_ptr<Logger::Log> logger) noexcept;
 
 			/**
-			 * Copy constructor (deleted).
+			 * @brief Copy constructor (deleted).
 			 */
 			Server(const Server& other) = delete;
 
 			/**
-			 * Move constructor.
+			 * @brief Move constructor.
 			 */
 			Server(Server&& other) noexcept = default;
 
 			/**
-			 * Destructor.
+			 * @brief Destructor.
 			 */
 			~Server() noexcept override = default;
 
 			/**
-			 * Copy assignment (deleted).
+			 * @brief Copy assignment (deleted).
 			 */
 			Server& operator=(const Server& other) = delete;
 
 			/**
-			 * Move assignment.
+			 * @brief Move assignment.
 			 */
 			Server& operator=(Server&& other) noexcept = default;
 
 			/**
-			 * Binds and listens on host:port.
+			 * @brief Bind and listen on host:port.
 			 * @param hostname Bind address.
 			 * @param port Port.
 			 * @return Empty Expected on success.
@@ -74,18 +75,18 @@ namespace StormByte::Network::Socket {
 			ExpectedVoid Listen(const std::string& hostname, const unsigned short& port) noexcept;
 
 			/**
-			 * Accepts one client (with short poll/select wait).
+			 * @brief Accept one client.
 			 * @return Shared Client or error.
 			 */
 			ExpectedClient Accept() noexcept;
 
 			/**
-			 * Disconnects all accepted clients then the listener.
+			 * @brief Disconnect all accepted clients then the listener.
 			 */
 			void Disconnect() noexcept override;
 
 			/**
-			 * Disconnects one accepted client by UUID.
+			 * @brief Disconnect one accepted client by UUID.
 			 * @param client_uuid Client UUID.
 			 */
 			void DisconnectClient(const std::string& client_uuid) noexcept;

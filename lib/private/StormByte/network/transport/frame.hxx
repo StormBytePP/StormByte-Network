@@ -1,21 +1,21 @@
 /*
- * Copyright (C) 2024-2026 David C. Manuelda (StormBytePP)
- *
- * This file is part of StormByte-Network.
- *
- * StormByte-Network is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Lesser General Public License version 3
- * or later, as published by the Free Software Foundation.
- *
- * StormByte-Network is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
- * GNU Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with StormByte-Network. If not, see
- * <https://www.gnu.org/licenses/lgpl-3.0.html>.
- */
+* Copyright (C) 2024-2026 David C. Manuelda (StormBytePP)
+*
+* This file is part of StormByte-Network.
+*
+* StormByte-Network is free software: you can redistribute it and/or modify
+* it under the terms of the GNU Lesser General Public License version 3
+* or later, as published by the Free Software Foundation.
+*
+* StormByte-Network is distributed in the hope that it will be useful,
+* but WITHOUT ANY WARRANTY; without even the implied warranty of
+* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+* GNU Lesser General Public License for more details.
+*
+* You should have received a copy of the GNU Lesser General Public License
+* along with StormByte-Network. If not, see
+* <https://www.gnu.org/licenses/lgpl-3.0.html>.
+*/
 
 #pragma once
 
@@ -28,56 +28,51 @@ namespace StormByte::Network::Socket {
 }
 
 /**
- * @namespace Transport
- * @brief Application-layer messages (Packet, Frame) and on-wire layout.
+ * @brief Transport types of the Network module.
  */
 namespace StormByte::Network::Transport {
 	/**
 	 * @class Frame
 	 * @brief On-wire unit: opcode + payload size + payload.
 	 *
-	 * Layout:
-	 * - Opcode: sizeof(Packet::OpcodeType)
-	 * - Payload size: sizeof(std::size_t)
-	 * - Payload: variable (may be empty)
-	 *
+	 * Layout: Opcode (OpcodeType) + payload size (size_t) + payload.
 	 * Opcodes >= Packet::PROCESS_THRESHOLD run payload through pipelines.
 	 */
 	class STORMBYTE_NETWORK_PRIVATE Frame {
 		public:
 			/**
-			 * Builds a frame from a packet (serializes payload, strips opcode from buffer).
+			 * @brief Build a frame from a packet.
 			 * @param packet Source packet.
 			 */
 			Frame(const Packet& packet) noexcept;
 
 			/**
-			 * Copy constructor.
+			 * @brief Copy constructor.
 			 */
 			Frame(const Frame& other) noexcept = default;
 
 			/**
-			 * Move constructor.
+			 * @brief Move constructor.
 			 */
 			Frame(Frame&& other) noexcept = default;
 
 			/**
-			 * Destructor.
+			 * @brief Destructor.
 			 */
 			virtual ~Frame() noexcept = default;
 
 			/**
-			 * Copy assignment.
+			 * @brief Copy assignment.
 			 */
 			Frame& operator=(const Frame& other) = default;
 
 			/**
-			 * Move assignment.
+			 * @brief Move assignment.
 			 */
 			Frame& operator=(Frame&& other) noexcept = default;
 
 			/**
-			 * Reads one frame from the socket (opcode, size, payload + optional pipeline).
+			 * @brief Read one frame from the socket.
 			 * @param client Socket client.
 			 * @param in_pipeline Input pipeline.
 			 * @param logger Logger.
@@ -86,7 +81,7 @@ namespace StormByte::Network::Transport {
 			static Frame ProcessInput(std::shared_ptr<Socket::Client> client, Buffer::Pipeline& in_pipeline, std::shared_ptr<Logger::Log> logger) noexcept;
 
 			/**
-			 * Deserializes payload into a Packet via @p packet_fn.
+			 * @brief Deserialize payload into a Packet.
 			 * @param packet_fn Deserializer callback.
 			 * @param logger Logger.
 			 * @return Packet pointer, or nullptr on failure.
@@ -94,7 +89,7 @@ namespace StormByte::Network::Transport {
 			PacketPointer ProcessPacket(const DeserializePacketFunction& packet_fn, std::shared_ptr<Logger::Log> logger) noexcept;
 
 			/**
-			 * Serializes this frame to a Consumer (opcode, size, payload + optional pipeline).
+			 * @brief Serialize this frame to a Consumer.
 			 * @param out_pipeline Output pipeline.
 			 * @param logger Logger.
 			 * @return Consumer of framed bytes.
@@ -106,11 +101,12 @@ namespace StormByte::Network::Transport {
 			Buffer::DataType m_payload;		///< Payload bytes
 
 			/**
-			 * Empty frame (error path).
+			 * @brief Empty frame (error path).
 			 */
 			Frame() noexcept = default;
 
 			/**
+			 * @brief Construct from opcode and payload.
 			 * @param opcode Opcode.
 			 * @param payload Payload (moved).
 			 */

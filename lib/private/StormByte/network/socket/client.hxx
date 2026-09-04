@@ -1,21 +1,21 @@
 /*
- * Copyright (C) 2024-2026 David C. Manuelda (StormBytePP)
- *
- * This file is part of StormByte-Network.
- *
- * StormByte-Network is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Lesser General Public License version 3
- * or later, as published by the Free Software Foundation.
- *
- * StormByte-Network is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
- * GNU Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with StormByte-Network. If not, see
- * <https://www.gnu.org/licenses/lgpl-3.0.html>.
- */
+* Copyright (C) 2024-2026 David C. Manuelda (StormBytePP)
+*
+* This file is part of StormByte-Network.
+*
+* StormByte-Network is free software: you can redistribute it and/or modify
+* it under the terms of the GNU Lesser General Public License version 3
+* or later, as published by the Free Software Foundation.
+*
+* StormByte-Network is distributed in the hope that it will be useful,
+* but WITHOUT ANY WARRANTY; without even the implied warranty of
+* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+* GNU Lesser General Public License for more details.
+*
+* You should have received a copy of the GNU Lesser General Public License
+* along with StormByte-Network. If not, see
+* <https://www.gnu.org/licenses/lgpl-3.0.html>.
+*/
 
 #pragma once
 
@@ -28,8 +28,7 @@
 #include <span>
 
 /**
- * @namespace Socket
- * @brief Low-level socket wrappers.
+ * @brief Socket wrappers of the Network module.
  */
 namespace StormByte::Network::Socket {
 	/**
@@ -39,38 +38,39 @@ namespace StormByte::Network::Socket {
 	class STORMBYTE_NETWORK_PRIVATE Client final: public Socket {
 		public:
 			/**
+			 * @brief Construct with protocol and logger.
 			 * @param protocol Address family.
 			 * @param logger Logger.
 			 */
 			Client(const Connection::Protocol& protocol, std::shared_ptr<Logger::Log> logger) noexcept;
 
 			/**
-			 * Copy constructor (deleted).
+			 * @brief Copy constructor (deleted).
 			 */
 			Client(const Client& other) = delete;
 
 			/**
-			 * Move constructor.
+			 * @brief Move constructor.
 			 */
 			Client(Client&& other) noexcept = default;
 
 			/**
-			 * Destructor.
+			 * @brief Destructor.
 			 */
 			~Client() noexcept override = default;
 
 			/**
-			 * Copy assignment (deleted).
+			 * @brief Copy assignment (deleted).
 			 */
 			Client& operator=(const Client& other) = delete;
 
 			/**
-			 * Move assignment.
+			 * @brief Move assignment.
 			 */
 			Client& operator=(Client&& other) noexcept = default;
 
 			/**
-			 * Connects to host:port.
+			 * @brief Connect to host:port.
 			 * @param hostname Host name.
 			 * @param port Port.
 			 * @return Empty Expected on success.
@@ -78,29 +78,30 @@ namespace StormByte::Network::Socket {
 			ExpectedVoid Connect(const std::string& hostname, const unsigned short& port) noexcept;
 
 			/**
-			 * @return Reader adapter for this client.
+			 * @brief Reader adapter.
+			 * @return Reader.
 			 */
 			inline Reader Reader() noexcept {
 				return { *this };
 			}
 
 			/**
-			 * Receives up to @p size bytes (no timeout).
-			 * @param size Max bytes (0 = implementation default / until close policy).
+			 * @brief Receive up to @p size bytes (no timeout).
+			 * @param size Max bytes.
 			 * @return Buffer or error.
 			 */
 			ExpectedBuffer Receive(const std::size_t& size = 0) noexcept;
 
 			/**
-			 * Receives with timeout.
-			 * @param size Max bytes (0 = unlimited until close if not require_exact).
+			 * @brief Receive with timeout.
+			 * @param size Max bytes.
 			 * @param timeout_seconds 0 = wait forever between chunks.
 			 * @return Buffer or error.
 			 */
 			ExpectedBuffer Receive(const std::size_t& size, const unsigned short& timeout_seconds) noexcept;
 
 			/**
-			 * Receives exactly into @p out (append).
+			 * @brief Receive exactly into @p out (append).
 			 * @param size Required byte count.
 			 * @param out Destination.
 			 * @param timeout_seconds Timeout between chunks (0 = forever).
@@ -109,53 +110,55 @@ namespace StormByte::Network::Socket {
 			ExpectedVoid ReceiveInto(const std::size_t& size, Buffer::DataType& out, const unsigned short& timeout_seconds = 0) noexcept;
 
 			/**
-			 * Peeks without consuming (MSG_PEEK).
+			 * @brief Peek without consuming (MSG_PEEK).
 			 * @param size Bytes to peek.
 			 * @return Buffer or error.
 			 */
 			ExpectedBuffer Peek(const std::size_t& size) const noexcept;
 
 			/**
-			 * Sends a FIFO buffer.
+			 * @brief Send a FIFO buffer.
 			 * @param buffer Data.
 			 * @return Empty Expected on success.
 			 */
 			ExpectedVoid Send(const Buffer::FIFO& buffer) noexcept;
 
 			/**
-			 * Sends a byte vector.
+			 * @brief Send a byte vector.
 			 * @param buffer Data.
 			 * @return Empty Expected on success.
 			 */
 			ExpectedVoid Send(const std::vector<std::byte>& buffer) noexcept;
 
 			/**
-			 * Sends a byte span.
+			 * @brief Send a byte span.
 			 * @param data Data.
 			 * @return Empty Expected on success.
 			 */
 			ExpectedVoid Send(std::span<const std::byte> data) noexcept;
 
 			/**
-			 * Sends from a Consumer until EoF.
+			 * @brief Send from a Consumer until EoF.
 			 * @param data Consumer.
 			 * @return Empty Expected on success.
 			 */
 			ExpectedVoid Send(Buffer::Consumer data) noexcept;
 
 			/**
-			 * @return true if peer has requested shutdown (peek).
+			 * @brief Whether the peer requested shutdown.
+			 * @return true if so.
 			 */
 			bool HasShutdownRequest() noexcept;
 
 			/**
-			 * Lightweight connectivity check; may mark Disconnected on failure.
+			 * @brief Lightweight connectivity check; may mark Disconnected.
 			 * @return true if still up.
 			 */
 			bool Ping() noexcept;
 
 			/**
-			 * @return Writer adapter for this client.
+			 * @brief Writer adapter.
+			 * @return Writer.
 			 */
 			inline Writer Writer() noexcept {
 				return { *this };
@@ -163,7 +166,7 @@ namespace StormByte::Network::Socket {
 
 		private:
 			/**
-			 * Single recv with flags.
+			 * @brief Single recv with flags.
 			 * @param size Max bytes.
 			 * @param flags recv flags.
 			 * @return Buffer or error.
@@ -171,15 +174,15 @@ namespace StormByte::Network::Socket {
 			ExpectedBuffer ReadOnce(const std::size_t& size, int flags) noexcept;
 
 			/**
-			 * Non-blocking read helper (if used by implementation).
+			 * @brief Non-blocking read helper.
 			 * @param buffer Destination FIFO.
 			 * @return Read result.
 			 */
 			Connection::Read::Result ReadNonBlocking(Buffer::FIFO& buffer) noexcept;
 
 			/**
-			 * Shared receive loop for Receive / ReceiveInto.
-			 * @param max_size Cap (0 = until peer close if !require_exact).
+			 * @brief Shared receive loop.
+			 * @param max_size Cap.
 			 * @param out Append target.
 			 * @param timeout_seconds Inter-chunk timeout.
 			 * @param require_exact Peer close early is error when true.
@@ -188,7 +191,7 @@ namespace StormByte::Network::Socket {
 			ExpectedVoid ReceiveLoop(const std::size_t& max_size, Buffer::DataType& out, const unsigned short& timeout_seconds, bool require_exact) noexcept;
 
 			/**
-			 * Low-level write of @p size bytes from @p data.
+			 * @brief Low-level write.
 			 * @param data Source span.
 			 * @param size Bytes to write.
 			 * @return Empty Expected on success.
