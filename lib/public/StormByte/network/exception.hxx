@@ -1,21 +1,21 @@
 /*
- * Copyright (C) 2024-2026 David C. Manuelda (StormBytePP)
- *
- * This file is part of StormByte-Network.
- *
- * StormByte-Network is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Lesser General Public License version 3
- * or later, as published by the Free Software Foundation.
- *
- * StormByte-Network is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
- * GNU Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with StormByte-Network. If not, see
- * <https://www.gnu.org/licenses/lgpl-3.0.html>.
- */
+* Copyright (C) 2024-2026 David C. Manuelda (StormBytePP)
+*
+* This file is part of StormByte-Network.
+*
+* StormByte-Network is free software: you can redistribute it and/or modify
+* it under the terms of the GNU Lesser General Public License version 3
+* or later, as published by the Free Software Foundation.
+*
+* StormByte-Network is distributed in the hope that it will be useful,
+* but WITHOUT ANY WARRANTY; without even the implied warranty of
+* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+* GNU Lesser General Public License for more details.
+*
+* You should have received a copy of the GNU Lesser General Public License
+* along with StormByte-Network. If not, see
+* <https://www.gnu.org/licenses/lgpl-3.0.html>.
+*/
 
 #pragma once
 
@@ -23,17 +23,17 @@
 #include <StormByte/network/visibility.h>
 
 /**
- * @namespace Network
- * @brief StormByte networking subsystem.
+ * @brief Network module of the StormByte suite.
  */
 namespace StormByte::Network {
 	/**
 	 * @class Exception
-	 * @brief Base exception for the network module.
+	 * @brief Base exception for the Network module.
 	 */
 	class STORMBYTE_NETWORK_PUBLIC Exception: public StormByte::Exception {
 		public:
 			/**
+			 * @brief Construct with a component prefix and a format string.
 			 * @tparam Args Format argument types.
 			 * @param component Subsystem name.
 			 * @param fmt Format string.
@@ -48,11 +48,12 @@ namespace StormByte::Network {
 
 	/**
 	 * @class ConnectionError
-	 * @brief Connection or socket operation failure.
+	 * @brief Connection or socket operation failed.
 	 */
 	class ConnectionError: public Exception {
 		public:
 			/**
+			 * @brief Construct from a format string.
 			 * @tparam Args Format argument types.
 			 * @param fmt Format string.
 			 * @param args Format arguments.
@@ -66,11 +67,12 @@ namespace StormByte::Network {
 
 	/**
 	 * @class ConnectionClosed
-	 * @brief Connection closed while waiting or transferring.
+	 * @brief Peer closed while waiting or transferring.
 	 */
 	class STORMBYTE_NETWORK_PUBLIC ConnectionClosed final: public Exception {
 		public:
 			/**
+			 * @brief Construct from a format string.
 			 * @tparam Args Format argument types.
 			 * @param fmt Format string.
 			 * @param args Format arguments.
@@ -89,6 +91,7 @@ namespace StormByte::Network {
 	class STORMBYTE_NETWORK_PUBLIC PacketError final: public Exception {
 		public:
 			/**
+			 * @brief Construct from a format string.
 			 * @tparam Args Format argument types.
 			 * @param fmt Format string.
 			 * @param args Format arguments.
@@ -107,6 +110,7 @@ namespace StormByte::Network {
 	class STORMBYTE_NETWORK_PUBLIC FrameError final: public Exception {
 		public:
 			/**
+			 * @brief Construct from a format string.
 			 * @tparam Args Format argument types.
 			 * @param fmt Format string.
 			 * @param args Format arguments.
