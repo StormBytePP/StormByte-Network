@@ -1,21 +1,21 @@
 /*
- * Copyright (C) 2024-2026 David C. Manuelda (StormBytePP)
- *
- * This file is part of StormByte-Network.
- *
- * StormByte-Network is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Lesser General Public License version 3
- * or later, as published by the Free Software Foundation.
- *
- * StormByte-Network is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
- * GNU Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with StormByte-Network. If not, see
- * <https://www.gnu.org/licenses/lgpl-3.0.html>.
- */
+* Copyright (C) 2024-2026 David C. Manuelda (StormBytePP)
+*
+* This file is part of StormByte-Network.
+*
+* StormByte-Network is free software: you can redistribute it and/or modify
+* it under the terms of the GNU Lesser General Public License version 3
+* or later, as published by the Free Software Foundation.
+*
+* StormByte-Network is distributed in the hope that it will be useful,
+* but WITHOUT ANY WARRANTY; without even the implied warranty of
+* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+* GNU Lesser General Public License for more details.
+*
+* You should have received a copy of the GNU Lesser General Public License
+* along with StormByte-Network. If not, see
+* <https://www.gnu.org/licenses/lgpl-3.0.html>.
+*/
 
 #pragma once
 
@@ -24,18 +24,16 @@
 #include <string>
 
 /**
- * @namespace Connection
- * @brief Connection-level types (protocol, status, read/write results).
+ * @brief Connection types of the Network module.
  */
 namespace StormByte::Network::Connection {
 	/**
-	 * @namespace Read
 	 * @brief Read-side result codes.
 	 */
 	namespace Read {
 		/**
 		 * @enum Result
-		 * @brief Outcome of a wait/read operation.
+		 * @brief Outcome of a wait/read.
 		 */
 		enum class STORMBYTE_NETWORK_PUBLIC Result {
 			Success,			///< Data available or read ok
@@ -48,13 +46,12 @@ namespace StormByte::Network::Connection {
 	}
 
 	/**
-	 * @namespace Write
 	 * @brief Write-side result codes.
 	 */
 	namespace Write {
 		/**
 		 * @enum Result
-		 * @brief Outcome of a write operation.
+		 * @brief Outcome of a write.
 		 */
 		enum class STORMBYTE_NETWORK_PUBLIC Result {
 			Success,	///< Write completed
@@ -63,7 +60,7 @@ namespace StormByte::Network::Connection {
 	}
 
 	/**
-	 * Converts a read result to a string.
+	 * @brief Read result as text.
 	 * @param result Read result.
 	 * @return Human-readable name.
 	 */
@@ -80,7 +77,7 @@ namespace StormByte::Network::Connection {
 	}
 
 	/**
-	 * Converts a write result to a string.
+	 * @brief Write result as text.
 	 * @param result Write result.
 	 * @return Human-readable name.
 	 */
