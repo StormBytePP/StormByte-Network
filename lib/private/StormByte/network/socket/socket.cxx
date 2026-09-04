@@ -1,8 +1,26 @@
+/*
+ * Copyright (C) 2024-2026 David C. Manuelda (StormBytePP)
+ *
+ * This file is part of StormByte-Network.
+ *
+ * StormByte-Network is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Lesser General Public License version 3
+ * or later, as published by the Free Software Foundation.
+ *
+ * StormByte-Network is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU Lesser General Public License for more details.
+ *
+ * You should have received a copy of the GNU Lesser General Public License
+ * along with StormByte-Network. If not, see
+ * <https://www.gnu.org/licenses/lgpl-3.0.html>.
+ */
+
 #include <StormByte/network/connection/handler.hxx>
 #include <StormByte/network/socket/socket.hxx>
 #include <StormByte/system.hxx>
 #include <StormByte/uuid.hxx>
-
 #ifdef UNIX
 #include <netinet/in.h>
 #include <netinet/tcp.h>
@@ -20,7 +38,6 @@
 #include <ws2tcpip.h>
 #include <iphlpapi.h>
 #endif
-
 #include <chrono>
 #include <format>
 #include <atomic>
@@ -28,19 +45,15 @@
 #include <fstream>
 #include <string>
 #endif
-
 constexpr const int SOCKET_BUFFER_SIZE = 262144; // 256 KiB desired minimum
 constexpr const std::size_t MAX_SINGLE_IO = 4 * 1024 * 1024; // must match client.cxx
-
 using namespace StormByte::Network::Socket;
-
 Socket::Socket(const Connection::Protocol& protocol, std::shared_ptr<Logger::Log> logger) noexcept:
 m_protocol(protocol), m_status(Connection::Status::Disconnected),
 m_handle(-1), m_conn_info(nullptr), m_mtu(DEFAULT_MTU), m_logger(logger),
 m_UUID(StormByte::GenerateUUIDv4()) {
 	(void)StormByte::Network::Connection::Handler::Instance();
 }
-
 Socket::Socket(Socket&& other) noexcept:
 	m_protocol(other.m_protocol),
 	m_status(other.m_status.load(std::memory_order_relaxed)),
@@ -56,7 +69,6 @@ Socket::Socket(Socket&& other) noexcept:
 	other.m_effective_send_buf = 0;
 	other.m_effective_recv_buf = 0;
 }
-
 Socket& Socket::operator=(Socket&& other) noexcept {
 	if (this != &other) {
 		m_protocol = other.m_protocol;
@@ -68,18 +80,15 @@ Socket& Socket::operator=(Socket&& other) noexcept {
 		m_UUID = std::move(other.m_UUID);
 		m_effective_send_buf = other.m_effective_send_buf;
 		m_effective_recv_buf = other.m_effective_recv_buf;
-
 		other.m_status.store(Connection::Status::Disconnected, std::memory_order_relaxed);
 		other.m_effective_send_buf = 0;
 		other.m_effective_recv_buf = 0;
 	}
 	return *this;
 }
-
 Socket::~Socket() noexcept {
 	Disconnect();
 }
-
 void Socket::Disconnect() noexcept {
 	// Only one thread performs the real close.
 	auto prev = m_status.exchange(Connection::Status::Disconnecting,
@@ -88,7 +97,6 @@ void Socket::Disconnect() noexcept {
 		prev == Connection::Status::Disconnecting) {
 		return;
 	}
-
 	if (m_handle > 0) {
 #ifdef UNIX
 		shutdown(m_handle, SHUT_RDWR);
@@ -102,16 +110,13 @@ void Socket::Disconnect() noexcept {
 		m_handle = INVALID_SOCKET;
 #endif
 	}
-
 	m_status.store(Connection::Status::Disconnected, std::memory_order_release);
 	m_logger << Logger::Level::LowLevel << "Disconnected socket " << m_UUID << std::endl;
 }
-
 StormByte::Network::ExpectedReadResult Socket::WaitForData(const long long& usecs) noexcept {
 	if (!Connection::IsConnected(m_status.load(std::memory_order_acquire))) {
 		return Unexpected<ConnectionClosed>("Failed to wait for data: Invalid connection status");
 	}
-
 	auto start_time = std::chrono::steady_clock::now();
 	const std::chrono::microseconds requested_usecs = std::chrono::microseconds(usecs);
 	constexpr std::chrono::microseconds MIN_WAIT = std::chrono::microseconds(10000); // 10ms
@@ -119,17 +124,14 @@ StormByte::Network::ExpectedReadResult Socket::WaitForData(const long long& usec
 		(usecs > 0) ? std::max(requested_usecs, MIN_WAIT) : std::chrono::microseconds::zero();
 	const auto deadline = (usecs > 0) ? (start_time + effective_usecs)
 									: std::chrono::steady_clock::time_point::max();
-
 	// Progress log: first after 5s idle, then every 5s, with elapsed time for this wait.
 	constexpr auto PROGRESS_INTERVAL = std::chrono::seconds(5);
 	auto next_progress_log = start_time + PROGRESS_INTERVAL;
 	bool logged_waiting = false;
-
 	auto elapsed_ms = [&]() {
 		return std::chrono::duration_cast<std::chrono::milliseconds>(
 			std::chrono::steady_clock::now() - start_time).count();
 	};
-
 	auto log_progress_if_due = [&]() {
 		const auto now = std::chrono::steady_clock::now();
 		if (now < next_progress_log)
@@ -140,7 +142,6 @@ StormByte::Network::ExpectedReadResult Socket::WaitForData(const long long& usec
 				<< " (elapsed " << elapsed_ms() << " ms)" << std::endl;
 		next_progress_log = now + PROGRESS_INTERVAL;
 	};
-
 	auto log_wait_done = [&](const char* reason) {
 		const auto ms = elapsed_ms();
 		if (!logged_waiting && ms < 1000)
@@ -149,10 +150,8 @@ StormByte::Network::ExpectedReadResult Socket::WaitForData(const long long& usec
 				<< "Wait for data on socket " << m_UUID << ": " << reason
 				<< " after " << ms << " ms" << std::endl;
 	};
-
 	while (Connection::IsConnected(m_status.load(std::memory_order_acquire))) {
 		log_progress_if_due();
-
 #ifdef LINUX
 		int timeout_ms = -1;
 		if (usecs > 0) {
@@ -165,32 +164,26 @@ StormByte::Network::ExpectedReadResult Socket::WaitForData(const long long& usec
 			timeout_ms = static_cast<int>(remaining.count());
 			if (timeout_ms < 0) timeout_ms = 0;
 		}
-
 		int epfd = epoll_create1(0);
 		if (epfd == -1) {
 			return Unexpected<ConnectionClosed>("Failed to create epoll instance");
 		}
-
 		struct epoll_event ev;
 		ev.events = EPOLLIN | EPOLLPRI | EPOLLRDHUP | EPOLLHUP | EPOLLERR;
 		ev.data.fd = m_handle;
-
 		if (epoll_ctl(epfd, EPOLL_CTL_ADD, m_handle, &ev) == -1) {
 			close(epfd);
 			return Unexpected<ConnectionClosed>("Failed to add fd to epoll");
 		}
-
 		struct epoll_event events[1];
 		int nfds = epoll_wait(epfd, events, 1, timeout_ms);
 		epoll_ctl(epfd, EPOLL_CTL_DEL, m_handle, nullptr);
 		close(epfd);
-
 		if (nfds > 0) {
 			uint32_t evflags = events[0].events;
 			if (evflags & EPOLLERR) {
 				return Unexpected<ConnectionClosed>("Socket error while waiting for data");
 			}
-
 			if (evflags & (EPOLLHUP | EPOLLRDHUP)) {
 				if (m_status.load(std::memory_order_acquire) != Connection::Status::Connected)
 					return Connection::Read::Result::Closed;
@@ -214,7 +207,6 @@ StormByte::Network::ExpectedReadResult Socket::WaitForData(const long long& usec
 				log_wait_done("peer shutdown");
 				return Connection::Read::Result::ShutdownRequest;
 			}
-
 			if (m_status.load(std::memory_order_acquire) != Connection::Status::Connected)
 				return Connection::Read::Result::Closed;
 			if (evflags & (EPOLLIN | EPOLLPRI)) {
@@ -244,7 +236,6 @@ StormByte::Network::ExpectedReadResult Socket::WaitForData(const long long& usec
 			timeout_ms = static_cast<int>(remaining.count());
 			if (timeout_ms < 0) timeout_ms = 0;
 		}
-
 		struct pollfd pfd;
 		pfd.fd = m_handle;
 		pfd.events = POLLIN | POLLPRI | POLLHUP | POLLERR;
@@ -252,14 +243,11 @@ StormByte::Network::ExpectedReadResult Socket::WaitForData(const long long& usec
 		pfd.events |= POLLRDHUP;		// solo si el sistema lo define
 #endif
 		pfd.revents = 0;
-
 		int nfds = poll(&pfd, 1, timeout_ms);
-
 		if (nfds > 0) {
 			if (pfd.revents & POLLERR) {
 				return Unexpected<ConnectionClosed>("Socket error while waiting for data");
 			}
-
 			if (pfd.revents & (POLLHUP
 #ifdef POLLRDHUP
 				| POLLRDHUP
@@ -287,7 +275,6 @@ StormByte::Network::ExpectedReadResult Socket::WaitForData(const long long& usec
 				log_wait_done("peer shutdown");
 				return Connection::Read::Result::ShutdownRequest;
 			}
-
 			if (m_status.load(std::memory_order_acquire) != Connection::Status::Connected)
 				return Connection::Read::Result::Closed;
 			if (pfd.revents & (POLLIN | POLLPRI)) {
@@ -317,23 +304,19 @@ StormByte::Network::ExpectedReadResult Socket::WaitForData(const long long& usec
 			timeout_ms = static_cast<int>(remaining.count());
 			if (timeout_ms < 0) timeout_ms = 0;
 		}
-
 		WSAEVENT ev = WSACreateEvent();
 		if (ev == WSA_INVALID_EVENT) {
 			return Unexpected<ConnectionClosed>("Failed to create WSA event");
 		}
-
 		long mask = FD_READ | FD_CLOSE | FD_ACCEPT;
 		if (WSAEventSelect(m_handle, ev, mask) == SOCKET_ERROR) {
 			WSACloseEvent(ev);
 			return Unexpected<ConnectionClosed>("WSAEventSelect failed");
 		}
-
 		DWORD wait_res = WSAWaitForMultipleEvents(
 			1, &ev, FALSE,
 			(timeout_ms < 0 ? WSA_INFINITE : static_cast<DWORD>(timeout_ms)),
 			FALSE);
-
 		if (wait_res == WSA_WAIT_TIMEOUT) {
 			WSAEventSelect(m_handle, NULL, 0);
 			WSACloseEvent(ev);
@@ -354,10 +337,8 @@ StormByte::Network::ExpectedReadResult Socket::WaitForData(const long long& usec
 				WSACloseEvent(ev);
 				return Unexpected<ConnectionClosed>("WSAEnumNetworkEvents failed");
 			}
-
 			WSAEventSelect(m_handle, NULL, 0);
 			WSACloseEvent(ev);
-
 			if (netev.lNetworkEvents & FD_CLOSE) {
 				int err = netev.iErrorCode[FD_CLOSE_BIT];
 				if (err != 0) {
@@ -384,14 +365,12 @@ StormByte::Network::ExpectedReadResult Socket::WaitForData(const long long& usec
 				log_wait_done("peer shutdown");
 				return Connection::Read::Result::ShutdownRequest;
 			}
-
 			if (netev.lNetworkEvents & FD_READ) {
 				if (m_status.load(std::memory_order_acquire) != Connection::Status::Connected)
 					return Connection::Read::Result::Closed;
 				log_wait_done("data available");
 				return Connection::Read::Result::Success;
 			}
-
 			m_logger << Logger::Level::LowLevel
 					<< "WSA wait signaled unknown network event (flags=0x" << std::hex
 					<< netev.lNetworkEvents << std::dec << ")" << std::endl;
@@ -402,10 +381,8 @@ StormByte::Network::ExpectedReadResult Socket::WaitForData(const long long& usec
 		}
 #endif
 	}
-
 	return Unexpected<ConnectionClosed>("Failed to wait for data: Unknown error occurred");
 }
-
 StormByte::Expected<StormByte::Network::Connection::HandlerType, StormByte::Network::ConnectionError>
 Socket::CreateSocket() noexcept {
 	(void)StormByte::Network::Connection::Handler::Instance();
@@ -418,18 +395,14 @@ Socket::CreateSocket() noexcept {
 		m_status.store(Connection::Status::Disconnected, std::memory_order_release);
 		return Unexpected<ConnectionError>(Connection::Handler::Instance().LastError());
 	}
-
 	return handle;
 }
-
 void Socket::InitializeAfterConnect() noexcept {
 	m_status.store(Connection::Status::Connecting, std::memory_order_release);
 	m_mtu = GetMTU();
 	SetNonBlocking();
-
 	int desired_buf = SOCKET_BUFFER_SIZE;
 	int rc = 0;
-
 #ifdef LINUX
 	auto read_proc_int = [](const char* path) -> int {
 		std::ifstream f(path);
@@ -442,7 +415,6 @@ void Socket::InitializeAfterConnect() noexcept {
 			return -1;
 		}
 	};
-
 	int sys_wmem_max = read_proc_int("/proc/sys/net/core/wmem_max");
 	int sys_rmem_max = read_proc_int("/proc/sys/net/core/rmem_max");
 	if (sys_wmem_max > 0) {
@@ -453,12 +425,10 @@ void Socket::InitializeAfterConnect() noexcept {
 		m_logger << Logger::Level::LowLevel << "System rmem_max: " << Logger::humanreadable_bytes
 				<< sys_rmem_max << Logger::nohumanreadable << std::endl;
 	}
-
 	int send_buf = desired_buf;
 	int recv_buf = desired_buf;
 	if (sys_wmem_max > send_buf) send_buf = sys_wmem_max;
 	if (sys_rmem_max > recv_buf) recv_buf = sys_rmem_max;
-
 	rc = setsockopt(m_handle, SOL_SOCKET, SO_SNDBUF, &send_buf, sizeof(send_buf));
 	if (rc != 0) {
 		m_logger << Logger::Level::Warning << "setsockopt(SO_SNDBUF) failed: "
@@ -473,7 +443,6 @@ void Socket::InitializeAfterConnect() noexcept {
 	// macOS / other POSIX (no /proc)
 	int send_buf = desired_buf;
 	int recv_buf = desired_buf;
-
 	rc = setsockopt(m_handle, SOL_SOCKET, SO_SNDBUF, &send_buf, sizeof(send_buf));
 	if (rc != 0) {
 		m_logger << Logger::Level::Warning << "setsockopt(SO_SNDBUF) failed: "
@@ -484,7 +453,6 @@ void Socket::InitializeAfterConnect() noexcept {
 		m_logger << Logger::Level::Warning << "setsockopt(SO_RCVBUF) failed: "
 				<< Connection::Handler::Instance().LastError() << std::endl;
 	}
-
 	// Prevent SIGPIPE on send (macOS/BSD equivalent of MSG_NOSIGNAL)
 	int nosigpipe = 1;
 	rc = setsockopt(m_handle, SOL_SOCKET, SO_NOSIGPIPE, &nosigpipe, sizeof(nosigpipe));
@@ -497,7 +465,6 @@ void Socket::InitializeAfterConnect() noexcept {
 	constexpr int WINDOWS_DESIRED_MAX = 8 * 1024 * 1024; // 8 MiB request (OS will clamp)
 	int try_send = WINDOWS_DESIRED_MAX;
 	int try_recv = WINDOWS_DESIRED_MAX;
-
 	rc = setsockopt(m_handle, SOL_SOCKET, SO_SNDBUF,
 		reinterpret_cast<const char*>(&try_send), sizeof(try_send));
 	if (rc != 0) {
@@ -510,7 +477,6 @@ void Socket::InitializeAfterConnect() noexcept {
 					<< Connection::Handler::Instance().LastError() << std::endl;
 		}
 	}
-
 	rc = setsockopt(m_handle, SOL_SOCKET, SO_RCVBUF,
 		reinterpret_cast<const char*>(&try_recv), sizeof(try_recv));
 	if (rc != 0) {
@@ -524,7 +490,6 @@ void Socket::InitializeAfterConnect() noexcept {
 		}
 	}
 #endif
-
 	int effective = 0;
 #ifdef WINDOWS
 	int optlen = sizeof(effective);
@@ -553,7 +518,6 @@ void Socket::InitializeAfterConnect() noexcept {
 		m_effective_recv_buf = effective;
 	}
 #endif
-
 	{
 		std::size_t send_cap = static_cast<std::size_t>(m_effective_send_buf);
 		std::size_t recv_cap = static_cast<std::size_t>(m_effective_recv_buf);
@@ -565,7 +529,6 @@ void Socket::InitializeAfterConnect() noexcept {
 				<< send_cap << ", recv capacity: " << recv_cap
 				<< " (max single IO: " << MAX_SINGLE_IO << ")" << Logger::nohumanreadable << std::endl;
 	}
-
 	int flag = 1;
 #ifdef WINDOWS
 	rc = setsockopt(m_handle, IPPROTO_TCP, TCP_NODELAY,
@@ -579,19 +542,16 @@ void Socket::InitializeAfterConnect() noexcept {
 	}
 	m_status.store(Connection::Status::Connected, std::memory_order_release);
 }
-
 #ifdef UNIX
 int Socket::GetMTU() const noexcept {
 	if (!m_conn_info || m_handle <= 0)
 		return DEFAULT_MTU;
-
 #ifdef LINUX
 	int mtu = 0;
 	socklen_t optlen = sizeof(mtu);
 	if (getsockopt(m_handle, IPPROTO_IP, IP_MTU, &mtu, &optlen) >= 0 && mtu > 0)
 		return mtu;
 #endif
-
 	// macOS / otros UNIX: devolvemos el valor por defecto
 	// (el stack de macOS gestiona el PMTU de forma transparente)
 	return DEFAULT_MTU;
@@ -600,17 +560,14 @@ int Socket::GetMTU() const noexcept {
 int Socket::GetMTU() const noexcept {
 	if (!m_conn_info || !m_handle)
 		return DEFAULT_MTU;
-
 	ULONG out_buf_len = 0;
 	GetAdaptersAddresses(AF_UNSPEC, 0, NULL, NULL, &out_buf_len);
-
 	auto adapter_addresses = std::make_unique<BYTE[]>(out_buf_len);
 	if (GetAdaptersAddresses(AF_UNSPEC, 0, NULL,
 			reinterpret_cast<PIP_ADAPTER_ADDRESSES>(adapter_addresses.get()),
 			&out_buf_len) != ERROR_SUCCESS) {
 		return DEFAULT_MTU;
 	}
-
 	PIP_ADAPTER_ADDRESSES adapter = reinterpret_cast<PIP_ADAPTER_ADDRESSES>(adapter_addresses.get());
 	while (adapter) {
 		for (PIP_ADAPTER_UNICAST_ADDRESS unicast = adapter->FirstUnicastAddress;
@@ -626,7 +583,6 @@ int Socket::GetMTU() const noexcept {
 	return DEFAULT_MTU;
 }
 #endif
-
 void Socket::SetNonBlocking() noexcept {
 #ifdef WINDOWS
 	u_long mode = 1;

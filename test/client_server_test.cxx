@@ -1,30 +1,44 @@
+/*
+ * Copyright (C) 2024-2026 David C. Manuelda (StormBytePP)
+ *
+ * This file is part of StormByte-Network.
+ *
+ * StormByte-Network is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Lesser General Public License version 3
+ * or later, as published by the Free Software Foundation.
+ *
+ * StormByte-Network is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU Lesser General Public License for more details.
+ *
+ * You should have received a copy of the GNU Lesser General Public License
+ * along with StormByte-Network. If not, see
+ * <https://www.gnu.org/licenses/lgpl-3.0.html>.
+ */
+
 #include <StormByte/network/client.hxx>
 #include <StormByte/network/server.hxx>
 #include <StormByte/serializable.hxx>
 #include <StormByte/logger/threaded_log.hxx>
 #include <StormByte/test_handlers.h>
 #include <StormByte/system.hxx>
-
 #include <chrono>
 #include <cstdlib>
 #include <iostream>
 #include <thread>
 #include <random>
 #include <utility>
-
 // Namespace aliases and commonly used types to reduce verbosity
 namespace SB = StormByte;
 namespace Net = SB::Network;
 namespace Buf = SB::Buffer;
 namespace SBLog = SB::Logger;
 namespace Transport = Net::Transport;
-
 template<typename T>
 using Serializable = SB::Serializable<T>;
-
 template<typename T>
 using NetExpected = SB::Expected<T, Net::Exception>;
-
 using Buf::DataType;
 using Buf::Consumer;
 using Buf::Producer;
@@ -35,14 +49,12 @@ using SBLog::ThreadedLog;
 using Buf::Pipeline;
 using namespace StormByte::Logger;
 using namespace StormByte::Network;
-
 std::shared_ptr<Log> logger = std::make_shared<ThreadedLog>(std::cout, Level::Info, "[%L] [T%i] %T:");
 constexpr const unsigned short timeout = 5; // 5 seconds
 constexpr const std::size_t large_data_size = 20 * 1024 * 1024; // 20 MB
 constexpr const char large_data_repeat_char = 'x';
 constexpr const char* HOST = "localhost";
 constexpr const unsigned short PORT = 7080;
-
 namespace Test {
 	namespace Packet {
 		enum class Opcode: unsigned short {
@@ -53,12 +65,10 @@ namespace Test {
 			C_MSG_SENDLARGEDATA,
 			S_MSG_REPLYLARGEDATAECHOED
 		};
-
 		class Generic: public Transport::Packet {
 			public:
 				Generic(const enum Opcode& opcode): Transport::Packet(static_cast<Transport::Packet::OpcodeType>(opcode)) {}
 		};
-
 		class AskNameList: public Generic {
 			public:
 				AskNameList(const std::size_t& amount): Generic(Opcode::C_MSG_ASKNAMELIST), m_amount(amount) {}
@@ -68,26 +78,21 @@ namespace Test {
 				std::size_t GetAmount() const noexcept {
 					return m_amount;
 				}
-
 			private:
 				std::size_t m_amount;
 		};
-
 		class AnswerNameList: public Generic {
 			public:
 				AnswerNameList(const std::vector<std::string>& names): Generic(Opcode::S_MSG_RESPONDNAMELIST), m_names(names) {}
 				DataType DoSerialize() const noexcept override {
 					return Serializable<std::vector<std::string>>(m_names).Serialize();
 				}
-
 				const std::vector<std::string>& GetNames() const noexcept {
 					return m_names;
 				}
-
 			private:
 				std::vector<std::string> m_names;
 		};
-
 		class AskRandomNumber: public Generic {
 			public:
 				AskRandomNumber(): Generic(Opcode::C_MSG_ASKRANDOMNUMBER) {}
@@ -95,30 +100,20 @@ namespace Test {
 					return {};
 				}
 		};
-
 		class AnswerRandomNumber: public Generic {
 			public:
 				AnswerRandomNumber(const int& number): Generic(Opcode::S_MSG_RESPONDRANDOMNUMBER), m_number(number) {}
 				DataType DoSerialize() const noexcept override {
 					return Serializable<int>(m_number).Serialize();
 				}
-
 				int GetNumber() const noexcept {
 					return m_number;
 				}
-
 			private:
 				int m_number;
 		};
-
 		class LargeData: public Generic {
 			public:
-				/** Build from size (fills with repeat char). */
-				explicit LargeData(std::size_t size) noexcept
-					: Generic(Opcode::C_MSG_SENDLARGEDATA),
-					m_data(std::string(size, large_data_repeat_char)) {}
-
-				/** Take ownership of existing data (deserialize / echo path). */
 				explicit LargeData(std::string data) noexcept
 					: Generic(Opcode::C_MSG_SENDLARGEDATA),
 					m_data(std::move(data)) {}

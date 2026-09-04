@@ -1,29 +1,42 @@
+/*
+ * Copyright (C) 2024-2026 David C. Manuelda (StormBytePP)
+ *
+ * This file is part of StormByte-Network.
+ *
+ * StormByte-Network is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Lesser General Public License version 3
+ * or later, as published by the Free Software Foundation.
+ *
+ * StormByte-Network is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU Lesser General Public License for more details.
+ *
+ * You should have received a copy of the GNU Lesser General Public License
+ * along with StormByte-Network. If not, see
+ * <https://www.gnu.org/licenses/lgpl-3.0.html>.
+ */
+
 #include <StormByte/network/connection/client.hxx>
 #include <StormByte/network/client.hxx>
 #include <StormByte/network/transport/frame.hxx>
 #include <StormByte/network/transport/packet.hxx>
-
 using namespace StormByte::Network;
-
 Client::~Client() noexcept {
 	Disconnect();
 }
-
 bool Client::Connect(const Connection::Protocol& protocol, const std::string& address, const unsigned short& port) {
 	if (m_connection) {
 		m_logger << Logger::Level::Error << "Client is already connected." << std::endl;
 		return false;
 	}
-
 	try {
 		std::shared_ptr<Socket::Client> socket = std::make_shared<Socket::Client>(protocol, m_logger);
-
 		if (!socket->Connect(address, port)) {
 			m_logger << Logger::Level::Error << "Failed to connect to " << address << ":" << port
 					<< " using protocol " << Connection::ProtocolString(protocol) << std::endl;
 			return false;
 		}
-
 		m_connection = CreateConnection(socket);
 		m_logger << Logger::Level::LowLevel << "Successfully connected to " << address << ":" << port
 				<< " using protocol " << Connection::ProtocolString(protocol) << std::endl;
@@ -33,18 +46,15 @@ bool Client::Connect(const Connection::Protocol& protocol, const std::string& ad
 		return false;
 	}
 }
-
 void Client::Disconnect() noexcept {
 	if (m_connection) {
 		m_logger << Logger::Level::LowLevel << "Disconnecting client." << std::endl;
 		m_connection.reset();
 	}
 }
-
 Connection::Status Client::Status() const noexcept {
 	return m_connection ? m_connection->Status() : Connection::Status::Disconnected;
 }
-
 PacketPointer Client::Send(const Transport::Packet& packet) noexcept {
 	return Endpoint::Send(m_connection, packet);
 }

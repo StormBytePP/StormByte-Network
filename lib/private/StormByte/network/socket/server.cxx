@@ -1,6 +1,24 @@
+/*
+ * Copyright (C) 2024-2026 David C. Manuelda (StormBytePP)
+ *
+ * This file is part of StormByte-Network.
+ *
+ * StormByte-Network is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Lesser General Public License version 3
+ * or later, as published by the Free Software Foundation.
+ *
+ * StormByte-Network is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU Lesser General Public License for more details.
+ *
+ * You should have received a copy of the GNU Lesser General Public License
+ * along with StormByte-Network. If not, see
+ * <https://www.gnu.org/licenses/lgpl-3.0.html>.
+ */
+
 #include <StormByte/network/socket/server.hxx>
 #include <StormByte/network/socket/client.hxx>
-
 #ifdef UNIX
 #include <sys/socket.h>
 #include <netinet/in.h>
@@ -9,30 +27,22 @@
 #else
 #include <winsock2.h>
 #endif
-
 #include <StormByte/network/connection/handler.hxx>
 #include <algorithm>
 #include <memory>
-
 using namespace StormByte::Network;
-
 Socket::Server::Server(const Connection::Protocol& protocol, std::shared_ptr<Logger::Log> logger) noexcept:
 Socket(protocol, logger) {
 	m_logger << Logger::Level::LowLevel << "Created server socket with UUID: " << m_UUID << std::endl;
 }
-
 ExpectedVoid Socket::Server::Listen(const std::string& hostname, const unsigned short& port) noexcept {
 	if (Connection::IsConnected(m_status.load(std::memory_order_acquire)))
 		return Unexpected<ConnectionError>("Server is already connected");
-
 	m_status.store(Connection::Status::Connecting, std::memory_order_release);
-
 	auto expected_socket = CreateSocket();
 	if (!expected_socket)
 		return Unexpected(expected_socket.error());
-
 	m_handle = expected_socket.value();
-
 	int opt = 1;
 #ifdef WINDOWS
 	{
@@ -56,13 +66,10 @@ ExpectedVoid Socket::Server::Listen(const std::string& hostname, const unsigned 
 			Connection::Handler::Instance().LastErrorCode());
 	}
 #endif
-
 	auto expected_connection_info = Connection::Info::FromHost(hostname, port, m_protocol);
 	if (!expected_connection_info)
 		return Unexpected<ConnectionError>(expected_connection_info.error()->what());
-
 	m_conn_info = std::make_unique<Connection::Info>(std::move(expected_connection_info.value()));
-
 	auto bind_result = ::bind(m_handle, m_conn_info->SockAddr().get(), sizeof(*m_conn_info->SockAddr()));
 	if (bind_result == -1) {
 		m_status.store(Connection::Status::Disconnected, std::memory_order_release);
@@ -75,7 +82,6 @@ ExpectedVoid Socket::Server::Listen(const std::string& hostname, const unsigned 
 			Connection::Handler::Instance().LastError(),
 			Connection::Handler::Instance().LastErrorCode());
 	}
-
 	auto listen_result = ::listen(m_handle, SOMAXCONN);
 	if (listen_result == -1) {
 		m_status.store(Connection::Status::Disconnected, std::memory_order_release);
@@ -88,18 +94,13 @@ ExpectedVoid Socket::Server::Listen(const std::string& hostname, const unsigned 
 			Connection::Handler::Instance().LastError(),
 			Connection::Handler::Instance().LastErrorCode());
 	}
-
 	InitializeAfterConnect();
-
 	m_logger << Logger::Level::LowLevel << "Server listening on " << hostname << ":" << port << std::endl;
-
 	return {};
 }
-
 ExpectedClient Socket::Server::Accept() noexcept {
 	if (!Connection::IsConnected(m_status.load(std::memory_order_acquire)))
 		return Unexpected<ConnectionError>("Socket is not connected");
-
 #ifdef UNIX
 	struct pollfd pfd;
 	pfd.fd = m_handle;
@@ -122,7 +123,6 @@ ExpectedClient Socket::Server::Accept() noexcept {
 		return Unexpected<ConnectionError>("Error during select.");
 	}
 #endif
-
 	Connection::HandlerType client_handle = ::accept(m_handle, nullptr, nullptr);
 #ifdef WINDOWS
 	if (client_handle == INVALID_SOCKET) {
@@ -131,25 +131,20 @@ ExpectedClient Socket::Server::Accept() noexcept {
 #endif
 		return Unexpected<ConnectionError>("Failed to accept client connection.");
 	}
-
 	Client client_socket(m_protocol, m_logger);
 	client_socket.m_handle = client_handle;
 	client_socket.InitializeAfterConnect();
-
 	m_active_clients.push_back(std::make_shared<Client>(std::move(client_socket)));
 	return m_active_clients.back();
 }
-
 void Socket::Server::Disconnect() noexcept {
 	for (auto& client : m_active_clients) {
 		if (!client) continue;
 		client->Disconnect();
 	}
 	m_active_clients.clear();
-
 	Socket::Disconnect();
 }
-
 void Socket::Server::DisconnectClient(const std::string& client_uuid) noexcept {
 	auto it = std::find_if(m_active_clients.begin(), m_active_clients.end(),
 		[&client_uuid](const std::shared_ptr<Client>& client) {

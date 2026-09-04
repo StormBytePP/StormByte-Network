@@ -1,5 +1,23 @@
-#include <StormByte/network/connection/info.hxx>
+/*
+ * Copyright (C) 2024-2026 David C. Manuelda (StormBytePP)
+ *
+ * This file is part of StormByte-Network.
+ *
+ * StormByte-Network is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Lesser General Public License version 3
+ * or later, as published by the Free Software Foundation.
+ *
+ * StormByte-Network is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU Lesser General Public License for more details.
+ *
+ * You should have received a copy of the GNU Lesser General Public License
+ * along with StormByte-Network. If not, see
+ * <https://www.gnu.org/licenses/lgpl-3.0.html>.
+ */
 
+#include <StormByte/network/connection/info.hxx>
 #ifdef UNIX
 #include <sys/types.h>
 #include <sys/socket.h>
@@ -11,47 +29,34 @@
 #include <ws2tcpip.h>
 #include <iphlpapi.h>
 #endif
-
 #include <StormByte/network/connection/handler.hxx>
-
 using namespace StormByte::Network::Connection;
 using StormByte::Network::Exception;
-
 Info::Info(std::shared_ptr<sockaddr> sock_addr) noexcept:
 	m_sock_addr(sock_addr), m_mtu(DEFAULT_MTU), m_ip(), m_port(0) {
 	Initialize(sock_addr);
 }
-
 StormByte::Expected<Info, Exception> Info::FromHost(const std::string& hostname, const unsigned short& port, const Protocol& protocol) noexcept {
 	auto expected_sock_addr = Info::ResolveHostname(hostname, port, protocol);
 	if (!expected_sock_addr)
 		return Unexpected(expected_sock_addr.error());
-
 	return Info(std::move(expected_sock_addr.value()));
 }
-
 StormByte::Expected<Info, Exception> Info::FromSockAddr(std::shared_ptr<sockaddr> sockaddr) noexcept {
 	if (!sockaddr)
 		return Unexpected<Exception>("Invalid socket address");
-
 	return Info(sockaddr);
 }
-
 StormByte::Expected<std::shared_ptr<sockaddr>, Exception> Info::ResolveHostname(const std::string& hostname, const unsigned short& port, const Protocol& protocol) noexcept {
 	struct addrinfo hints{}, *res = nullptr;
-
 	hints.ai_family = ProtocolInt(protocol);
 	hints.ai_socktype = SOCK_STREAM;
-
 	int ret = getaddrinfo(hostname.c_str(), nullptr, &hints, &res);
 	if (ret != 0 || !res)
 		return Unexpected<Exception>("Can't resolve host '{}': {}", hostname, Handler::Instance().LastError());
-
 	std::unique_ptr<addrinfo, decltype(&freeaddrinfo)> res_guard(res, freeaddrinfo);
-
 	char ipstr[INET6_ADDRSTRLEN];
 	void* addr = nullptr;
-
 	if (res->ai_family == AF_INET) {
 		addr = &((struct sockaddr_in*)res->ai_addr)->sin_addr;
 	} else if (res->ai_family == AF_INET6) {
@@ -59,21 +64,16 @@ StormByte::Expected<std::shared_ptr<sockaddr>, Exception> Info::ResolveHostname(
 	}
 	if (!addr)
 		return Unexpected<Exception>("Unable to determine resolved address");
-
 	inet_ntop(res->ai_family, addr, ipstr, sizeof(ipstr));
-
 	sockaddr_in resolved{};
 	resolved.sin_family = ProtocolInt(protocol);
 	resolved.sin_port = htons(port);
-
 	if (inet_pton(resolved.sin_family, ipstr, &resolved.sin_addr) <= 0) {
 		return Unexpected<Exception>("Invalid IP address '{}'", ipstr);
 	}
-
 	auto resolved_sock = std::make_unique<sockaddr_in>(resolved);
 	return std::shared_ptr<sockaddr>(reinterpret_cast<sockaddr*>(resolved_sock.release()));
 }
-
 void Info::Initialize(std::shared_ptr<sockaddr> sock_addr) noexcept {
 	char ipstr[INET6_ADDRSTRLEN];
 	if (sock_addr->sa_family == AF_INET) {
