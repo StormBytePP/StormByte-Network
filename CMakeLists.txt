@@ -1,12 +1,15 @@
-cmake_minimum_required(VERSION 3.12)
+cmake_minimum_required(VERSION 3.28)
 set(CMAKE_DISABLE_IN_SOURCE_BUILD ON)
 set(CMAKE_CXX_STANDARD 26)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
+file(READ "${CMAKE_CURRENT_SOURCE_DIR}/VERSION" _sb_ver)
+string(STRIP "${_sb_ver}" _sb_ver)
+
 project("StormByte C++ Library: Network module"
-	VERSION 1.0.0
-	DESCRIPTION "StormByte-Network is a StormByte library module for handling and create network connections"
+	VERSION ${_sb_ver}
+	DESCRIPTION "StormByte-Network is the C++26 networking module of the StormByte suite."
 	HOMEPAGE_URL "https://dev.stormbyte.org/StormByte-Network"
 )
 
@@ -15,8 +18,8 @@ include(cmake/asan.cmake)
 cmake_policy(SET CMP0079 NEW)
 
 add_subdirectory(doc)
-add_subdirectory(lib)
 add_subdirectory(thirdparty)
+add_subdirectory(lib)
 add_subdirectory(test)
 
 include(cmake/install.cmake)
