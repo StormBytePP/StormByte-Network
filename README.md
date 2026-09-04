@@ -1,177 +1,180 @@
-# StormByte
-![Linux](https://img.shields.io/badge/Linux-Supported-1793D1?logo=linux&logoColor=white)
-![Windows](https://img.shields.io/badge/Windows-Supported-0078D6?logo=windows&logoColor=white)
-![macOS](https://img.shields.io/badge/macOS-Supported-0078D6?logo=apple&logoColor=white)
+# StormByte-Network
+
+![Multiplatform](https://img.shields.io/badge/Linux%20%7C%20Windows%20%7C%20macOS-Supported-1793D1)
 ![C++26](https://img.shields.io/badge/C%2B%2B-26-00599C?logo=c%2B%2B&logoColor=white)
-![CMake](https://img.shields.io/badge/CMake-3.12+-064F8C?logo=cmake&logoColor=white)
+![CMake](https://img.shields.io/badge/CMake-3.28+-064F8C?logo=cmake&logoColor=white)
 ![License: LGPL v3](https://img.shields.io/badge/License-LGPL_v3-blue.svg)
-[![CI](https://github.com/StormBytePP/StormByte-Network/actions/workflows/ci.yml/badge.svg)](https://github.com/StormBytePP/StormByte-Buffer/actions/workflows/ci.yml)
+[![CI](https://github.com/StormBytePP/StormByte-Network/actions/workflows/ci.yml/badge.svg)](https://github.com/StormBytePP/StormByte-Network/actions/workflows/ci.yml)
+[![Sponsor](https://img.shields.io/badge/Sponsor-GitHub-ea4aaa?logo=github-sponsors&logoColor=white)](https://github.com/sponsors/StormBytePP)
 
-StormByte is a comprehensive, cross-platform C++ library aimed at easing system programming, configuration management, logging, and database handling tasks. This library provides a unified API that abstracts away the complexities and inconsistencies of different platforms (Windows, Linux).
+StormByte-Network is the C++26 networking module of the [StormByte](https://dev.stormbyte.org/StormByte) suite.
 
-## Features
-
-- **Network**: Provides classes to handle portable network communication across Linux and Windows, including features such as asynchronous data handling, error management, and high-level socket APIs.
+It is not a thin socket wrapper. You inherit `Client` or `Server`, define packets, and attach Buffer pipelines. POSIX and Winsock, framing, accept loops and per-client workers stay private.
 
 ## Table of Contents
 
 - [Repository](#repository)
 - [Installation](#installation)
-- [Modules](#modules)
-	- [Base](https://dev.stormbyte.org/StormByte)
-	- [Buffer](https://dev.stormbyte.org/StormByte-Buffer)
-	- [Config](https://dev.stormbyte.org/StormByte-Config)
-	- [Crypto](https://dev.stormbyte.org/StormByte-Crypto)
-	- [Database](https://dev.stormbyte.org/StormByte-Database)
-	- [Logger](https://github.com/StormBytePP/StormByte-Logger.git)
-	- [Multimedia](https://dev.stormbyte.org/StormByte-Multimedia)
-	- **Network**
-	- [System](https://dev.stormbyte.org/StormByte-System)
+- [Why StormByte-Network](#why-stormbyte-network)
+- [Features](#features)
+- [Dependencies](#dependencies)
+- [The rest of the suite](#the-rest-of-the-suite)
+- [Public API](#public-api)
+- [Examples](#examples)
+	- [A client](#a-client)
+	- [A server](#a-server)
+	- [A packet](#a-packet)
+- [Design notes](#design-notes)
+- [Testing](#testing)
 - [Contributing](#contributing)
 - [License](#license)
 
-## Modules
+## Repository
 
-### Network
+- [StormByte-Network](https://github.com/StormBytePP/StormByte-Network)
 
-#### Overview
+## Installation
 
-The **StormByte Network** module provides a robust, cross-platform C++ library for building client-server applications. It abstracts away platform-specific socket handling (Linux and Windows) and provides a high-level, type-safe packet-based communication system. The library uses modern C++ features including `Expected` types for error handling, move semantics, and RAII for resource management.
+```bash
+git clone https://github.com/StormBytePP/StormByte-Network.git
+cd StormByte-Network
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+cmake --build build -j
+cmake --install build
+```
 
-#### Features
+## Why StormByte-Network
 
-- **Cross-platform socket abstraction**: Works seamlessly on both Linux and Windows
-- **Type-safe packet communication**: Define custom packet types with automatic serialization
-- **Asynchronous event handling**: Non-blocking I/O with configurable timeouts
-- **Connection management**: Automatic client tracking and lifecycle management for servers
-- **Pipeline support**: Optional preprocessing/postprocessing (compression, encryption)
-- **Thread-safe logging**: Integrated with StormByte Logger for diagnostics
-- **UUID-based client identification**: Each connection is uniquely identified
-- **MTU discovery**: Automatic path MTU detection for optimal packet sizing
-- **Error handling**: Uses `Expected<T, E>` pattern to avoid exceptions in performance-critical paths
+| Goal | How it is achieved |
+|------|--------------------|
+| **Inherit, don't wrap sockets** | `Client` / `Server` are abstract application endpoints. |
+| **Framed messages** | `Transport::Packet` + private `Frame` (opcode, size, payload). |
+| **Buffer as I/O** | Pipelines on inbound/outbound payloads; Reader/Writer adapters. |
+| **IPv4 and IPv6** | `Connection::Protocol`. |
+| **Cross-platform** | POSIX and Winsock behind `Socket` / `Handler`. |
 
-#### Architecture
+## Features
 
-The library is built around three main base classes that you extend to implement your application logic:
+- Abstract `Endpoint`, `Client`, `Server`
+- Packet factory (`DeserializePacketFunction`)
+- Connection status, read/write results
+- Request/response (`Send`) and fire-and-forget (`Reply`)
+- Server accept thread + one worker per client
+- Optional payload processing for opcodes ≥ `Packet::PROCESS_THRESHOLD`
 
-1. **`Packet`** - Base class for all network messages. Each packet has an opcode (message type identifier) and serializes its data.
-3. **`Server` / `Client`** - High-level connection endpoints. Override `ProcessClientPacket()` in Server or use `Send()`/`Receive()` in Client to handle communication.
+## Dependencies
 
-#### Examples
+| Dependency | Role |
+|------------|------|
+| StormByte (base) | Expected, exceptions, visibility |
+| StormByte-Buffer | FIFO, Pipeline, Consumer, External I/O |
+| StormByte-Logger | Diagnostics |
 
-##### Minimal example (based on test/client_server_test.cxx)
+## The rest of the suite
 
-The example below shows the minimal pieces needed with the new API: packet types derived from `Transport::Packet`, a deserializer function, a small `Client` helper that uses `Send()` as a request/response primitive and a `Server` that replies from `ProcessClientPacket()`.
+- [Base](https://dev.stormbyte.org/StormByte) — foundation: Expected, exceptions, visibility, helpers
+- [Buffer](https://dev.stormbyte.org/StormByte-Buffer) — FIFO, pipelines, consumers and producers
+- [Config](https://dev.stormbyte.org/StormByte-Config) — typed configuration trees
+- [Crypto](https://dev.stormbyte.org/StormByte-Crypto) — hash, compress, encrypt, sign, key agreement
+- [Database](https://dev.stormbyte.org/StormByte-Database) — one API over SQLite, PostgreSQL and MariaDB
+- [Logger](https://dev.stormbyte.org/StormByte-Logger) — levels, redaction, threaded sinks
+- [Multimedia](https://dev.stormbyte.org/StormByte-Multimedia) — FFmpeg-backed media engine
+- **Network** (this repository)
+- [System](https://dev.stormbyte.org/StormByte-System) — process, platform and system helpers
+
+## Public API
+
+Under `StormByte::Network`:
+
+| Type | Role |
+|------|------|
+| `Client` | Inherit; implement pipelines; call `Send` |
+| `Server` | Inherit; implement `ProcessClientPacket` |
+| `Transport::Packet` | Inherit; implement `DoSerialize` |
+| `Connection::Protocol` | IPv4 / IPv6 |
+| `Connection::Status` | Lifecycle |
+| `Exception` / `ConnectionError` / `ConnectionClosed` | Errors |
+
+Sockets, frames and Winsock bootstrap are private.
+
+## Examples
+
+### A client
 
 ```cpp
 #include <StormByte/network/client.hxx>
-#include <StormByte/network/server.hxx>
-#include <StormByte/serializable.hxx>
-#include <StormByte/logger/threaded_log.hxx>
 
-namespace Test {
-	enum class Opcode : unsigned short { C_ASK_NAMES = 1, S_REPLY_NAMES };
+class AppClient : public StormByte::Network::Client {
+public:
+	AppClient(const StormByte::Network::DeserializePacketFunction& fn,
+	          std::shared_ptr<StormByte::Logger::Log> log)
+		: Client(fn, log) {}
 
-	// Small packet pair: request contains a size, reply contains vector<string>
-	namespace Packet {
-		class AskNameList : public StormByte::Network::Transport::Packet {
-		public:
-			AskNameList(std::size_t n) : Transport::Packet(static_cast<Transport::Packet::OpcodeType>(Opcode::C_ASK_NAMES)), m_n(n) {}
-			StormByte::Buffer::DataType DoSerialize() const noexcept override {
-				return StormByte::Serializable<std::size_t>(m_n).Serialize();
-			}
-			std::size_t GetAmount() const noexcept { return m_n; }
-		private: std::size_t m_n;
-		};
-
-		class AnswerNameList : public StormByte::Network::Transport::Packet {
-		public:
-			AnswerNameList(const std::vector<std::string>& names) : Transport::Packet(static_cast<Transport::Packet::OpcodeType>(Opcode::S_REPLY_NAMES)), m_names(names) {}
-			StormByte::Buffer::DataType DoSerialize() const noexcept override { return StormByte::Serializable<std::vector<std::string>>(m_names).Serialize(); }
-			const std::vector<std::string>& GetNames() const noexcept { return m_names; }
-		private: std::vector<std::string> m_names;
-		};
+protected:
+	StormByte::Buffer::Pipeline InputPipeline() const noexcept override {
+		return {};
 	}
-
-	// Deserializer used by Client/Server constructors
-	inline StormByte::Network::DeserializePacketFunction MakeDeserializer() {
-		return [](StormByte::Network::Transport::Packet::OpcodeType opcode, StormByte::Buffer::Consumer consumer, StormByte::Logger::Log& /*logger*/) -> StormByte::Network::PacketPointer {
-			StormByte::Buffer::DataType data;
-			consumer.ExtractUntilEoF(data);
-			switch(static_cast<Opcode>(opcode)) {
-				case Opcode::C_ASK_NAMES: {
-					auto n = StormByte::Serializable<std::size_t>::Deserialize(data);
-					if (!n) return nullptr;
-					return std::make_shared<Packet::AskNameList>(*n);
-				}
-				case Opcode::S_REPLY_NAMES: {
-					auto names = StormByte::Serializable<std::vector<std::string>>::Deserialize(data);
-					if (!names) return nullptr;
-					return std::make_shared<Packet::AnswerNameList>(*names);
-				}
-				default: return nullptr;
-			}
-		};
+	StormByte::Buffer::Pipeline OutputPipeline() const noexcept override {
+		return {};
 	}
-
-	// Simplified client wrapper
-	class Client : public StormByte::Network::Client {
-	public:
-		Client(const StormByte::Logger::ThreadedLog& logger) noexcept : StormByte::Network::Client(MakeDeserializer(), logger) {}
-		StormByte::Buffer::Pipeline InputPipeline() const noexcept override { return {}; }
-		StormByte::Buffer::Pipeline OutputPipeline() const noexcept override { return {}; }
-
-		auto RequestNames(std::size_t n) noexcept -> StormByte::Expected<std::vector<std::string>, StormByte::Network::Exception> {
-			Packet::AskNameList req(n);
-			auto resp = Send(req);
-			if (!resp) return StormByte::Unexpected<StormByte::Network::Exception>("send/receive failed");
-			auto ans = std::dynamic_pointer_cast<Packet::AnswerNameList>(resp);
-			if (!ans) return StormByte::Unexpected<StormByte::Network::Exception>("unexpected response");
-			return ans->GetNames();
-		}
-	};
-
-	// Simplified server
-	class Server : public StormByte::Network::Server {
-	public:
-		Server(const StormByte::Logger::ThreadedLog& logger) noexcept : StormByte::Network::Server(MakeDeserializer(), logger) {}
-		StormByte::Buffer::Pipeline InputPipeline() const noexcept override { return {}; }
-		StormByte::Buffer::Pipeline OutputPipeline() const noexcept override { return {}; }
-
-	private:
-		StormByte::Network::PacketPointer ProcessClientPacket(const std::string& /*uuid*/, StormByte::Network::PacketPointer packet) noexcept override {
-			switch(static_cast<Opcode>(packet->Opcode())) {
-				case Opcode::C_ASK_NAMES: {
-					auto ask = std::dynamic_pointer_cast<Packet::AskNameList>(packet);
-					if (!ask) return nullptr;
-					std::vector<std::string> names;
-					for (std::size_t i = 0; i < ask->GetAmount(); ++i) names.push_back("Name_" + std::to_string(i+1));
-					return std::make_shared<Packet::AnswerNameList>(names);
-				}
-				default: return nullptr;
-			}
-		}
-	};
-}
-
-// Usage (sketch):
-// - create ThreadedLog
-// - start Server and call Connect(protocol, host, port)
-// - start Client and call Connect(protocol, host, port)
-// - call Client::RequestNames(n) which uses Send() under the hood
-
+};
 ```
 
-Explanation:
+### A server
 
-- The deserializer converts opcode + payload bytes into concrete `Packet` objects and is passed to both `Client` and `Server` constructors.
-- `Client::Send()` is used as a synchronous request/response helper in this simplified pattern (the test wraps Send into higher-level helpers).
-- `Server::ProcessClientPacket()` inspects the opcode and can return a `PacketPointer` to send back immediately (or `nullptr` when no reply is needed).
+```cpp
+#include <StormByte/network/server.hxx>
+
+class AppServer : public StormByte::Network::Server {
+public:
+	using Server::Server;
+
+protected:
+	StormByte::Buffer::Pipeline InputPipeline() const noexcept override { return {}; }
+	StormByte::Buffer::Pipeline OutputPipeline() const noexcept override { return {}; }
+
+	StormByte::Network::PacketPointer ProcessClientPacket(
+		const std::string& uuid,
+		StormByte::Network::PacketPointer packet) noexcept override {
+		(void)uuid;
+		return packet;
+	}
+};
+```
+
+### A packet
+
+```cpp
+#include <StormByte/network/transport/packet.hxx>
+
+class PingPacket : public StormByte::Network::Transport::Packet {
+public:
+	PingPacket() : Packet(1) {}
+
+protected:
+	StormByte::Buffer::DataType DoSerialize() const noexcept override {
+		return {};
+	}
+};
+```
+
+## Design notes
+
+- One connection is not a thread-safe multiplex. The server isolates clients on their own threads.
+- `Connect` on `Server` means bind + listen + accept loop.
+- Frame layout uses host `size_t` for payload length. Same architecture on both ends.
+- Pipelines run only when the opcode is at or above `PROCESS_THRESHOLD`.
+
+## Testing
+
+Enable tests in CMake (`ENABLE_TEST`) and run CTest from the build tree.
 
 ## Contributing
 
-Contributions are welcome! Please fork the repository and submit pull requests for any enhancements or bug fixes.
+Issues on GitHub. No wiki, no discussions.
 
 ## License
 
-This project is licensed under LGPL v3 License - see the [LICENSE](LICENSE) file for details.
+GNU Lesser General Public License v3 or later.
+
+See [https://www.gnu.org/licenses/lgpl-3.0.html](https://www.gnu.org/licenses/lgpl-3.0.html).
