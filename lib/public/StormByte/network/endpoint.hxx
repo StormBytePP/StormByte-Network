@@ -1,21 +1,21 @@
 /*
- * Copyright (C) 2024-2026 David C. Manuelda (StormBytePP)
- *
- * This file is part of StormByte-Network.
- *
- * StormByte-Network is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Lesser General Public License version 3
- * or later, as published by the Free Software Foundation.
- *
- * StormByte-Network is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
- * GNU Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with StormByte-Network. If not, see
- * <https://www.gnu.org/licenses/lgpl-3.0.html>.
- */
+* Copyright (C) 2024-2026 David C. Manuelda (StormBytePP)
+*
+* This file is part of StormByte-Network.
+*
+* StormByte-Network is free software: you can redistribute it and/or modify
+* it under the terms of the GNU Lesser General Public License version 3
+* or later, as published by the Free Software Foundation.
+*
+* StormByte-Network is distributed in the hope that it will be useful,
+* but WITHOUT ANY WARRANTY; without even the implied warranty of
+* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+* GNU Lesser General Public License for more details.
+*
+* You should have received a copy of the GNU Lesser General Public License
+* along with StormByte-Network. If not, see
+* <https://www.gnu.org/licenses/lgpl-3.0.html>.
+*/
 
 #pragma once
 
@@ -24,8 +24,7 @@
 #include <StormByte/network/typedefs.hxx>
 
 /**
- * @namespace StormByte::Network
- * @brief StormByte networking subsystem.
+ * @brief Network module of the StormByte suite.
  */
 namespace StormByte::Network {
 	namespace Connection {
@@ -34,50 +33,48 @@ namespace StormByte::Network {
 
 	/**
 	 * @class Endpoint
-	 * @brief Shared base for Client and Server endpoints.
+	 * @brief Shared base for Client and Server.
 	 *
-	 * Not instantiated directly. Override @ref InputPipeline() /
-	 * @ref OutputPipeline() for buffer stages; use @ref Send() / @ref Reply()
-	 * for framed request/response.
+	 * Not instantiated directly. Override InputPipeline() / OutputPipeline(). Use Send() / Reply() for framed request/response.
 	 *
-	 * @note **Inheritance-oriented.** Derive application clients/servers from
-	 * @ref Client / @ref Server, not from Endpoint alone.
+	 * @note Inheritance-oriented. Derive from Client / Server, not from Endpoint alone.
 	 */
 	class STORMBYTE_NETWORK_PUBLIC Endpoint {
 		public:
 			/**
+			 * @brief Construct with a packet factory and a logger.
 			 * @param deserialize_packet_function Builds domain packets from wire data.
 			 * @param logger Diagnostic logger.
 			 */
 			Endpoint(const DeserializePacketFunction& deserialize_packet_function, std::shared_ptr<Logger::Log> logger) noexcept;
 
 			/**
-			 * Copy constructor (deleted).
+			 * @brief Copy constructor (deleted).
 			 */
 			Endpoint(const Endpoint& other) = delete;
 
 			/**
-			 * Move constructor.
+			 * @brief Move constructor.
 			 */
 			Endpoint(Endpoint&& other) noexcept = default;
 
 			/**
-			 * Destructor.
+			 * @brief Destructor.
 			 */
 			virtual ~Endpoint() noexcept = default;
 
 			/**
-			 * Copy assignment (deleted).
+			 * @brief Copy assignment (deleted).
 			 */
 			Endpoint& operator=(const Endpoint& other) = delete;
 
 			/**
-			 * Move assignment.
+			 * @brief Move assignment.
 			 */
 			Endpoint& operator=(Endpoint&& other) noexcept = default;
 
 			/**
-			 * Connects or listens (meaning depends on derived class).
+			 * @brief Connect or listen (meaning depends on the derived class).
 			 * @param protocol Address family.
 			 * @param address Host or bind address.
 			 * @param port Port number.
@@ -86,12 +83,13 @@ namespace StormByte::Network {
 			virtual bool Connect(const Connection::Protocol& protocol, const std::string& address, const unsigned short& port) = 0;
 
 			/**
-			 * Tears down the endpoint.
+			 * @brief Tear down the endpoint.
 			 */
 			virtual void Disconnect() noexcept = 0;
 
 			/**
-			 * @return Current connection/listen status.
+			 * @brief Current connection/listen status.
+			 * @return Status.
 			 */
 			virtual Connection::Status Status() const noexcept = 0;
 
@@ -100,24 +98,26 @@ namespace StormByte::Network {
 			std::shared_ptr<Logger::Log> m_logger;						///< Logger
 
 			/**
-			 * Wraps a socket client with input/output pipelines.
+			 * @brief Wrap a socket client with input/output pipelines.
 			 * @param socket Underlying socket client.
-			 * @return Connection::Client shared pointer.
+			 * @return Connection::Client.
 			 */
 			std::shared_ptr<Connection::Client> CreateConnection(std::shared_ptr<Socket::Client> socket) noexcept;
 
 			/**
-			 * @return Pipeline applied to inbound frame payloads.
+			 * @brief Pipeline applied to inbound frame payloads.
+			 * @return Pipeline.
 			 */
 			virtual Buffer::Pipeline InputPipeline() const noexcept = 0;
 
 			/**
-			 * @return Pipeline applied to outbound frame payloads.
+			 * @brief Pipeline applied to outbound frame payloads.
+			 * @return Pipeline.
 			 */
 			virtual Buffer::Pipeline OutputPipeline() const noexcept = 0;
 
 			/**
-			 * Sends @p packet and waits for a response frame.
+			 * @brief Send @p packet and wait for a response frame.
 			 * @param client_connection Active connection.
 			 * @param packet Packet to send.
 			 * @return Response packet, or nullptr on failure.
@@ -125,7 +125,7 @@ namespace StormByte::Network {
 			PacketPointer Send(std::shared_ptr<Connection::Client> client_connection, const Transport::Packet& packet) noexcept;
 
 			/**
-			 * Sends @p packet without waiting for a reply.
+			 * @brief Send @p packet without waiting for a reply.
 			 * @param client_connection Active connection.
 			 * @param packet Packet to send.
 			 * @return true on success.
@@ -134,7 +134,7 @@ namespace StormByte::Network {
 
 		private:
 			/**
-			 * Internal send helper (no receive).
+			 * @brief Internal send (no receive).
 			 * @param client_connection Active connection.
 			 * @param packet Packet to send.
 			 * @return true on success.
