@@ -32,6 +32,10 @@ IPv4 and IPv6, framed request/response, POSIX and Winsock stay behind the public
 - **Integration and lifecycle coverage**
     - Expanded client/server integration coverage with empty-payload, text-echo, and numeric-sum commands.
     - Added disconnect/reconnect, slow-handler, concurrent-client, pending-task shutdown, and late-completion coverage.
+
+### Fixed
+
+- Avoided passing unsupported `/GL` and `/LTCG` flags to clang-cl Release builds by using CMake's interprocedural optimization setting.
     - Documented client/server lifecycle invariants and the Windows `FD_SETSIZE` boundary.
 
 ### Fixed
