@@ -151,7 +151,8 @@ namespace Test {
 			C_MSG_ECHOTEXT,
 			S_MSG_REPLYTEXT,
 			C_MSG_SUMNUMBERS,
-			S_MSG_REPLYSUM
+			S_MSG_REPLYSUM,
+			C_MSG_DISCONNECT
 		};
 		class Generic: public Transport::Packet {
 			public:
@@ -258,6 +259,11 @@ namespace Test {
 					return {};
 				}
 		};
+		class DisconnectRequest: public Generic {
+			public:
+				DisconnectRequest(): Generic(Opcode::C_MSG_DISCONNECT) {}
+				DataType DoSerialize() const noexcept override { return {}; }
+		};
 		class EchoText: public Generic {
 			public:
 				explicit EchoText(std::string text) noexcept:
@@ -335,6 +341,8 @@ namespace Test {
 				case Packet::Opcode::C_MSG_ASKRANDOMNUMBER: {
 					return std::make_shared<Packet::AskRandomNumber>();
 				}
+				case Packet::Opcode::C_MSG_DISCONNECT:
+					return std::make_shared<Packet::DisconnectRequest>();
 				case Packet::Opcode::S_MSG_RESPONDRANDOMNUMBER: {
 					auto expected_number = Serializable<int>::Deserialize(data);
 					if (!expected_number) {
@@ -515,6 +523,11 @@ namespace Test {
 				return std::dynamic_pointer_cast<Packet::Pong>(response_packet) != nullptr;
 			}
 
+			bool RequestDisconnect() noexcept {
+				Packet::DisconnectRequest request_packet;
+				return Send(request_packet) == nullptr;
+			}
+
 			NetExpected<std::string> RequestEchoText(std::string text) noexcept {
 				Packet::EchoText request_packet(std::move(text));
 				auto response_packet = Send(request_packet);
@@ -599,6 +612,9 @@ namespace Test {
 					}
 					case Packet::Opcode::C_MSG_PING:
 						return std::make_shared<Packet::Pong>();
+					case Packet::Opcode::C_MSG_DISCONNECT:
+						DisconnectClient(client_uuid);
+						return nullptr;
 					case Packet::Opcode::C_MSG_ECHOTEXT: {
 						auto text_packet = std::dynamic_pointer_cast<Packet::EchoText>(packet);
 						if (!text_packet) {
@@ -792,6 +808,30 @@ int TestClientDisconnectKeepsServerAlive() {
 	RETURN_TEST(fn_name, 0);
 }
 
+int TestDisconnectRequestedByHandler() {
+	const std::string fn_name = "TestDisconnectRequestedByHandler";
+	Test::Server server(logger);
+	if (!server.Connect(Net::Connection::Protocol::IPv4, HOST, PORT)) {
+		RETURN_TEST(fn_name, 1);
+	}
+	std::this_thread::sleep_for(std::chrono::milliseconds(100));
+	Test::Client first_client(logger);
+	if (!first_client.Connect(Net::Connection::Protocol::IPv4, HOST, PORT)) {
+		RETURN_TEST(fn_name, 1);
+	}
+	ASSERT_TRUE(fn_name, first_client.RequestDisconnect());
+	first_client.Disconnect();
+	std::this_thread::sleep_for(std::chrono::milliseconds(100));
+	Test::Client second_client(logger);
+	if (!second_client.Connect(Net::Connection::Protocol::IPv4, HOST, PORT)) {
+		RETURN_TEST(fn_name, 1);
+	}
+	ASSERT_TRUE(fn_name, second_client.RequestPing());
+	second_client.Disconnect();
+	server.Disconnect();
+	RETURN_TEST(fn_name, 0);
+}
+
 int TestFragmentedAndBatchedFrames() {
 	const std::string fn_name = "TestFragmentedAndBatchedFrames";
 	constexpr std::size_t frame_header_size = sizeof(Transport::Packet::OpcodeType) + sizeof(std::size_t);
@@ -881,6 +921,7 @@ int main() {
 	result += TestRequestLargeDataEchoed();
 	result += TestRequestAdditionalCommands();
 	result += TestClientDisconnectKeepsServerAlive();
+	result += TestDisconnectRequestedByHandler();
 	result += TestFragmentedAndBatchedFrames();
 
 	if (result == 0) {

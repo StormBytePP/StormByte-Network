@@ -131,6 +131,10 @@ namespace StormByte::Network {
 			};
 			std::deque<Completion> m_completions; ///< Worker completions
 			std::mutex m_completion_mutex; ///< Protects completions
+			enum class CommandType: unsigned short { DisconnectClient, DisconnectAll, Stop }; ///< Loop command
+			struct Command { CommandType type; std::string uuid; }; ///< Loop command
+			std::deque<Command> m_commands; ///< Commands from workers/user callbacks
+			std::mutex m_command_mutex; ///< Protects commands
 
 			/**
 			 * @brief Accept-loop thread body.
@@ -169,6 +173,15 @@ namespace StormByte::Network {
 
 			/** @brief Apply all worker completions on EventLoop. */
 			void DrainCompletions() noexcept;
+
+			/** @brief Enqueue a command for EventLoop. */
+			void PostCommand(Command command) noexcept;
+
+			/** @brief Apply all commands on EventLoop. */
+			void DrainCommands() noexcept;
+
+			/** @brief Direct session removal, called only by EventLoop. */
+			void DisconnectClientOnLoop(const std::string& uuid) noexcept;
 
 			/**
 			 * @brief Application packet handler.

@@ -135,6 +135,10 @@ void Server::Disconnect() noexcept {
 	if (!m_socket_server) {
 		return;
 	}
+	if (m_pool && m_pool->IsWorkerThread()) {
+		PostCommand({ CommandType::Stop, {} });
+		return;
+	}
 	m_logger << Logger::Level::LowLevel
 			<< "Stopping server and disconnecting all clients." << std::endl;
 	// 1) Signal stop so AcceptClients' while (IsConnected(...)) exits
@@ -229,6 +233,14 @@ void Server::CloseWakeup() noexcept {
 }
 
 void Server::DisconnectClient(const std::string& uuid) noexcept {
+	if (m_accept_thread.get_id() != std::this_thread::get_id()) {
+		PostCommand({ CommandType::DisconnectClient, uuid });
+		return;
+	}
+	DisconnectClientOnLoop(uuid);
+}
+
+void Server::DisconnectClientOnLoop(const std::string& uuid) noexcept {
 	auto session_it = m_sessions.find(uuid);
 	if (session_it == m_sessions.end()) {
 		return;
@@ -268,6 +280,44 @@ void Server::PostCompletion(Completion completion) noexcept {
 		m_completions.push_back(std::move(completion));
 	}
 	SignalWakeup();
+}
+
+void Server::PostCommand(Command command) noexcept {
+	{
+		std::scoped_lock lock(m_command_mutex);
+		m_commands.push_back(std::move(command));
+	}
+	SignalWakeup();
+}
+
+void Server::DrainCommands() noexcept {
+	std::deque<Command> commands;
+	{
+		std::scoped_lock lock(m_command_mutex);
+		commands.swap(m_commands);
+	}
+	for (const auto& command: commands) {
+		switch (command.type) {
+			case CommandType::DisconnectClient:
+				DisconnectClientOnLoop(command.uuid);
+				break;
+			case CommandType::DisconnectAll:
+				{
+					std::vector<std::string> uuids;
+					uuids.reserve(m_sessions.size());
+					for (const auto& [uuid, _]: m_sessions) {
+						uuids.push_back(uuid);
+					}
+					for (const auto& uuid: uuids) {
+						DisconnectClientOnLoop(uuid);
+					}
+				}
+				break;
+			case CommandType::Stop:
+				m_status.store(Connection::Status::Disconnecting, std::memory_order_release);
+				break;
+		}
+	}
 }
 
 void Server::DrainCompletions() noexcept {
@@ -315,7 +365,10 @@ void Server::AcceptClients() noexcept {
 			}
 			ProcessSession(session);
 		},
-		[this]() noexcept { DrainCompletions(); }
+		[this]() noexcept {
+			DrainCommands();
+			DrainCompletions();
+		}
 	);
 	for (auto& [uuid, session]: m_sessions) {
 		(void)uuid;
