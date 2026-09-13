@@ -132,19 +132,19 @@ bool Server::Connect(const Connection::Protocol& protocol, const std::string& ad
 	}
 }
 void Server::Disconnect() noexcept {
-	if (!m_socket_server) {
+	if (!m_socket_server && !m_accept_thread.joinable() && !m_pool) {
 		return;
 	}
 	if (m_pool && m_pool->IsWorkerThread()) {
 		PostCommand({ CommandType::Stop, {} });
 		return;
 	}
-	m_logger << Logger::Level::LowLevel
-			<< "Stopping server and disconnecting all clients." << std::endl;
-	// 1) Signal stop so AcceptClients' while (IsConnected(...)) exits
-	m_status.store(Connection::Status::Disconnecting, std::memory_order_release);
-	// 2) Wake AcceptClients without tearing down the listener from another thread.
-	SignalWakeup();
+	if (m_socket_server) {
+		m_logger << Logger::Level::LowLevel
+				<< "Stopping server and disconnecting all clients." << std::endl;
+		m_status.store(Connection::Status::Disconnecting, std::memory_order_release);
+		SignalWakeup();
+	}
 	// The event loop owns all sessions. It performs cleanup after observing stop.
 	if (m_accept_thread.joinable() && m_accept_thread.get_id() != std::this_thread::get_id()) {
 		m_accept_thread.join();

@@ -152,7 +152,10 @@ namespace Test {
 			S_MSG_REPLYTEXT,
 			C_MSG_SUMNUMBERS,
 			S_MSG_REPLYSUM,
-			C_MSG_DISCONNECT
+			C_MSG_DISCONNECT,
+			C_MSG_SLOW,
+			S_MSG_SLOW,
+			C_MSG_STOPSERVER
 		};
 		class Generic: public Transport::Packet {
 			public:
@@ -264,6 +267,21 @@ namespace Test {
 				DisconnectRequest(): Generic(Opcode::C_MSG_DISCONNECT) {}
 				DataType DoSerialize() const noexcept override { return {}; }
 		};
+		class SlowRequest: public Generic {
+			public:
+				SlowRequest(): Generic(Opcode::C_MSG_SLOW) {}
+				DataType DoSerialize() const noexcept override { return {}; }
+		};
+		class SlowReply: public Generic {
+			public:
+				SlowReply(): Generic(Opcode::S_MSG_SLOW) {}
+				DataType DoSerialize() const noexcept override { return {}; }
+		};
+		class StopServerRequest: public Generic {
+			public:
+				StopServerRequest(): Generic(Opcode::C_MSG_STOPSERVER) {}
+				DataType DoSerialize() const noexcept override { return {}; }
+		};
 		class EchoText: public Generic {
 			public:
 				explicit EchoText(std::string text) noexcept:
@@ -343,6 +361,12 @@ namespace Test {
 				}
 				case Packet::Opcode::C_MSG_DISCONNECT:
 					return std::make_shared<Packet::DisconnectRequest>();
+				case Packet::Opcode::C_MSG_SLOW:
+					return std::make_shared<Packet::SlowRequest>();
+				case Packet::Opcode::S_MSG_SLOW:
+					return std::make_shared<Packet::SlowReply>();
+				case Packet::Opcode::C_MSG_STOPSERVER:
+					return std::make_shared<Packet::StopServerRequest>();
 				case Packet::Opcode::S_MSG_RESPONDRANDOMNUMBER: {
 					auto expected_number = Serializable<int>::Deserialize(data);
 					if (!expected_number) {
@@ -528,6 +552,17 @@ namespace Test {
 				return Send(request_packet) == nullptr;
 			}
 
+			bool RequestSlow() noexcept {
+				Packet::SlowRequest request_packet;
+				auto response_packet = Send(request_packet);
+				return std::dynamic_pointer_cast<Packet::SlowReply>(response_packet) != nullptr;
+			}
+
+			bool RequestStopServer() noexcept {
+				Packet::StopServerRequest request_packet;
+				return Send(request_packet) == nullptr;
+			}
+
 			NetExpected<std::string> RequestEchoText(std::string text) noexcept {
 				Packet::EchoText request_packet(std::move(text));
 				auto response_packet = Send(request_packet);
@@ -612,6 +647,12 @@ namespace Test {
 					}
 					case Packet::Opcode::C_MSG_PING:
 						return std::make_shared<Packet::Pong>();
+					case Packet::Opcode::C_MSG_SLOW:
+						std::this_thread::sleep_for(std::chrono::milliseconds(500));
+						return std::make_shared<Packet::SlowReply>();
+					case Packet::Opcode::C_MSG_STOPSERVER:
+						Disconnect();
+						return nullptr;
 					case Packet::Opcode::C_MSG_DISCONNECT:
 						DisconnectClient(client_uuid);
 						return nullptr;
@@ -832,6 +873,53 @@ int TestDisconnectRequestedByHandler() {
 	RETURN_TEST(fn_name, 0);
 }
 
+int TestSlowHandlerDoesNotBlockOtherClients() {
+	const std::string fn_name = "TestSlowHandlerDoesNotBlockOtherClients";
+	Test::Server server(logger);
+	if (!server.Connect(Net::Connection::Protocol::IPv4, HOST, PORT)) {
+		RETURN_TEST(fn_name, 1);
+	}
+	std::this_thread::sleep_for(std::chrono::milliseconds(100));
+	Test::Client slow_client(logger);
+	Test::Client fast_client(logger);
+	ASSERT_TRUE(fn_name, slow_client.Connect(Net::Connection::Protocol::IPv4, HOST, PORT));
+	ASSERT_TRUE(fn_name, fast_client.Connect(Net::Connection::Protocol::IPv4, HOST, PORT));
+	std::atomic<bool> slow_result{false};
+	std::thread slow_thread([&]() { slow_result.store(slow_client.RequestSlow()); });
+	std::this_thread::sleep_for(std::chrono::milliseconds(50));
+	const auto start = std::chrono::steady_clock::now();
+	ASSERT_TRUE(fn_name, fast_client.RequestPing());
+	const auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
+		std::chrono::steady_clock::now() - start).count();
+	ASSERT_TRUE(fn_name, elapsed < 300);
+	if (slow_thread.joinable()) {
+		slow_thread.join();
+	}
+	ASSERT_TRUE(fn_name, slow_result.load());
+	slow_client.Disconnect();
+	fast_client.Disconnect();
+	server.Disconnect();
+	RETURN_TEST(fn_name, 0);
+}
+
+int TestStopRequestedByHandler() {
+	const std::string fn_name = "TestStopRequestedByHandler";
+	Test::Server server(logger);
+	if (!server.Connect(Net::Connection::Protocol::IPv4, HOST, PORT)) {
+		RETURN_TEST(fn_name, 1);
+	}
+	std::this_thread::sleep_for(std::chrono::milliseconds(100));
+	Test::Client client(logger);
+	ASSERT_TRUE(fn_name, client.Connect(Net::Connection::Protocol::IPv4, HOST, PORT));
+	ASSERT_TRUE(fn_name, client.RequestStopServer());
+	client.Disconnect();
+	for (int attempt = 0; attempt < 40 && server.Status() != Connection::Status::Disconnected; ++attempt) {
+		std::this_thread::sleep_for(std::chrono::milliseconds(25));
+	}
+	ASSERT_TRUE(fn_name, server.Status() == Connection::Status::Disconnected);
+	RETURN_TEST(fn_name, 0);
+}
+
 int TestFragmentedAndBatchedFrames() {
 	const std::string fn_name = "TestFragmentedAndBatchedFrames";
 	constexpr std::size_t frame_header_size = sizeof(Transport::Packet::OpcodeType) + sizeof(std::size_t);
@@ -922,6 +1010,8 @@ int main() {
 	result += TestRequestAdditionalCommands();
 	result += TestClientDisconnectKeepsServerAlive();
 	result += TestDisconnectRequestedByHandler();
+	result += TestSlowHandlerDoesNotBlockOtherClients();
+	result += TestStopRequestedByHandler();
 	result += TestFragmentedAndBatchedFrames();
 
 	if (result == 0) {
