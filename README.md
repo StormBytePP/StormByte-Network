@@ -11,7 +11,7 @@ StormByte-Network is the C++26 networking module of the [StormByte](https://dev.
 
 It depends on [StormByte Base 1.1.0](https://github.com/StormBytePP/StormByte/releases/tag/1.1.0) (or newer), [StormByte Buffer 1.1.0](https://github.com/StormBytePP/StormByte-Buffer/releases/tag/1.1.0) (or newer), and [StormByte Logger 1.1.0](https://github.com/StormBytePP/StormByte-Logger/releases/tag/1.1.0) (or newer).
 
-It is not a thin socket wrapper. You inherit `Client` or `Server`, define packets, and attach Buffer pipelines. POSIX and Winsock, framing, accept loops and per-client workers stay private.
+It is not a thin socket wrapper. You inherit `Client` or `Server`, define packets, and attach Buffer pipelines. POSIX and Winsock, framing, event-driven I/O and bounded packet processing stay private.
 
 ## Table of Contents
 
@@ -61,7 +61,8 @@ cmake --install build
 - Packet factory (`DeserializePacketFunction`)
 - Connection status, read/write results
 - Request/response (`Send`) and fire-and-forget (`Reply`)
-- Server accept thread + one worker per client
+- Server event loop with bounded packet-handler workers
+- Per-session in-flight ordering, bounded output buffering and backpressure handling
 - Optional payload processing for opcodes ≥ `Packet::PROCESS_THRESHOLD`
 
 ## Dependencies
@@ -164,7 +165,9 @@ protected:
 
 ## Design notes
 
-- One connection is not a thread-safe multiplex. The server isolates clients on their own threads.
+- One connection is not a thread-safe multiplex. The server keeps socket I/O in its event loop and dispatches packet handlers through a bounded internal pool.
+- Client request/response APIs remain synchronous to the caller; a slow packet handler no longer blocks socket I/O for unrelated clients.
+- A slow peer is isolated by per-session output limits; once a session exceeds its output budget, the server closes that session rather than allowing unbounded memory growth.
 - `Connect` on `Server` means bind + listen + accept loop.
 - Frame layout uses host `size_t` for payload length. Same architecture on both ends.
 - Pipelines run only when the opcode is at or above `PROCESS_THRESHOLD`.

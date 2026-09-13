@@ -16,23 +16,23 @@ IPv4 and IPv6, framed request/response, POSIX and Winsock stay behind the public
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-09-13
+
 ### Changed
 
 - Updated dependencies to [StormByte Base 1.1.0](https://github.com/StormBytePP/StormByte/releases/tag/1.1.0), [StormByte Logger 1.1.0](https://github.com/StormBytePP/StormByte-Logger/releases/tag/1.1.0), and [StormByte Buffer 1.1.0](https://github.com/StormBytePP/StormByte-Buffer/releases/tag/1.1.0).
-- Reduced non-blocking socket wait overhead by waiting for readability/writability only when the system call reports backpressure.
-- Expanded client/server integration coverage with empty-payload, text-echo, and numeric-sum commands.
-- Documented client/server lifecycle invariants and added disconnect/reconnect parity coverage.
-- Added private incremental server-side frame parsing while preserving the existing client/server API and worker behavior.
-- Added a portable accept-loop wakeup channel so server shutdown does not tear down the listener to interrupt a wait.
-- Extracted the listener and shutdown wait into a private event loop while preserving per-client workers.
-- Connected active session sockets to the private event loop while retaining one synchronous worker per client for packet processing.
-- Replaced per-client workers with one event-loop thread for session parsing, packet processing, and synchronous replies; slow handlers and sends remain documented limitations until the worker pool.
-- Added a bounded private packet worker pool with per-session in-flight control and EventLoop completions; synchronous output remains the next optimization step.
-- Routed worker-originated client/server disconnect requests through EventLoop commands without worker self-joins.
-- Added bounded per-session output streaming with non-blocking writes and POLLOUT/select-driven draining.
-- Added integration coverage for slow handlers, concurrent client progress, and server stop requested by a packet handler.
-- Added shutdown coverage while a slow packet task is still pending in the worker pool.
-- Added coverage for client disconnect during a slow handler and discarded late completions.
+- **Server and socket concurrency**
+    - Reduced non-blocking socket wait overhead by waiting for readability/writability only when the system call reports backpressure.
+    - Added private incremental server-side frame parsing while preserving the existing client/server API and worker behavior.
+    - Added a portable accept-loop wakeup channel so server shutdown does not tear down the listener to interrupt a wait.
+    - Replaced per-client workers with one event-loop thread for session parsing, packet processing, and synchronous replies.
+    - Added a bounded private packet worker pool with per-session in-flight control and EventLoop completions.
+    - Routed worker-originated client/server disconnect requests through EventLoop commands without worker self-joins.
+    - Added bounded per-session output streaming with non-blocking writes and POLLOUT/select-driven draining.
+- **Integration and lifecycle coverage**
+    - Expanded client/server integration coverage with empty-payload, text-echo, and numeric-sum commands.
+    - Added disconnect/reconnect, slow-handler, concurrent-client, pending-task shutdown, and late-completion coverage.
+    - Documented client/server lifecycle invariants and the Windows `FD_SETSIZE` boundary.
 
 ### Fixed
 
@@ -80,5 +80,6 @@ Initial public release of StormByte-Network.
 - `Client` and `Server` are designed to be **subclassed**, not used as generic drop-in types without derivation.
 - Public API surface is stable for the 1.x series; private socket/connection types remain implementation details.
 
-[Unreleased]: https://github.com/StormBytePP/StormByte-Network/compare/1.0.0...HEAD
+[Unreleased]: https://github.com/StormBytePP/StormByte-Network/compare/1.1.0...HEAD
+[1.1.0]: https://github.com/StormBytePP/StormByte-Network/releases/tag/1.1.0
 [1.0.0]: https://github.com/StormBytePP/StormByte-Network/releases/tag/1.0.0
