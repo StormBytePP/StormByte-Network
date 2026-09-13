@@ -38,6 +38,7 @@ IPv4 and IPv6, framed request/response, POSIX and Winsock stay behind the public
 
 - Avoided passing unsupported `/GL` and `/LTCG` flags to clang-cl Release builds by using CMake's interprocedural optimization setting.
 - Fixed macOS polling portability when `POLLRDHUP` is unavailable.
+- Fixed the Windows test target's Winsock linkage using a consistent CMake link signature.
 
 - Guarded polymorphic large-data packet handling against unexpected packet types.
 
