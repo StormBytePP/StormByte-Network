@@ -31,6 +31,43 @@ namespace StormByte::Network::Detail {
 		return m_client && m_client->Socket() ? m_client->Socket()->Handle() : Connection::HandlerType{};
 	}
 
+	bool Session::InFlight() const noexcept {
+		return m_in_flight;
+	}
+
+	void Session::SetInFlight(bool value) noexcept {
+		m_in_flight = value;
+	}
+
+	bool Session::CanRead() const noexcept {
+		return !m_closed && !m_in_flight && !m_task_blocked && m_ready_frames.empty();
+	}
+
+	void Session::SetTaskBlocked(bool value) noexcept {
+		m_task_blocked = value;
+	}
+
+	void Session::QueueFrames(FrameList frames) noexcept {
+		m_ready_frames.insert(
+			m_ready_frames.end(),
+			std::make_move_iterator(frames.begin()),
+			std::make_move_iterator(frames.end()));
+	}
+
+	bool Session::HasPendingFrame() const noexcept {
+		return !m_ready_frames.empty();
+	}
+
+	bool Session::ReadyForProcessing() const noexcept {
+		return !m_closed && !m_in_flight && !m_task_blocked && !m_ready_frames.empty();
+	}
+
+	Transport::Frame Session::TakeFrame() noexcept {
+		Transport::Frame frame = std::move(m_ready_frames.front());
+		m_ready_frames.erase(m_ready_frames.begin());
+		return frame;
+	}
+
 	void Session::Close() noexcept {
 		m_closed = true;
 	}

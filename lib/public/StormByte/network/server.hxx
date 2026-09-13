@@ -22,8 +22,10 @@
 #include <StormByte/network/endpoint.hxx>
 
 #include <atomic>
+#include <mutex>
 #include <thread>
 #include <unordered_map>
+#include <deque>
 
 /**
  * @brief Network module of the StormByte suite.
@@ -39,6 +41,7 @@ namespace StormByte::Network {
 
 	namespace Detail {
 		class Session;	///< Forward declaration
+		class WorkerPool;	///< Forward declaration
 	}
 
 	/**
@@ -119,6 +122,15 @@ namespace StormByte::Network {
 			Connection::HandlerType m_wakeup_read;												///< Wakeup read handle
 			Connection::HandlerType m_wakeup_write;												///< Wakeup write handle
 			std::unordered_map<std::string, std::shared_ptr<Detail::Session>> m_sessions;	///< Active parser sessions
+			std::unique_ptr<Detail::WorkerPool> m_pool;														///< Packet worker pool
+			enum class CompletionReason: unsigned short { Success, NullHandler, Error }; ///< Completion outcome
+			struct Completion {
+				std::string uuid; ///< Client UUID
+				PacketPointer packet; ///< Response packet
+				CompletionReason reason; ///< Completion outcome
+			};
+			std::deque<Completion> m_completions; ///< Worker completions
+			std::mutex m_completion_mutex; ///< Protects completions
 
 			/**
 			 * @brief Accept-loop thread body.
@@ -151,6 +163,12 @@ namespace StormByte::Network {
 			 * @param session Ready session.
 			 */
 			void ProcessSession(const std::shared_ptr<Detail::Session>& session) noexcept;
+
+			/** @brief Enqueue a worker completion and wake EventLoop. */
+			void PostCompletion(Completion completion) noexcept;
+
+			/** @brief Apply all worker completions on EventLoop. */
+			void DrainCompletions() noexcept;
 
 			/**
 			 * @brief Application packet handler.

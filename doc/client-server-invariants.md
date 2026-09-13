@@ -41,6 +41,7 @@ This document records the observable behavior that the internal server redesign 
 - The event loop owns listener, wakeup, and active session sockets.
 - `ProcessClientPacket` and synchronous replies currently run in the event loop.
 - A slow `ProcessClientPacket` or synchronous send currently blocks the whole server; a bounded worker pool and output queues are required before claiming isolation from slow handlers.
+- Packet handlers now run in a bounded private pool; the EventLoop applies completions and still performs synchronous replies until output queues are introduced.
 
 ## Platform Boundaries
 

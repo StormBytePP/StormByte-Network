@@ -23,13 +23,18 @@ namespace StormByte::Network::Detail {
 	m_listener(listener), m_wakeup_read(wakeup_read), m_status(status), m_logger(std::move(logger)) {}
 
 	Expected<EventLoop::Event, ConnectionClosed> EventLoop::Wait(const SessionList& sessions) noexcept {
+		for (const auto& session: sessions) {
+			if (session->ReadyForProcessing()) {
+				return Event{ EventKind::Session, session };
+			}
+		}
 #ifdef UNIX
 		std::vector<pollfd> descriptors;
 		descriptors.reserve(2 + sessions.size());
 		descriptors.push_back({ m_listener.Handle(), POLLIN, 0 });
 		descriptors.push_back({ m_wakeup_read, POLLIN, 0 });
 		for (const auto& session: sessions) {
-			descriptors.push_back({ session->Handle(), POLLIN, 0 });
+			descriptors.push_back({ session->Handle(), static_cast<short>(session->CanRead() ? POLLIN : 0), 0 });
 		}
 		const int result = poll(descriptors.data(), descriptors.size(), 1000);
 		if (result < 0) {
@@ -80,7 +85,7 @@ namespace StormByte::Network::Detail {
 			return Event{ EventKind::Listener, nullptr };
 		}
 		for (const auto& session: sessions) {
-			if (FD_ISSET(session->Handle(), &read_fds)) {
+			if (session->CanRead() && FD_ISSET(session->Handle(), &read_fds)) {
 				ready_session = session;
 				break;
 			}

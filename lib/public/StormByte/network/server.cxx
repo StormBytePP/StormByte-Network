@@ -22,12 +22,14 @@
 #include <StormByte/network/server.hxx>
 #include <StormByte/network/session.hxx>
 #include <StormByte/network/socket/server.hxx>
+#include <StormByte/network/worker_pool.hxx>
 #ifdef UNIX
 #include <unistd.h>
 #else
 #include <winsock2.h>
 #include <ws2tcpip.h>
 #endif
+#include <algorithm>
 using namespace StormByte::Network;
 Server::Server(const DeserializePacketFunction& deserialize_packet_function, std::shared_ptr<Logger::Log> logger) noexcept:
 	Endpoint(deserialize_packet_function, logger),
@@ -49,7 +51,8 @@ Server::Server(Server&& other) noexcept:
 	m_accept_thread(std::move(other.m_accept_thread)),
 	m_wakeup_read(other.m_wakeup_read),
 	m_wakeup_write(other.m_wakeup_write),
-	m_sessions(std::move(other.m_sessions)) {
+	m_sessions(std::move(other.m_sessions)),
+	m_pool(std::move(other.m_pool)) {
 #ifdef WINDOWS
 	other.m_wakeup_read = INVALID_SOCKET;
 	other.m_wakeup_write = INVALID_SOCKET;
@@ -72,6 +75,7 @@ Server& Server::operator=(Server&& other) noexcept {
 		m_wakeup_read = other.m_wakeup_read;
 		m_wakeup_write = other.m_wakeup_write;
 		m_sessions = std::move(other.m_sessions);
+		m_pool = std::move(other.m_pool);
 #ifdef WINDOWS
 		other.m_wakeup_read = INVALID_SOCKET;
 		other.m_wakeup_write = INVALID_SOCKET;
@@ -102,6 +106,21 @@ bool Server::Connect(const Connection::Protocol& protocol, const std::string& ad
 			m_socket_server.reset();
 			return false;
 		}
+		std::size_t worker_count = std::thread::hardware_concurrency();
+		worker_count = worker_count == 0 ? 4 : std::min(worker_count, static_cast<std::size_t>(8));
+		m_pool = std::make_unique<Detail::WorkerPool>(worker_count, 64,
+			[this](const std::string& uuid, PacketPointer packet) {
+				return ProcessClientPacket(uuid, std::move(packet));
+			},
+			[this](Detail::WorkerPool::Completion completion) {
+				CompletionReason reason = CompletionReason::Error;
+				switch (completion.reason) {
+					case Detail::WorkerPool::CompletionReason::Success: reason = CompletionReason::Success; break;
+					case Detail::WorkerPool::CompletionReason::NullHandler: reason = CompletionReason::NullHandler; break;
+					case Detail::WorkerPool::CompletionReason::Error: reason = CompletionReason::Error; break;
+				}
+				PostCompletion({ std::move(completion.uuid), std::move(completion.packet), reason });
+			});
 		m_status.store(Connection::Status::Connected);
 		m_accept_thread = std::thread(&Server::AcceptClients, this);
 		m_logger << Logger::Level::LowLevel << "Server is listening on " << address << ":" << port
@@ -125,6 +144,13 @@ void Server::Disconnect() noexcept {
 	// The event loop owns all sessions. It performs cleanup after observing stop.
 	if (m_accept_thread.joinable() && m_accept_thread.get_id() != std::this_thread::get_id()) {
 		m_accept_thread.join();
+	}
+	if (m_pool) {
+		const bool from_worker = m_pool->IsWorkerThread();
+		m_pool->Stop();
+		if (!from_worker) {
+			m_pool->Join();
+		}
 	}
 }
 
@@ -236,6 +262,40 @@ void Server::AcceptOneClient() noexcept {
 	m_logger << Logger::Level::LowLevel << "AcceptClients: accepted client uuid=" << client_uuid << std::endl;
 }
 
+void Server::PostCompletion(Completion completion) noexcept {
+	{
+		std::scoped_lock lock(m_completion_mutex);
+		m_completions.push_back(std::move(completion));
+	}
+	SignalWakeup();
+}
+
+void Server::DrainCompletions() noexcept {
+	std::deque<Completion> completions;
+	{
+		std::scoped_lock lock(m_completion_mutex);
+		completions.swap(m_completions);
+	}
+	for (auto& [_, session]: m_sessions) {
+		session->SetTaskBlocked(false);
+	}
+	for (auto& completion: completions) {
+		auto session_it = m_sessions.find(completion.uuid);
+		if (session_it == m_sessions.end()) {
+			continue;
+		}
+		auto session = session_it->second;
+		session->SetInFlight(false);
+		if (completion.reason != CompletionReason::Success || !completion.packet) {
+			DisconnectClient(completion.uuid);
+			continue;
+		}
+		if (!Reply(session->Client(), *completion.packet)) {
+			DisconnectClient(completion.uuid);
+		}
+	}
+}
+
 void Server::AcceptClients() noexcept {
 	m_logger << Logger::Level::LowLevel << "Started accept event loop" << std::endl;
 	Detail::EventLoop event_loop(*m_socket_server, m_wakeup_read, m_status, m_logger);
@@ -255,7 +315,7 @@ void Server::AcceptClients() noexcept {
 			}
 			ProcessSession(session);
 		},
-		[]() noexcept {}
+		[this]() noexcept { DrainCompletions(); }
 	);
 	for (auto& [uuid, session]: m_sessions) {
 		(void)uuid;
@@ -272,35 +332,34 @@ void Server::AcceptClients() noexcept {
 	m_logger << Logger::Level::LowLevel << "Stopped accept event loop" << std::endl;
 }
 void Server::ProcessSession(const std::shared_ptr<Detail::Session>& session) noexcept {
-	if (!session || session->Closed() || !session->Client()) {
+	if (!session || session->Closed() || session->InFlight() || !session->Client() || !m_pool) {
 		return;
 	}
 	const std::string client_uuid = session->UUID();
-	auto expected_frames = session->ReadReady(session->Client()->InputPipeline(), m_logger);
-	if (!expected_frames) {
+	if (!session->HasPendingFrame()) {
+		auto expected_frames = session->ReadReady(session->Client()->InputPipeline(), m_logger);
+		if (!expected_frames) {
+			DisconnectClient(client_uuid);
+			return;
+		}
+		session->QueueFrames(std::move(expected_frames.value()));
+	}
+	if (!session->HasPendingFrame()) {
+		return;
+	}
+	if (!m_pool->HasCapacity()) {
+		session->SetTaskBlocked(true);
+		return;
+	}
+	Transport::Frame frame = session->TakeFrame();
+	PacketPointer packet = frame.ProcessPacket(m_deserialize_packet_function, m_logger);
+	if (!packet) {
 		DisconnectClient(client_uuid);
 		return;
 	}
-	for (auto& frame: expected_frames.value()) {
-		if (session->Closed() || !Connection::IsConnected(m_status.load())) {
-			return;
-		}
-		PacketPointer packet = frame.ProcessPacket(m_deserialize_packet_function, m_logger);
-		if (!packet) {
-			DisconnectClient(client_uuid);
-			return;
-		}
-		PacketPointer response_packet = ProcessClientPacket(client_uuid, packet);
-		if (!response_packet || session->Closed() || !Connection::IsConnected(m_status.load())) {
-			if (!response_packet) {
-				DisconnectClient(client_uuid);
-			}
-			return;
-		}
-		if (session->Client()->Socket()->HasShutdownRequest()) {
-			DisconnectClient(client_uuid);
-			return;
-		}
-		Reply(session->Client(), *response_packet);
+	session->SetInFlight(true);
+	if (!m_pool->Submit({ client_uuid, std::move(packet) })) {
+		session->SetInFlight(false);
+		session->SetTaskBlocked(true);
 	}
 }
