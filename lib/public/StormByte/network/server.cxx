@@ -21,15 +21,70 @@
 #include <StormByte/network/server.hxx>
 #include <StormByte/network/session.hxx>
 #include <StormByte/network/socket/server.hxx>
+#ifdef UNIX
+#include <poll.h>
+#include <unistd.h>
+#else
+#include <winsock2.h>
+#include <ws2tcpip.h>
+#endif
+#include <array>
 using namespace StormByte::Network;
 Server::Server(const DeserializePacketFunction& deserialize_packet_function, std::shared_ptr<Logger::Log> logger) noexcept:
 	Endpoint(deserialize_packet_function, logger),
 	m_socket_server(nullptr),
 	m_status(Connection::Status::Disconnected),
-	m_accept_thread()
+	m_accept_thread(),
+#ifdef WINDOWS
+	m_wakeup_read(INVALID_SOCKET),
+	m_wakeup_write(INVALID_SOCKET)
+#else
+	m_wakeup_read(-1),
+	m_wakeup_write(-1)
+#endif
 {}
+Server::Server(Server&& other) noexcept:
+	Endpoint(std::move(other)),
+	m_socket_server(std::move(other.m_socket_server)),
+	m_status(other.m_status.load(std::memory_order_relaxed)),
+	m_accept_thread(std::move(other.m_accept_thread)),
+	m_wakeup_read(other.m_wakeup_read),
+	m_wakeup_write(other.m_wakeup_write),
+	m_clients(std::move(other.m_clients)),
+	m_handle_msg_threads(std::move(other.m_handle_msg_threads)) {
+#ifdef WINDOWS
+	other.m_wakeup_read = INVALID_SOCKET;
+	other.m_wakeup_write = INVALID_SOCKET;
+#else
+	other.m_wakeup_read = -1;
+	other.m_wakeup_write = -1;
+#endif
+	other.m_status.store(Connection::Status::Disconnected, std::memory_order_relaxed);
+}
 Server::~Server() noexcept {
 	Disconnect();
+}
+Server& Server::operator=(Server&& other) noexcept {
+	if (this != &other) {
+		Disconnect();
+		Endpoint::operator=(std::move(other));
+		m_socket_server = std::move(other.m_socket_server);
+		m_status.store(other.m_status.load(std::memory_order_relaxed), std::memory_order_relaxed);
+		m_accept_thread = std::move(other.m_accept_thread);
+		m_wakeup_read = other.m_wakeup_read;
+		m_wakeup_write = other.m_wakeup_write;
+		m_clients = std::move(other.m_clients);
+		m_handle_msg_threads = std::move(other.m_handle_msg_threads);
+#ifdef WINDOWS
+		other.m_wakeup_read = INVALID_SOCKET;
+		other.m_wakeup_write = INVALID_SOCKET;
+#else
+		other.m_wakeup_read = -1;
+		other.m_wakeup_write = -1;
+#endif
+		other.m_status.store(Connection::Status::Disconnected, std::memory_order_relaxed);
+	}
+	return *this;
 }
 bool Server::Connect(const Connection::Protocol& protocol, const std::string& address, const unsigned short& port) {
 	if (m_socket_server) {
@@ -41,6 +96,12 @@ bool Server::Connect(const Connection::Protocol& protocol, const std::string& ad
 		if (!m_socket_server->Listen(address, port)) {
 			m_logger << Logger::Level::Error << "Failed to listen on " << address << ":" << port
 					<< " using protocol " << Connection::ProtocolString(protocol) << std::endl;
+			m_socket_server.reset();
+			return false;
+		}
+		if (!CreateWakeup()) {
+			m_logger << Logger::Level::Error << "Failed to create server wakeup channel" << std::endl;
+			m_socket_server->Disconnect();
 			m_socket_server.reset();
 			return false;
 		}
@@ -62,17 +123,8 @@ void Server::Disconnect() noexcept {
 			<< "Stopping server and disconnecting all clients." << std::endl;
 	// 1) Signal stop so AcceptClients' while (IsConnected(...)) exits
 	m_status.store(Connection::Status::Disconnecting, std::memory_order_release);
-	// 2) Wake AcceptClients if blocked in WaitForData / Accept (without full teardown yet)
-	{
-		const auto& h = m_socket_server->Handle();
-#ifdef UNIX
-		if (h > 0)
-			::shutdown(h, SHUT_RDWR);
-#else
-		if (h != INVALID_SOCKET)
-			::shutdown(h, SD_BOTH);
-#endif
-	}
+	// 2) Wake AcceptClients without tearing down the listener from another thread.
+	SignalWakeup();
 	// 3) Wait until accept thread has left WaitForData / the loop
 	if (m_accept_thread.joinable()) {
 		m_accept_thread.join();
@@ -92,8 +144,131 @@ void Server::Disconnect() noexcept {
 	// 5) Now safe: no accept thread using the listen fd
 	m_socket_server->Disconnect();
 	m_socket_server.reset();
+	CloseWakeup();
 	m_status.store(Connection::Status::Disconnected, std::memory_order_release);
 }
+
+bool Server::CreateWakeup() noexcept {
+#ifdef UNIX
+	int handles[2];
+	if (::pipe(handles) != 0) {
+		return false;
+	}
+	m_wakeup_read = handles[0];
+	m_wakeup_write = handles[1];
+	return true;
+#else
+	m_wakeup_read = ::socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+	m_wakeup_write = ::socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+	if (m_wakeup_read == INVALID_SOCKET || m_wakeup_write == INVALID_SOCKET) {
+		CloseWakeup();
+		return false;
+	}
+	sockaddr_in address{};
+	address.sin_family = AF_INET;
+	address.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+	address.sin_port = 0;
+	if (::bind(m_wakeup_read, reinterpret_cast<const sockaddr*>(&address), sizeof(address)) == SOCKET_ERROR) {
+		CloseWakeup();
+		return false;
+	}
+	int address_size = sizeof(address);
+	if (::getsockname(m_wakeup_read, reinterpret_cast<sockaddr*>(&address), &address_size) == SOCKET_ERROR ||
+		::connect(m_wakeup_write, reinterpret_cast<const sockaddr*>(&address), sizeof(address)) == SOCKET_ERROR) {
+		CloseWakeup();
+		return false;
+	}
+	return true;
+#endif
+}
+
+void Server::SignalWakeup() noexcept {
+#ifdef WINDOWS
+	if (m_wakeup_write == INVALID_SOCKET) {
+		return;
+	}
+#else
+	if (m_wakeup_write < 0) {
+		return;
+	}
+#endif
+	const char signal = 1;
+#ifdef UNIX
+	[[maybe_unused]] const ssize_t written = ::write(m_wakeup_write, &signal, sizeof(signal));
+#else
+	(void)::send(m_wakeup_write, &signal, sizeof(signal), 0);
+#endif
+}
+
+void Server::CloseWakeup() noexcept {
+#ifdef WINDOWS
+	if (m_wakeup_read != INVALID_SOCKET) {
+		closesocket(m_wakeup_read);
+		m_wakeup_read = INVALID_SOCKET;
+	}
+	if (m_wakeup_write != INVALID_SOCKET) {
+		closesocket(m_wakeup_write);
+		m_wakeup_write = INVALID_SOCKET;
+	}
+#else
+	if (m_wakeup_read >= 0) {
+		close(m_wakeup_read);
+		m_wakeup_read = -1;
+	}
+	if (m_wakeup_write >= 0) {
+		close(m_wakeup_write);
+		m_wakeup_write = -1;
+	}
+#endif
+}
+
+ExpectedReadResult Server::WaitForAccept() noexcept {
+#ifdef UNIX
+	std::array<pollfd, 2> descriptors{{
+		{ m_socket_server->Handle(), POLLIN, 0 },
+		{ m_wakeup_read, POLLIN, 0 }
+	}};
+	const int result = poll(descriptors.data(), descriptors.size(), 1000);
+	if (result < 0) {
+		return Unexpected<ConnectionClosed>("Failed to wait for server events");
+	}
+	if (result == 0) {
+		return Connection::Read::Result::Timeout;
+	}
+	if (descriptors[1].revents & POLLIN) {
+		char signal;
+		[[maybe_unused]] const ssize_t received = ::read(m_wakeup_read, &signal, sizeof(signal));
+		return Connection::Read::Result::Closed;
+	}
+	if (descriptors[0].revents & POLLIN) {
+		return Connection::Read::Result::Success;
+	}
+	return Unexpected<ConnectionClosed>("Server listener reported an invalid event");
+#else
+	fd_set read_fds;
+	FD_ZERO(&read_fds);
+	FD_SET(m_socket_server->Handle(), &read_fds);
+	FD_SET(m_wakeup_read, &read_fds);
+	timeval timeout{ .tv_sec = 1, .tv_usec = 0 };
+	const int result = select(0, &read_fds, nullptr, nullptr, &timeout);
+	if (result == SOCKET_ERROR) {
+		return Unexpected<ConnectionClosed>("Failed to wait for server events");
+	}
+	if (result == 0) {
+		return Connection::Read::Result::Timeout;
+	}
+	if (FD_ISSET(m_wakeup_read, &read_fds)) {
+		char signal;
+		(void)::recv(m_wakeup_read, &signal, sizeof(signal), 0);
+		return Connection::Read::Result::Closed;
+	}
+	if (FD_ISSET(m_socket_server->Handle(), &read_fds)) {
+		return Connection::Read::Result::Success;
+	}
+	return Unexpected<ConnectionClosed>("Server listener reported an invalid event");
+#endif
+}
+
 void Server::DisconnectClient(const std::string& uuid) noexcept {
 	std::thread thread_to_join;
 	std::shared_ptr<Connection::Client> client;
@@ -128,10 +303,9 @@ void Server::DisconnectClient(const std::string& uuid) noexcept {
 	}
 }
 void Server::AcceptClients() noexcept {
-	constexpr auto TIMEOUT = 1000000; // 1 second
 	m_logger << Logger::Level::LowLevel << "Started accept clients thread" << std::endl;
 	while (Connection::IsConnected(m_status.load())) {
-		auto expected_wait = m_socket_server->WaitForData(TIMEOUT);
+		auto expected_wait = WaitForAccept();
 		if (!expected_wait) {
 			m_logger << Logger::Level::Error << expected_wait.error()->what() << std::endl;
 			return;

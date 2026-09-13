@@ -63,7 +63,7 @@ namespace StormByte::Network {
 			/**
 			 * @brief Move constructor.
 			 */
-			Server(Server&& other) noexcept = default;
+			Server(Server&& other) noexcept;
 
 			/**
 			 * @brief Destructor (joins threads, disconnects clients).
@@ -78,7 +78,7 @@ namespace StormByte::Network {
 			/**
 			 * @brief Move assignment.
 			 */
-			Server& operator=(Server&& other) noexcept = default;
+			Server& operator=(Server&& other) noexcept;
 
 			/**
 			 * @brief Bind, listen and start the accept thread.
@@ -113,6 +113,8 @@ namespace StormByte::Network {
 			std::unique_ptr<Socket::Server> m_socket_server;											///< Listen socket
 			std::atomic<Connection::Status> m_status;												///< Server status
 			std::thread m_accept_thread;															///< Accept loop thread
+			Connection::HandlerType m_wakeup_read;												///< Wakeup read handle
+			Connection::HandlerType m_wakeup_write;												///< Wakeup write handle
 			std::unordered_map<std::string, std::shared_ptr<Connection::Client>> m_clients;		///< Active clients
 			std::unordered_map<std::string, std::thread> m_handle_msg_threads;						///< Per-client workers
 			std::mutex m_mutex;																		///< Protects client maps
@@ -121,6 +123,28 @@ namespace StormByte::Network {
 			 * @brief Accept-loop thread body.
 			 */
 			void AcceptClients() noexcept;
+
+			/**
+			 * @brief Create the private accept-loop wakeup channel.
+			 * @return true when the channel is ready.
+			 */
+			bool CreateWakeup() noexcept;
+
+			/**
+			 * @brief Signal the accept loop to stop waiting.
+			 */
+			void SignalWakeup() noexcept;
+
+			/**
+			 * @brief Close both ends of the wakeup channel.
+			 */
+			void CloseWakeup() noexcept;
+
+			/**
+			 * @brief Wait for listener activity or a shutdown wakeup.
+			 * @return Read result.
+			 */
+			ExpectedReadResult WaitForAccept() noexcept;
 
 			/**
 			 * @brief Per-client communication thread body.

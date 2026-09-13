@@ -39,6 +39,11 @@ This document records the observable behavior that the internal server redesign 
 - Shutdown must wake blocked I/O, stop new work, close or drain per-connection state according to the selected lifecycle policy, and complete without deadlock.
 - Any internal queues must be bounded. Backpressure must not create an unbounded allocation path.
 
+## Platform Boundaries
+
+- The server accept wait uses `poll()` on POSIX and `select()` on Windows.
+- The Windows implementation is bounded by `FD_SETSIZE`; a future high-connection implementation must replace `select()` before exceeding that limit.
+
 ## Design Boundaries
 
 - These invariants must be proven by documentation and parity tests before changing the server execution model.
