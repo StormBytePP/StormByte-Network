@@ -340,7 +340,7 @@ void Server::DrainCompletions() noexcept {
 			DisconnectClient(completion.uuid);
 			continue;
 		}
-		if (!Reply(session->Client(), *completion.packet)) {
+		if (!session->QueueResponse(completion.packet, m_logger)) {
 			DisconnectClient(completion.uuid);
 		}
 	}
@@ -359,11 +359,11 @@ void Server::AcceptClients() noexcept {
 			}
 			return sessions;
 		},
-		[this](const std::shared_ptr<Detail::Session>& session) noexcept {
+		[this](const std::shared_ptr<Detail::Session>& session, bool readable, bool writable) noexcept {
 			if (!session) {
 				return;
 			}
-			ProcessSession(session);
+			ProcessSession(session, readable, writable);
 		},
 		[this]() noexcept {
 			DrainCommands();
@@ -384,8 +384,21 @@ void Server::AcceptClients() noexcept {
 	m_status.store(Connection::Status::Disconnected, std::memory_order_release);
 	m_logger << Logger::Level::LowLevel << "Stopped accept event loop" << std::endl;
 }
-void Server::ProcessSession(const std::shared_ptr<Detail::Session>& session) noexcept {
+void Server::ProcessSession(const std::shared_ptr<Detail::Session>& session, bool readable, bool writable) noexcept {
 	if (!session || session->Closed() || session->InFlight() || !session->Client() || !m_pool) {
+		return;
+	}
+	if (writable && session->HasOutput()) {
+		auto flushed = session->FlushOutput();
+		if (!flushed) {
+			DisconnectClient(session->UUID());
+			return;
+		}
+		if (!flushed.value()) {
+			return;
+		}
+	}
+	if (!readable || session->InFlight()) {
 		return;
 	}
 	const std::string client_uuid = session->UUID();

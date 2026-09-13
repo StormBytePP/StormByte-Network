@@ -29,6 +29,7 @@ IPv4 and IPv6, framed request/response, POSIX and Winsock stay behind the public
 - Replaced per-client workers with one event-loop thread for session parsing, packet processing, and synchronous replies; slow handlers and sends remain documented limitations until the worker pool.
 - Added a bounded private packet worker pool with per-session in-flight control and EventLoop completions; synchronous output remains the next optimization step.
 - Routed worker-originated client/server disconnect requests through EventLoop commands without worker self-joins.
+- Added bounded per-session output streaming with non-blocking writes and POLLOUT/select-driven draining.
 
 ### Fixed
 

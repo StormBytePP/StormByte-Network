@@ -33,7 +33,7 @@ namespace StormByte::Network::Detail {
 			using ListenerCallback = std::function<void()>; ///< Listener-ready callback.
 			using SessionList = std::vector<std::shared_ptr<Session>>; ///< Session snapshot.
 			using SessionSnapshot = std::function<SessionList()>; ///< Session snapshot callback.
-			using SessionCallback = std::function<void(const std::shared_ptr<Session>&)>; ///< Session-ready callback.
+			using SessionCallback = std::function<void(const std::shared_ptr<Session>&, bool, bool)>; ///< Session-ready callback.
 			using WakeupCallback = std::function<void()>; ///< Wakeup callback.
 
 			/**
@@ -63,7 +63,7 @@ namespace StormByte::Network::Detail {
 			std::shared_ptr<Logger::Log> m_logger; ///< Diagnostic logger.
 
 			enum class EventKind: unsigned short { Timeout, Listener, Session, Wakeup }; ///< Wait event kind.
-			struct Event { EventKind kind; std::shared_ptr<Session> session; }; ///< Wait event.
+			struct Event { EventKind kind; std::shared_ptr<Session> session; bool readable = false; bool writable = false; }; ///< Wait event.
 
 			/**
 			 * @brief Wait for listener, wakeup, or a session descriptor.

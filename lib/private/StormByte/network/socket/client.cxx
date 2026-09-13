@@ -428,6 +428,69 @@ ExpectedVoid Socket::Client::Write(std::span<const std::byte> data, const std::s
 			<< nohumanreadable << " bytes completed successfully" << std::endl;
 	return {};
 }
+StormByte::Expected<std::size_t, ConnectionError> Socket::Client::TryWrite(
+	std::span<const std::byte> data, bool& would_block) noexcept {
+	would_block = false;
+	if (m_status.load(std::memory_order_acquire) != Connection::Status::Connected || !m_handle) {
+		return Unexpected<ConnectionError>("Failed to write: Client is not connected");
+	}
+	if (data.empty()) {
+		return static_cast<std::size_t>(0);
+	}
+#ifdef LINUX
+	const int send_flags = MSG_NOSIGNAL;
+	const ssize_t written = ::send(m_handle, reinterpret_cast<const char*>(data.data()),
+		static_cast<int>(std::min(data.size(), MAX_SINGLE_IO)), send_flags);
+#else
+	const int send_flags = 0;
+	const int written = ::send(m_handle, reinterpret_cast<const char*>(data.data()),
+		static_cast<int>(std::min(data.size(), MAX_SINGLE_IO)), send_flags);
+#endif
+	if (written > 0) {
+		return static_cast<std::size_t>(written);
+	}
+#ifdef WINDOWS
+	if (Connection::Handler::Instance().LastErrorCode() == WSAEWOULDBLOCK) {
+#else
+	if (errno == EAGAIN || errno == EWOULDBLOCK) {
+#endif
+		would_block = true;
+		return static_cast<std::size_t>(0);
+	}
+	return Unexpected<ConnectionError>("Failed to write: {}", Connection::Handler::Instance().LastError());
+}
+StormByte::Expected<StormByte::Buffer::DataType, ConnectionError> Socket::Client::TryRead(bool& would_block) noexcept {
+	would_block = false;
+	if (m_status.load(std::memory_order_acquire) != Connection::Status::Connected || !m_handle) {
+		return Unexpected<ConnectionError>("Failed to read: Client is not connected");
+	}
+	const std::size_t size = ClampChunk(
+		m_effective_recv_buf > 0 ? static_cast<std::size_t>(m_effective_recv_buf) : DEFAULT_IO_CHUNK,
+		MAX_SINGLE_IO);
+	StormByte::Buffer::DataType data(size);
+#ifdef UNIX
+	const ssize_t received = ::recv(m_handle, data.data(), data.size(), 0);
+#else
+	const int received = ::recv(m_handle, reinterpret_cast<char*>(data.data()), static_cast<int>(data.size()), 0);
+#endif
+	if (received > 0) {
+		data.resize(static_cast<std::size_t>(received));
+		return data;
+	}
+	if (received == 0) {
+		return Unexpected<ConnectionError>("Read failed: connection closed by peer");
+	}
+#ifdef WINDOWS
+	if (Connection::Handler::Instance().LastErrorCode() == WSAEWOULDBLOCK) {
+#else
+	if (errno == EAGAIN || errno == EWOULDBLOCK) {
+#endif
+		would_block = true;
+		data.clear();
+		return data;
+	}
+	return Unexpected<ConnectionError>("Failed to read: {}", Connection::Handler::Instance().LastError());
+}
 bool Socket::Client::Ping() noexcept {
 	if (m_status.load(std::memory_order_acquire) != Connection::Status::Connected) {
 		return false;

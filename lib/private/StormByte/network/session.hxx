@@ -11,6 +11,7 @@
 #include <StormByte/network/visibility.h>
 
 #include <vector>
+#include <deque>
 
 namespace StormByte::Network::Detail {
 	/**
@@ -76,6 +77,23 @@ namespace StormByte::Network::Detail {
 			/** @brief Close the session. */
 			void Close() noexcept;
 
+			/** @brief Whether serialized output has bytes ready to write. */
+			bool HasOutput() noexcept;
+
+			/**
+			 * @brief Serialize and queue one response.
+			 * @param packet Response packet.
+			 * @param logger Diagnostic logger.
+			 * @return false when the per-session cap is exceeded.
+			 */
+			bool QueueResponse(const PacketPointer& packet, std::shared_ptr<Logger::Log> logger) noexcept;
+
+			/**
+			 * @brief Attempt one non-blocking output write.
+			 * @return true when output is fully drained, false on would-block.
+			 */
+			StormByte::Expected<bool, ConnectionError> FlushOutput() noexcept;
+
 		private:
 			enum class ParsePhase: unsigned short { Header, Payload }; ///< Parser phase.
 			static constexpr std::size_t FRAME_HEADER_SIZE =
@@ -92,6 +110,22 @@ namespace StormByte::Network::Detail {
 			bool m_in_flight = false; ///< Request executing in pool.
 			bool m_task_blocked = false; ///< Pool queue was full.
 			FrameList m_ready_frames; ///< Parsed frames waiting for submission.
+			struct OutputStream {
+				Buffer::Consumer source; ///< Pipeline output source.
+				Buffer::DataType data; ///< Currently buffered chunk.
+				std::size_t offset = 0; ///< Bytes already written from chunk.
+
+				explicit OutputStream(Buffer::Consumer&& consumer) noexcept:
+					source(std::move(consumer)) {}
+			};
+			std::deque<OutputStream> m_output_frames; ///< Serialized output streams.
+			std::size_t m_output_bytes = 0; ///< Queued output bytes.
+			std::size_t m_output_frame_count = 0; ///< Logical response count.
+			static constexpr std::size_t MAX_OUTPUT_BYTES = 1024 * 1024; ///< Per-session byte cap.
+			static constexpr std::size_t MAX_OUTPUT_FRAMES = 8; ///< Per-session frame cap.
+
+			/** @brief Fill the front stream from its pipeline without blocking. */
+			bool PrepareOutput() noexcept;
 
 			/**
 			 * @brief Append bytes and extract complete frames.

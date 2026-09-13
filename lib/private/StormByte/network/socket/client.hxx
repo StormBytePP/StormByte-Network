@@ -30,6 +30,10 @@
 /**
  * @brief Socket wrappers of the Network module.
  */
+namespace StormByte::Network::Detail {
+	class Session;
+}
+
 namespace StormByte::Network::Socket {
 	/**
 	 * @class Client
@@ -165,6 +169,24 @@ namespace StormByte::Network::Socket {
 			}
 
 		private:
+			friend class StormByte::Network::Detail::Session;
+
+			/**
+			 * @brief Attempt one non-blocking write without waiting.
+			 * @param data Source bytes.
+			 * @param would_block Set when the socket needs POLLOUT/select.
+			 * @return Bytes written or hard error.
+			 */
+			Expected<std::size_t, ConnectionError> TryWrite(
+				std::span<const std::byte> data, bool& would_block) noexcept;
+
+			/**
+			 * @brief Attempt one non-blocking read without waiting.
+			 * @param would_block Set when the socket needs POLLIN/select.
+			 * @return Bytes read or hard error.
+			 */
+			Expected<Buffer::DataType, ConnectionError> TryRead(bool& would_block) noexcept;
+
 			/**
 			 * @brief Single recv with flags.
 			 * @param size Max bytes.

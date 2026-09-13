@@ -166,7 +166,7 @@ namespace StormByte::Network {
 			 * @brief Read, process, and reply for one ready session.
 			 * @param session Ready session.
 			 */
-			void ProcessSession(const std::shared_ptr<Detail::Session>& session) noexcept;
+			void ProcessSession(const std::shared_ptr<Detail::Session>& session, bool readable, bool writable) noexcept;
 
 			/** @brief Enqueue a worker completion and wake EventLoop. */
 			void PostCompletion(Completion completion) noexcept;

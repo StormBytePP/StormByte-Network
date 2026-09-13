@@ -25,7 +25,7 @@ namespace StormByte::Network::Detail {
 	Expected<EventLoop::Event, ConnectionClosed> EventLoop::Wait(const SessionList& sessions) noexcept {
 		for (const auto& session: sessions) {
 			if (session->ReadyForProcessing()) {
-				return Event{ EventKind::Session, session };
+				return Event{ EventKind::Session, session, true, session->HasOutput() };
 			}
 		}
 #ifdef UNIX
@@ -34,7 +34,8 @@ namespace StormByte::Network::Detail {
 		descriptors.push_back({ m_listener.Handle(), POLLIN, 0 });
 		descriptors.push_back({ m_wakeup_read, POLLIN, 0 });
 		for (const auto& session: sessions) {
-			descriptors.push_back({ session->Handle(), static_cast<short>(session->CanRead() ? POLLIN : 0), 0 });
+			const short events = static_cast<short>((session->CanRead() ? POLLIN : 0) | (session->HasOutput() ? POLLOUT : 0));
+			descriptors.push_back({ session->Handle(), events, 0 });
 		}
 		const int result = poll(descriptors.data(), descriptors.size(), 1000);
 		if (result < 0) {
@@ -52,24 +53,31 @@ namespace StormByte::Network::Detail {
 			return Event{ EventKind::Listener, nullptr };
 		}
 		for (std::size_t index = 0; index < sessions.size(); ++index) {
-			if (descriptors[index + 2].revents & (POLLIN | POLLERR | POLLHUP | POLLRDHUP)) {
-				return Event{ EventKind::Session, sessions[index] };
+			if (descriptors[index + 2].revents & (POLLIN | POLLOUT | POLLERR | POLLHUP | POLLRDHUP)) {
+				return Event{ EventKind::Session, sessions[index],
+					(descriptors[index + 2].revents & (POLLIN | POLLERR | POLLHUP | POLLRDHUP)) != 0,
+					(descriptors[index + 2].revents & POLLOUT) != 0 };
 			}
 		}
 		return Unexpected<ConnectionClosed>("Server reported an invalid event");
 #else
 		fd_set read_fds;
+		fd_set write_fds;
 		FD_ZERO(&read_fds);
+		FD_ZERO(&write_fds);
 		FD_SET(m_listener.Handle(), &read_fds);
 		FD_SET(m_wakeup_read, &read_fds);
 		std::shared_ptr<Session> ready_session;
 		for (const auto& session: sessions) {
-			if (!session->HasPendingFrame()) {
+			if (session->CanRead()) {
 				FD_SET(session->Handle(), &read_fds);
+			}
+			if (session->HasOutput()) {
+				FD_SET(session->Handle(), &write_fds);
 			}
 		}
 		timeval timeout{ .tv_sec = 1, .tv_usec = 0 };
-		const int result = select(0, &read_fds, nullptr, nullptr, &timeout);
+		const int result = select(0, &read_fds, &write_fds, nullptr, &timeout);
 		if (result == SOCKET_ERROR) {
 			return Unexpected<ConnectionClosed>("Failed to wait for server events");
 		}
@@ -85,13 +93,12 @@ namespace StormByte::Network::Detail {
 			return Event{ EventKind::Listener, nullptr };
 		}
 		for (const auto& session: sessions) {
-			if (session->CanRead() && FD_ISSET(session->Handle(), &read_fds)) {
+			const bool readable = session->CanRead() && FD_ISSET(session->Handle(), &read_fds);
+			const bool writable = session->HasOutput() && FD_ISSET(session->Handle(), &write_fds);
+			if (readable || writable) {
 				ready_session = session;
-				break;
+				return Event{ EventKind::Session, std::move(ready_session), readable, writable };
 			}
-		}
-		if (ready_session) {
-			return Event{ EventKind::Session, std::move(ready_session) };
 		}
 		return Unexpected<ConnectionClosed>("Server reported an invalid event");
 #endif
@@ -112,7 +119,7 @@ namespace StormByte::Network::Detail {
 					on_listener_ready();
 					break;
 				case EventKind::Session:
-					on_session_ready(wait_result->session);
+					on_session_ready(wait_result->session, wait_result->readable, wait_result->writable);
 					break;
 				case EventKind::Wakeup:
 					if (Connection::IsConnected(m_status.load(std::memory_order_acquire))) {
