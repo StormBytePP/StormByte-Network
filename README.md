@@ -9,6 +9,8 @@
 
 StormByte-Network is the C++26 networking module of the [StormByte](https://dev.stormbyte.org/StormByte) suite.
 
+It depends on [StormByte Base 1.1.0](https://github.com/StormBytePP/StormByte/releases/tag/1.1.0) (or newer), [StormByte Buffer 1.1.0](https://github.com/StormBytePP/StormByte-Buffer/releases/tag/1.1.0) (or newer), and [StormByte Logger 1.1.0](https://github.com/StormBytePP/StormByte-Logger/releases/tag/1.1.0) (or newer).
+
 It is not a thin socket wrapper. You inherit `Client` or `Server`, define packets, and attach Buffer pipelines. POSIX and Winsock, framing, accept loops and per-client workers stay private.
 
 ## Table of Contents
@@ -64,11 +66,11 @@ cmake --install build
 
 ## Dependencies
 
-| Dependency | Role |
-|------------|------|
-| StormByte (base) | Expected, exceptions, visibility |
-| StormByte-Buffer | FIFO, Pipeline, Consumer, External I/O |
-| StormByte-Logger | Diagnostics |
+| Dependency | Required Version | Role |
+|------------|------------------|------|
+| [StormByte (base)](https://github.com/StormBytePP/StormByte/releases/tag/1.1.0) | [1.1.0](https://github.com/StormBytePP/StormByte/releases/tag/1.1.0) | Expected, exceptions, visibility |
+| [StormByte-Buffer](https://github.com/StormBytePP/StormByte-Buffer/releases/tag/1.1.0) | [1.1.0](https://github.com/StormBytePP/StormByte-Buffer/releases/tag/1.1.0) | FIFO, Pipeline, Consumer, External I/O |
+| [StormByte-Logger](https://github.com/StormBytePP/StormByte-Logger/releases/tag/1.1.0) | [1.1.0](https://github.com/StormBytePP/StormByte-Logger/releases/tag/1.1.0) | Diagnostics |
 
 ## The rest of the suite
 

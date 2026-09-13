@@ -9,8 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 StormByte Network is the C++26 networking layer of the StormByte suite.
 
+It depends on [StormByte Base 1.1.0](https://github.com/StormBytePP/StormByte/releases/tag/1.1.0), [StormByte Logger 1.1.0](https://github.com/StormBytePP/StormByte-Logger/releases/tag/1.1.0), and [StormByte Buffer 1.1.0](https://github.com/StormBytePP/StormByte-Buffer/releases/tag/1.1.0).
+
 Inherit `Client` or `Server`, define packets, and attach Buffer pipelines.
 IPv4 and IPv6, framed request/response, POSIX and Winsock stay behind the public API.
+
+## [Unreleased]
+
+### Changed
+
+- Updated dependencies to [StormByte Base 1.1.0](https://github.com/StormBytePP/StormByte/releases/tag/1.1.0), [StormByte Logger 1.1.0](https://github.com/StormBytePP/StormByte-Logger/releases/tag/1.1.0), and [StormByte Buffer 1.1.0](https://github.com/StormBytePP/StormByte-Buffer/releases/tag/1.1.0).
 
 ## [1.0.0] - 2026-09-05
 
@@ -54,4 +62,5 @@ Initial public release of StormByte-Network.
 - `Client` and `Server` are designed to be **subclassed**, not used as generic drop-in types without derivation.
 - Public API surface is stable for the 1.x series; private socket/connection types remain implementation details.
 
+[Unreleased]: https://github.com/StormBytePP/StormByte-Network/compare/1.0.0...HEAD
 [1.0.0]: https://github.com/StormBytePP/StormByte-Network/releases/tag/1.0.0
