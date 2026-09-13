@@ -50,6 +50,7 @@ Server::Server(Server&& other) noexcept:
 	m_wakeup_read(other.m_wakeup_read),
 	m_wakeup_write(other.m_wakeup_write),
 	m_clients(std::move(other.m_clients)),
+	m_sessions(std::move(other.m_sessions)),
 	m_handle_msg_threads(std::move(other.m_handle_msg_threads)) {
 #ifdef WINDOWS
 	other.m_wakeup_read = INVALID_SOCKET;
@@ -73,6 +74,7 @@ Server& Server::operator=(Server&& other) noexcept {
 		m_wakeup_read = other.m_wakeup_read;
 		m_wakeup_write = other.m_wakeup_write;
 		m_clients = std::move(other.m_clients);
+		m_sessions = std::move(other.m_sessions);
 		m_handle_msg_threads = std::move(other.m_handle_msg_threads);
 #ifdef WINDOWS
 		other.m_wakeup_read = INVALID_SOCKET;
@@ -224,12 +226,18 @@ void Server::CloseWakeup() noexcept {
 void Server::DisconnectClient(const std::string& uuid) noexcept {
 	std::thread thread_to_join;
 	std::shared_ptr<Connection::Client> client;
+	std::shared_ptr<Detail::Session> session;
 	{
 		std::scoped_lock lock_guard(m_mutex);
 		auto it = m_clients.find(uuid);
 		if (it != m_clients.end()) {
 			client = it->second;
 			m_clients.erase(it);
+		}
+		auto session_it = m_sessions.find(uuid);
+		if (session_it != m_sessions.end()) {
+			session = session_it->second;
+			m_sessions.erase(session_it);
 		}
 		auto thread_it = m_handle_msg_threads.find(uuid);
 		if (thread_it != m_handle_msg_threads.end()) {
@@ -244,6 +252,9 @@ void Server::DisconnectClient(const std::string& uuid) noexcept {
 				m_handle_msg_threads.erase(thread_it);
 			}
 		}
+	}
+	if (session) {
+		session->Close();
 	}
 	// Socket I/O outside the map lock
 	if (client && client->Socket()) {
@@ -265,7 +276,9 @@ void Server::AcceptOneClient() noexcept {
 	const std::string client_uuid = expected_client.value()->UUID();
 	{
 		std::scoped_lock lock_guard(m_mutex);
-		m_clients.emplace(client_uuid, CreateConnection(expected_client.value()));
+		auto connection = CreateConnection(expected_client.value());
+		m_clients.emplace(client_uuid, connection);
+		m_sessions.emplace(client_uuid, std::make_shared<Detail::Session>(client_uuid, std::move(connection)));
 		m_handle_msg_threads.emplace(
 			client_uuid,
 			std::thread(&Server::HandleClientCommunication, this, client_uuid));
@@ -276,80 +289,70 @@ void Server::AcceptOneClient() noexcept {
 void Server::AcceptClients() noexcept {
 	m_logger << Logger::Level::LowLevel << "Started accept event loop" << std::endl;
 	Detail::EventLoop event_loop(*m_socket_server, m_wakeup_read, m_status, m_logger);
-	event_loop.Run([this]() noexcept {
-		AcceptOneClient();
-	});
+	event_loop.Run(
+		[this]() noexcept { AcceptOneClient(); },
+		[this]() {
+			Detail::EventLoop::SessionList sessions;
+			std::scoped_lock lock_guard(m_mutex);
+			sessions.reserve(m_sessions.size());
+			for (const auto& [_, session]: m_sessions) {
+				sessions.push_back(session);
+			}
+			return sessions;
+		},
+		[this](const std::shared_ptr<Detail::Session>& session) noexcept {
+			if (!session) {
+				return;
+			}
+			auto result = session->ReadReady(session->Client()->InputPipeline(), m_logger);
+			if (!result) {
+				session->Close();
+			}
+		},
+		[]() noexcept {}
+	);
 	m_logger << Logger::Level::LowLevel << "Stopped accept event loop" << std::endl;
 }
 void Server::HandleClientCommunication(const std::string& client_uuid) noexcept {
 	m_logger << Logger::Level::LowLevel << "Started communication thread for client uuid=" << client_uuid << std::endl;
+	std::shared_ptr<Detail::Session> session;
 	std::shared_ptr<Connection::Client> client;
 	{
 		std::scoped_lock lock_guard(m_mutex);
-		auto it = m_clients.find(client_uuid);
-		if (it == m_clients.end()) {
+		auto session_it = m_sessions.find(client_uuid);
+		if (session_it == m_sessions.end()) {
 			m_logger << Logger::Level::LowLevel << "Client uuid=" << client_uuid
 					<< " not found; ending communication thread" << std::endl;
 			return;
 		}
-		client = it->second;
+		session = session_it->second;
+		client = session->Client();
 	}
-	Detail::Session session(client_uuid, client);
-	while (Connection::IsConnected(m_status.load()) && Connection::IsConnected(session.Client()->Status())) {
-		auto expected_wait = client->Socket()->WaitForData();
-		if (!expected_wait) {
-			m_logger << Logger::Level::Error << expected_wait.error()->what() << std::endl;
+	while (Connection::IsConnected(m_status.load()) && Connection::IsConnected(client->Status())) {
+		auto expected_frame = session->TakeFrame();
+		if (!expected_frame) {
 			break;
 		}
-		switch (expected_wait.value()) {
-			case Connection::Read::Result::Success: {
-				auto expected_frames = session.AppendAndTakeFrames(client->InputPipeline(), m_logger);
-				if (!expected_frames) {
-					m_logger << Logger::Level::Error << "Failed to process frame from client="
-							<< client_uuid << ": " << expected_frames.error()->what() << std::endl;
-					break;
-				}
-				bool stop_client = false;
-				for (auto& frame : expected_frames.value()) {
-					PacketPointer packet = frame.ProcessPacket(m_deserialize_packet_function, m_logger);
-					if (!packet) {
-						m_logger << Logger::Level::Error << "Failed to process packet from client="
-								<< client_uuid << std::endl;
-						stop_client = true;
-						break;
-					}
-					if (!Connection::IsConnected(m_status.load())) {
-						stop_client = true;
-						break;
-					}
-					PacketPointer response_packet = ProcessClientPacket(client_uuid, packet);
-					if (!response_packet) {
-						m_logger << Logger::Level::Error
-								<< "HandleClientCommunication: response packet was null" << std::endl;
-						stop_client = true;
-						break;
-					}
-					if (session.Client()->Socket()->HasShutdownRequest() || !Connection::IsConnected(m_status.load())) {
-						stop_client = true;
-						break;
-					}
-					Reply(session.Client(), *response_packet);
-				}
-				if (stop_client) {
-					break;
-				}
-				continue; // success path: wait for next message
-			}
-			case Connection::Read::Result::Closed:
-			case Connection::Read::Result::ShutdownRequest:
-				break;
-			case Connection::Read::Result::Timeout:
-				// No data this slice — keep waiting (no yield, no log spam)
-				continue;
-			default:
-				continue;
+		PacketPointer packet = expected_frame->ProcessPacket(m_deserialize_packet_function, m_logger);
+		if (!packet) {
+			m_logger << Logger::Level::Error << "Failed to process packet from client=" << client_uuid << std::endl;
+			session->Close();
+			break;
 		}
-		break; // Closed / error / null packet
+		if (!Connection::IsConnected(m_status.load())) {
+			break;
+		}
+		PacketPointer response_packet = ProcessClientPacket(client_uuid, packet);
+		if (!response_packet) {
+			m_logger << Logger::Level::Error << "HandleClientCommunication: response packet was null" << std::endl;
+			session->Close();
+			break;
+		}
+		if (client->Socket()->HasShutdownRequest() || !Connection::IsConnected(m_status.load())) {
+			break;
+		}
+		Reply(client, *response_packet);
+		SignalWakeup();
 	}
 	DisconnectClient(client_uuid);
 	m_logger << Logger::Level::LowLevel << "Stopped communication thread for client uuid="

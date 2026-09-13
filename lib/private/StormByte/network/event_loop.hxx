@@ -11,12 +11,14 @@
 #pragma once
 
 #include <StormByte/network/socket/server.hxx>
+#include <StormByte/network/session.hxx>
 #include <StormByte/network/typedefs.hxx>
 #include <StormByte/network/visibility.h>
 
 #include <atomic>
 #include <functional>
 #include <memory>
+#include <vector>
 
 namespace StormByte::Network::Detail {
 	/**
@@ -29,6 +31,10 @@ namespace StormByte::Network::Detail {
 	class STORMBYTE_NETWORK_PRIVATE EventLoop final {
 		public:
 			using ListenerCallback = std::function<void()>; ///< Listener-ready callback.
+			using SessionList = std::vector<std::shared_ptr<Session>>; ///< Session snapshot.
+			using SessionSnapshot = std::function<SessionList()>; ///< Session snapshot callback.
+			using SessionCallback = std::function<void(const std::shared_ptr<Session>&)>; ///< Session-ready callback.
+			using WakeupCallback = std::function<void()>; ///< Wakeup callback.
 
 			/**
 			 * @brief Bind the loop to a listener and wakeup read handle.
@@ -45,7 +51,10 @@ namespace StormByte::Network::Detail {
 			 * @brief Run until the server stops or the wakeup is signalled.
 			 * @param on_listener_ready Called when the listener is readable.
 			 */
-			void Run(const ListenerCallback& on_listener_ready) noexcept;
+			void Run(const ListenerCallback& on_listener_ready,
+				const SessionSnapshot& snapshot,
+				const SessionCallback& on_session_ready,
+				const WakeupCallback& on_wakeup) noexcept;
 
 		private:
 			Socket::Server& m_listener; ///< Listening socket.
@@ -53,10 +62,14 @@ namespace StormByte::Network::Detail {
 			const std::atomic<Connection::Status>& m_status; ///< Server status.
 			std::shared_ptr<Logger::Log> m_logger; ///< Diagnostic logger.
 
+			enum class EventKind: unsigned short { Timeout, Listener, Session, Wakeup }; ///< Wait event kind.
+			struct Event { EventKind kind; std::shared_ptr<Session> session; }; ///< Wait event.
+
 			/**
-			 * @brief Wait for listener or wakeup activity.
-			 * @return Read result.
+			 * @brief Wait for listener, wakeup, or a session descriptor.
+			 * @param sessions Current session snapshot.
+			 * @return Wait event.
 			 */
-			ExpectedReadResult Wait() noexcept;
+			Expected<Event, ConnectionClosed> Wait(const SessionList& sessions) noexcept;
 	};
 }

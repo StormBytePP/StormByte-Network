@@ -39,6 +39,7 @@ This document records the observable behavior that the internal server redesign 
 - Shutdown must wake blocked I/O, stop new work, close or drain per-connection state according to the selected lifecycle policy, and complete without deadlock.
 - Any internal queues must be bounded. Backpressure must not create an unbounded allocation path.
 - The current event loop covers listener and shutdown wakeup only; client workers remain separate.
+- The event loop also registers active session sockets and delivers parsed frames to their existing workers; processing and synchronous replies still run in those workers.
 - A slow `ProcessClientPacket` currently blocks progress in the thread that executes it; a bounded worker pool is required before claiming isolation from slow handlers.
 
 ## Platform Boundaries

@@ -15,6 +15,8 @@
 #include <StormByte/network/visibility.h>
 
 #include <vector>
+#include <condition_variable>
+#include <mutex>
 
 /**
  * @brief Private server implementation details.
@@ -57,6 +59,38 @@ namespace StormByte::Network::Detail {
 			bool Closed() const noexcept;
 
 			/**
+			 * @brief Whether a parsed frame is waiting for the worker.
+			 * @return true when input must not be read again.
+			 */
+			bool HasPendingFrame() const noexcept;
+
+			/**
+			 * @brief Native socket handle for event-loop registration.
+			 * @return Socket handle.
+			 */
+			Connection::HandlerType Handle() const noexcept;
+
+			/**
+			 * @brief Read and queue complete frames from a ready socket.
+			 * @param in_pipeline Input payload pipeline.
+			 * @param logger Diagnostic logger.
+			 * @return Empty on success, or connection error.
+			 */
+			StormByte::Expected<void, ConnectionError> ReadReady(
+				Buffer::Pipeline& in_pipeline, std::shared_ptr<Logger::Log> logger) noexcept;
+
+			/**
+			 * @brief Wait for one parsed frame or session closure.
+			 * @return One frame, or connection error when closed.
+			 */
+			StormByte::Expected<Transport::Frame, ConnectionError> TakeFrame() noexcept;
+
+			/**
+			 * @brief Close the session and wake its worker.
+			 */
+			void Close() noexcept;
+
+			/**
 			 * @brief Receive bytes and extract every complete frame currently available.
 			 * @param in_pipeline Input payload pipeline.
 			 * @param logger Diagnostic logger.
@@ -82,5 +116,19 @@ namespace StormByte::Network::Detail {
 			std::size_t m_bytes_needed = FRAME_HEADER_SIZE; ///< Remaining bytes in the current phase
 			ParsePhase m_phase = ParsePhase::Header; ///< Current parser phase
 			bool m_closed = false; ///< Terminal receive state
+			FrameList m_ready_frames; ///< Parsed frames waiting for the worker
+			mutable std::mutex m_mutex; ///< Protects parser and frame queue
+			std::condition_variable m_frame_ready; ///< Wakes the client worker
+
+			/**
+			 * @brief Append bytes to the parser and queue complete frames.
+			 * @param received Newly received bytes.
+			 * @param in_pipeline Input payload pipeline.
+			 * @param logger Diagnostic logger.
+			 * @return Empty on success, or connection error.
+			 */
+			StormByte::Expected<void, ConnectionError> AppendReceived(
+				Buffer::DataType&& received, Buffer::Pipeline& in_pipeline,
+				std::shared_ptr<Logger::Log> logger) noexcept;
 	};
 }
