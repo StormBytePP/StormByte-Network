@@ -29,7 +29,7 @@ namespace StormByte::Network::Detail {
 		descriptors.push_back({ m_listener.Handle(), POLLIN, 0 });
 		descriptors.push_back({ m_wakeup_read, POLLIN, 0 });
 		for (const auto& session: sessions) {
-			descriptors.push_back({ session->Handle(), static_cast<short>(session->HasPendingFrame() ? 0 : POLLIN), 0 });
+			descriptors.push_back({ session->Handle(), POLLIN, 0 });
 		}
 		const int result = poll(descriptors.data(), descriptors.size(), 1000);
 		if (result < 0) {
@@ -80,7 +80,7 @@ namespace StormByte::Network::Detail {
 			return Event{ EventKind::Listener, nullptr };
 		}
 		for (const auto& session: sessions) {
-			if (!session->HasPendingFrame() && FD_ISSET(session->Handle(), &read_fds)) {
+			if (FD_ISSET(session->Handle(), &read_fds)) {
 				ready_session = session;
 				break;
 			}

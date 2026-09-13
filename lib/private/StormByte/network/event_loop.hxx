@@ -25,8 +25,8 @@ namespace StormByte::Network::Detail {
 	 * @class EventLoop
 	 * @brief Private listener and wakeup event loop.
 	 *
-	 * The loop currently covers the listener and shutdown wakeup. Client workers
-	 * remain separate while session descriptors are introduced later.
+	 * The loop owns listener, wakeup, and session I/O. Packet processing is
+	 * intentionally synchronous here until a bounded worker pool is introduced.
 	 */
 	class STORMBYTE_NETWORK_PRIVATE EventLoop final {
 		public:

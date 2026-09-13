@@ -22,7 +22,6 @@
 #include <StormByte/network/endpoint.hxx>
 
 #include <atomic>
-#include <mutex>
 #include <thread>
 #include <unordered_map>
 
@@ -46,7 +45,7 @@ namespace StormByte::Network {
 	 * @class Server
 	 * @brief Abstract application server.
 	 *
-	 * Listen socket, accept loop and per-client workers. Implement ProcessClientPacket(); override pipelines as needed.
+	 * Listen socket and single-threaded event loop. Implement ProcessClientPacket(); override pipelines as needed.
 	 *
 	 * @note Inheritance-oriented. Subclass required.
 	 */
@@ -119,10 +118,7 @@ namespace StormByte::Network {
 			std::thread m_accept_thread;															///< Accept loop thread
 			Connection::HandlerType m_wakeup_read;												///< Wakeup read handle
 			Connection::HandlerType m_wakeup_write;												///< Wakeup write handle
-			std::unordered_map<std::string, std::shared_ptr<Connection::Client>> m_clients;		///< Active clients
 			std::unordered_map<std::string, std::shared_ptr<Detail::Session>> m_sessions;	///< Active parser sessions
-			std::unordered_map<std::string, std::thread> m_handle_msg_threads;						///< Per-client workers
-			std::mutex m_mutex;																		///< Protects client maps
 
 			/**
 			 * @brief Accept-loop thread body.
@@ -151,10 +147,10 @@ namespace StormByte::Network {
 			void AcceptOneClient() noexcept;
 
 			/**
-			 * @brief Per-client communication thread body.
-			 * @param client_uuid Client UUID.
+			 * @brief Read, process, and reply for one ready session.
+			 * @param session Ready session.
 			 */
-			void HandleClientCommunication(const std::string& client_uuid) noexcept;
+			void ProcessSession(const std::shared_ptr<Detail::Session>& session) noexcept;
 
 			/**
 			 * @brief Application packet handler.

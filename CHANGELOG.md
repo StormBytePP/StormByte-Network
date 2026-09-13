@@ -26,6 +26,7 @@ IPv4 and IPv6, framed request/response, POSIX and Winsock stay behind the public
 - Added a portable accept-loop wakeup channel so server shutdown does not tear down the listener to interrupt a wait.
 - Extracted the listener and shutdown wait into a private event loop while preserving per-client workers.
 - Connected active session sockets to the private event loop while retaining one synchronous worker per client for packet processing.
+- Replaced per-client workers with one event-loop thread for session parsing, packet processing, and synchronous replies; slow handlers and sends remain documented limitations until the worker pool.
 
 ### Fixed
 
