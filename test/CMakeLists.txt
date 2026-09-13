@@ -10,5 +10,8 @@ if(ENABLE_TEST)
 	# Client/Server interaction test
 	add_executable(ClientServerTest client_server_test.cxx)
 	target_link_libraries(ClientServerTest StormByte::Network)
+	if(WIN32)
+		target_link_libraries(ClientServerTest PRIVATE ws2_32)
+	endif()
 	add_test(NAME ClientServerTest COMMAND ClientServerTest)
 endif()
