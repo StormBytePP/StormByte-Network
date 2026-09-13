@@ -369,7 +369,10 @@ namespace Test {
 						return std::make_shared<Packet::AnswerRandomNumber>(random_number);
 					}
 					case Packet::Opcode::C_MSG_SENDLARGEDATA: {
-						auto large_data_packet = std::static_pointer_cast<Packet::LargeData>(packet);
+						auto large_data_packet = std::dynamic_pointer_cast<Packet::LargeData>(packet);
+						if (!large_data_packet) {
+							return nullptr;
+						}
 						// Move payload into the answer — no extra 20 MiB copy
 						return std::make_shared<Packet::AnswerLargeDataEchoed>(large_data_packet->TakeData());
 					}
