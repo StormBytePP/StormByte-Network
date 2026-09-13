@@ -19,6 +19,8 @@ IPv4 and IPv6, framed request/response, POSIX and Winsock stay behind the public
 ### Changed
 
 - Updated dependencies to [StormByte Base 1.1.0](https://github.com/StormBytePP/StormByte/releases/tag/1.1.0), [StormByte Logger 1.1.0](https://github.com/StormBytePP/StormByte-Logger/releases/tag/1.1.0), and [StormByte Buffer 1.1.0](https://github.com/StormBytePP/StormByte-Buffer/releases/tag/1.1.0).
+- Reduced non-blocking socket wait overhead by waiting for readability/writability only when the system call reports backpressure.
+- Expanded client/server integration coverage with empty-payload, text-echo, and numeric-sum commands.
 
 ### Fixed
 

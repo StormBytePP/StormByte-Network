@@ -28,11 +28,7 @@
 #include <sys/socket.h>
 #include <unistd.h>
 #include <errno.h>
-#ifdef LINUX
-#include <sys/epoll.h>
-#else
 #include <poll.h>
-#endif
 #else
 #include <winsock2.h>
 #include <ws2tcpip.h>
@@ -152,78 +148,7 @@ StormByte::Network::ExpectedReadResult Socket::WaitForData(const long long& usec
 	};
 	while (Connection::IsConnected(m_status.load(std::memory_order_acquire))) {
 		log_progress_if_due();
-#ifdef LINUX
-		int timeout_ms = -1;
-		if (usecs > 0) {
-			auto now2 = std::chrono::steady_clock::now();
-			if (now2 >= deadline) {
-				log_wait_done("timeout");
-				return Connection::Read::Result::Timeout;
-			}
-			auto remaining = std::chrono::duration_cast<std::chrono::milliseconds>(deadline - now2);
-			timeout_ms = static_cast<int>(remaining.count());
-			if (timeout_ms < 0) timeout_ms = 0;
-		}
-		int epfd = epoll_create1(0);
-		if (epfd == -1) {
-			return Unexpected<ConnectionClosed>("Failed to create epoll instance");
-		}
-		struct epoll_event ev;
-		ev.events = EPOLLIN | EPOLLPRI | EPOLLRDHUP | EPOLLHUP | EPOLLERR;
-		ev.data.fd = m_handle;
-		if (epoll_ctl(epfd, EPOLL_CTL_ADD, m_handle, &ev) == -1) {
-			close(epfd);
-			return Unexpected<ConnectionClosed>("Failed to add fd to epoll");
-		}
-		struct epoll_event events[1];
-		int nfds = epoll_wait(epfd, events, 1, timeout_ms);
-		epoll_ctl(epfd, EPOLL_CTL_DEL, m_handle, nullptr);
-		close(epfd);
-		if (nfds > 0) {
-			uint32_t evflags = events[0].events;
-			if (evflags & EPOLLERR) {
-				return Unexpected<ConnectionClosed>("Socket error while waiting for data");
-			}
-			if (evflags & (EPOLLHUP | EPOLLRDHUP)) {
-				if (m_status.load(std::memory_order_acquire) != Connection::Status::Connected)
-					return Connection::Read::Result::Closed;
-				if (evflags & EPOLLIN) {
-					char tmp;
-					ssize_t r = recv(m_handle, &tmp, 1, MSG_PEEK | MSG_DONTWAIT);
-					if (r > 0) {
-						log_wait_done("data available");
-						return Connection::Read::Result::Success;
-					} else if (r == 0) {
-						log_wait_done("peer shutdown");
-						return Connection::Read::Result::ShutdownRequest;
-					} else {
-						if (errno == EWOULDBLOCK || errno == EAGAIN) {
-							log_wait_done("data available");
-							return Connection::Read::Result::Success;
-						}
-						return Unexpected<ConnectionClosed>("recv(MSG_PEEK) error while checking shutdown");
-					}
-				}
-				log_wait_done("peer shutdown");
-				return Connection::Read::Result::ShutdownRequest;
-			}
-			if (m_status.load(std::memory_order_acquire) != Connection::Status::Connected)
-				return Connection::Read::Result::Closed;
-			if (evflags & (EPOLLIN | EPOLLPRI)) {
-				log_wait_done("data available");
-				return Connection::Read::Result::Success;
-			}
-			return Unexpected<ConnectionClosed>("Unknown epoll event while waiting for data");
-		} else if (nfds == 0) {
-			log_wait_done("timeout");
-			return Connection::Read::Result::Timeout;
-		} else {
-			if (errno == ECONNRESET || errno == EBADF) {
-				return Unexpected<ConnectionClosed>("Connection closed or invalid socket");
-			}
-			return Unexpected<ConnectionClosed>("Failed to wait for data: epoll_wait error");
-		}
-#elifdef UNIX
+	#ifdef UNIX
 		// macOS / other POSIX: poll (máxima portabilidad)
 		int timeout_ms = -1;
 		if (usecs > 0) {
@@ -304,80 +229,41 @@ StormByte::Network::ExpectedReadResult Socket::WaitForData(const long long& usec
 			timeout_ms = static_cast<int>(remaining.count());
 			if (timeout_ms < 0) timeout_ms = 0;
 		}
-		WSAEVENT ev = WSACreateEvent();
-		if (ev == WSA_INVALID_EVENT) {
-			return Unexpected<ConnectionClosed>("Failed to create WSA event");
-		}
-		long mask = FD_READ | FD_CLOSE | FD_ACCEPT;
-		if (WSAEventSelect(m_handle, ev, mask) == SOCKET_ERROR) {
-			WSACloseEvent(ev);
-			return Unexpected<ConnectionClosed>("WSAEventSelect failed");
-		}
-		DWORD wait_res = WSAWaitForMultipleEvents(
-			1, &ev, FALSE,
-			(timeout_ms < 0 ? WSA_INFINITE : static_cast<DWORD>(timeout_ms)),
-			FALSE);
-		if (wait_res == WSA_WAIT_TIMEOUT) {
-			WSAEventSelect(m_handle, NULL, 0);
-			WSACloseEvent(ev);
+		fd_set read_fds;
+		FD_ZERO(&read_fds);
+		FD_SET(m_handle, &read_fds);
+		timeval timeout{ .tv_sec = timeout_ms / 1000, .tv_usec = (timeout_ms % 1000) * 1000 };
+		timeval* timeout_ptr = timeout_ms < 0 ? nullptr : &timeout;
+		const int wait_res = select(0, &read_fds, nullptr, nullptr, timeout_ptr);
+		if (wait_res == 0) {
 			log_wait_done("timeout");
 			return Connection::Read::Result::Timeout;
-		} else if (wait_res == WSA_WAIT_FAILED) {
+		} else if (wait_res == SOCKET_ERROR) {
 			int wsa_err = WSAGetLastError();
-			WSAEventSelect(m_handle, NULL, 0);
-			WSACloseEvent(ev);
 			if (wsa_err == WSAECONNRESET || wsa_err == WSAENOTSOCK) {
 				return Unexpected<ConnectionClosed>("Connection closed or invalid socket");
 			}
-			return Unexpected<ConnectionClosed>("WSAWaitForMultipleEvents failed");
+			return Unexpected<ConnectionClosed>("select failed");
 		} else {
-			WSANETWORKEVENTS netev;
-			if (WSAEnumNetworkEvents(m_handle, ev, &netev) == SOCKET_ERROR) {
-				WSAEventSelect(m_handle, NULL, 0);
-				WSACloseEvent(ev);
-				return Unexpected<ConnectionClosed>("WSAEnumNetworkEvents failed");
-			}
-			WSAEventSelect(m_handle, NULL, 0);
-			WSACloseEvent(ev);
-			if (netev.lNetworkEvents & FD_CLOSE) {
-				int err = netev.iErrorCode[FD_CLOSE_BIT];
-				if (err != 0) {
-					return Unexpected<ConnectionClosed>("Connection closed with error");
-				}
-				if ((netev.lNetworkEvents & FD_READ) != 0) {
-					char tmp;
-					int r = recv(m_handle, &tmp, 1, MSG_PEEK);
-					if (r > 0) {
-						log_wait_done("data available");
-						return Connection::Read::Result::Success;
-					} else if (r == 0) {
-						log_wait_done("peer shutdown");
-						return Connection::Read::Result::ShutdownRequest;
-					} else {
-						int wsaerr = WSAGetLastError();
-						if (wsaerr == WSAEWOULDBLOCK) {
-							log_wait_done("data available");
-							return Connection::Read::Result::Success;
-						}
-						return Unexpected<ConnectionClosed>("recv(MSG_PEEK) failed while checking shutdown");
-					}
-				}
-				log_wait_done("peer shutdown");
-				return Connection::Read::Result::ShutdownRequest;
-			}
-			if (netev.lNetworkEvents & FD_READ) {
-				if (m_status.load(std::memory_order_acquire) != Connection::Status::Connected)
-					return Connection::Read::Result::Closed;
+			if (!FD_ISSET(m_handle, &read_fds))
+				return Unexpected<ConnectionClosed>("Unknown select event while waiting for data");
+			if (m_status.load(std::memory_order_acquire) != Connection::Status::Connected)
+				return Connection::Read::Result::Closed;
+			char tmp;
+			const int bytes_read = recv(m_handle, &tmp, 1, MSG_PEEK);
+			if (bytes_read > 0) {
 				log_wait_done("data available");
 				return Connection::Read::Result::Success;
 			}
-			m_logger << Logger::Level::LowLevel
-					<< "WSA wait signaled unknown network event (flags=0x" << std::hex
-					<< netev.lNetworkEvents << std::dec << ")" << std::endl;
-			if (m_status.load(std::memory_order_acquire) != Connection::Status::Connected)
-				return Connection::Read::Result::Closed;
-			log_wait_done("data available");
-			return Connection::Read::Result::Success;
+			if (bytes_read == 0) {
+				log_wait_done("peer shutdown");
+				return Connection::Read::Result::ShutdownRequest;
+			}
+			if (WSAGetLastError() == WSAEWOULDBLOCK) {
+				log_wait_done("data available");
+				return Connection::Read::Result::Success;
+			}
+			return Unexpected<ConnectionClosed>("recv(MSG_PEEK) failed while checking shutdown");
 		}
 #endif
 	}

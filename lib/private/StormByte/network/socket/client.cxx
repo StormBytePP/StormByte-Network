@@ -49,6 +49,30 @@ namespace {
 			preferred = std::min(preferred, remaining);
 		return std::max(preferred, static_cast<std::size_t>(1));
 	}
+
+	/**
+	 * @brief Wait for a non-blocking socket to become writable.
+	 * @param handle Native socket handle.
+	 * @return 1 when writable, 0 on timeout, or -1 on error.
+	 */
+	int WaitForWritable(Connection::HandlerType handle) noexcept {
+#ifdef UNIX
+		pollfd pfd{ .fd = handle, .events = POLLOUT, .revents = 0 };
+		const int result = poll(&pfd, 1, 50);
+		if (result <= 0)
+			return result;
+		return (pfd.revents & (POLLOUT | POLLERR | POLLHUP)) != 0 ? 1 : 0;
+#else
+		fd_set write_fds;
+		FD_ZERO(&write_fds);
+		FD_SET(handle, &write_fds);
+		TIMEVAL timeout{ .tv_sec = 0, .tv_usec = 50000 };
+		const int result = select(0, nullptr, &write_fds, nullptr, &timeout);
+		if (result <= 0)
+			return result == SOCKET_ERROR ? -1 : 0;
+		return FD_ISSET(handle, &write_fds) ? 1 : 0;
+#endif
+	}
 }
 Socket::Client::Client(const Connection::Protocol& protocol, std::shared_ptr<Logger::Log> logger) noexcept
 :Socket(protocol, logger) {
@@ -103,38 +127,6 @@ ExpectedVoid Socket::Client::Send(std::span<const std::byte> data) noexcept {
 		? static_cast<std::size_t>(m_effective_send_buf)
 		: DEFAULT_IO_CHUNK;
 	while (!data.empty()) {
-#ifdef UNIX
-		struct pollfd pfd;
-		pfd.fd = m_handle;
-		pfd.events = POLLOUT;
-		int pol = poll(&pfd, 1, 50);
-		if (pol < 0) {
-			return Unexpected<ConnectionError>(
-				"Poll error: {} (error code: {})",
-				Connection::Handler::Instance().LastError(),
-				Connection::Handler::Instance().LastErrorCode());
-		} else if (pol == 0) {
-			continue;
-		} else if (!(pfd.revents & POLLOUT)) {
-			continue;
-		}
-#else
-		fd_set writefds;
-		FD_ZERO(&writefds);
-		FD_SET(m_handle, &writefds);
-		TIMEVAL tv;
-		tv.tv_sec  = 0;
-		tv.tv_usec = 50000;
-		int sel = select(0, nullptr, &writefds, nullptr, &tv);
-		if (sel == SOCKET_ERROR) {
-			return Unexpected<ConnectionError>(
-				"Select error: {} (error code: {})",
-				Connection::Handler::Instance().LastError(),
-				Connection::Handler::Instance().LastErrorCode());
-		} else if (sel == 0) {
-			continue;
-		}
-#endif
 		const std::size_t chunk_size = ClampChunk(preferred, data.size());
 		std::span<const std::byte> chunk = data.subspan(0, chunk_size);
 #ifdef LINUX
@@ -150,11 +142,17 @@ ExpectedVoid Socket::Client::Send(std::span<const std::byte> data) noexcept {
 #ifdef WINDOWS
 			const int wsa = Connection::Handler::Instance().LastErrorCode();
 			if (wsa == WSAEWOULDBLOCK) {
-				continue;
+				const int wait_result = WaitForWritable(m_handle);
+				if (wait_result > 0)
+					continue;
+				if (wait_result == 0)
+					continue;
 			}
 #else
 			if (errno == EAGAIN || errno == EWOULDBLOCK) {
-				continue;
+				const int wait_result = WaitForWritable(m_handle);
+				if (wait_result >= 0)
+					continue;
 			}
 #endif
 			int sys_errno = errno;
@@ -404,11 +402,15 @@ ExpectedVoid Socket::Client::Write(std::span<const std::byte> data, const std::s
 		if (written <= 0) {
 #ifdef WINDOWS
 			if (Connection::Handler::Instance().LastErrorCode() == WSAEWOULDBLOCK) {
-				continue;
+				const int wait_result = WaitForWritable(m_handle);
+				if (wait_result >= 0)
+					continue;
 			}
 #else
 			if (errno == EAGAIN || errno == EWOULDBLOCK) {
-				continue;
+				const int wait_result = WaitForWritable(m_handle);
+				if (wait_result >= 0)
+					continue;
 			}
 #endif
 			int sys_errno = errno;

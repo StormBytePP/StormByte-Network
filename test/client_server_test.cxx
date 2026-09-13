@@ -26,6 +26,7 @@
 #include <chrono>
 #include <cstdlib>
 #include <iostream>
+#include <numeric>
 #include <thread>
 #include <random>
 #include <utility>
@@ -63,7 +64,13 @@ namespace Test {
 			C_MSG_ASKRANDOMNUMBER,
 			S_MSG_RESPONDRANDOMNUMBER,
 			C_MSG_SENDLARGEDATA,
-			S_MSG_REPLYLARGEDATAECHOED
+			S_MSG_REPLYLARGEDATAECHOED,
+			C_MSG_PING,
+			S_MSG_PONG,
+			C_MSG_ECHOTEXT,
+			S_MSG_REPLYTEXT,
+			C_MSG_SUMNUMBERS,
+			S_MSG_REPLYSUM
 		};
 		class Generic: public Transport::Packet {
 			public:
@@ -156,6 +163,72 @@ namespace Test {
 			private:
 				std::string m_data;
 		};
+		class Ping: public Generic {
+			public:
+				Ping(): Generic(Opcode::C_MSG_PING) {}
+				DataType DoSerialize() const noexcept override {
+					return {};
+				}
+		};
+		class Pong: public Generic {
+			public:
+				Pong(): Generic(Opcode::S_MSG_PONG) {}
+				DataType DoSerialize() const noexcept override {
+					return {};
+				}
+		};
+		class EchoText: public Generic {
+			public:
+				explicit EchoText(std::string text) noexcept:
+					Generic(Opcode::C_MSG_ECHOTEXT), m_text(std::move(text)) {}
+				DataType DoSerialize() const noexcept override {
+					return Serializable<std::string>(m_text).Serialize();
+				}
+				const std::string& GetText() const noexcept {
+					return m_text;
+				}
+			private:
+				std::string m_text;
+		};
+		class ReplyText: public Generic {
+			public:
+				explicit ReplyText(std::string text) noexcept:
+					Generic(Opcode::S_MSG_REPLYTEXT), m_text(std::move(text)) {}
+				DataType DoSerialize() const noexcept override {
+					return Serializable<std::string>(m_text).Serialize();
+				}
+				const std::string& GetText() const noexcept {
+					return m_text;
+				}
+			private:
+				std::string m_text;
+		};
+		class SumNumbers: public Generic {
+			public:
+				explicit SumNumbers(std::vector<int> numbers) noexcept:
+					Generic(Opcode::C_MSG_SUMNUMBERS), m_numbers(std::move(numbers)) {}
+				DataType DoSerialize() const noexcept override {
+					return Serializable<std::vector<int>>(m_numbers).Serialize();
+				}
+				const std::vector<int>& GetNumbers() const noexcept {
+					return m_numbers;
+				}
+			private:
+				std::vector<int> m_numbers;
+		};
+		class ReplySum: public Generic {
+			public:
+				explicit ReplySum(const int& sum) noexcept:
+					Generic(Opcode::S_MSG_REPLYSUM), m_sum(sum) {}
+				DataType DoSerialize() const noexcept override {
+					return Serializable<int>(m_sum).Serialize();
+				}
+				int GetSum() const noexcept {
+					return m_sum;
+				}
+			private:
+				int m_sum;
+		};
 	}
 
 	DeserializePacketFunction DeserializeFunction() {
@@ -202,6 +275,38 @@ namespace Test {
 						return nullptr;
 					}
 					return std::make_shared<Packet::AnswerLargeDataEchoed>(std::move(*expected_data));
+				}
+				case Packet::Opcode::C_MSG_PING:
+					return std::make_shared<Packet::Ping>();
+				case Packet::Opcode::S_MSG_PONG:
+					return std::make_shared<Packet::Pong>();
+				case Packet::Opcode::C_MSG_ECHOTEXT: {
+					auto expected_text = Serializable<std::string>::Deserialize(data);
+					if (!expected_text) {
+						return nullptr;
+					}
+					return std::make_shared<Packet::EchoText>(std::move(*expected_text));
+				}
+				case Packet::Opcode::S_MSG_REPLYTEXT: {
+					auto expected_text = Serializable<std::string>::Deserialize(data);
+					if (!expected_text) {
+						return nullptr;
+					}
+					return std::make_shared<Packet::ReplyText>(std::move(*expected_text));
+				}
+				case Packet::Opcode::C_MSG_SUMNUMBERS: {
+					auto expected_numbers = Serializable<std::vector<int>>::Deserialize(data);
+					if (!expected_numbers) {
+						return nullptr;
+					}
+					return std::make_shared<Packet::SumNumbers>(std::move(*expected_numbers));
+				}
+				case Packet::Opcode::S_MSG_REPLYSUM: {
+					auto expected_sum = Serializable<int>::Deserialize(data);
+					if (!expected_sum) {
+						return nullptr;
+					}
+					return std::make_shared<Packet::ReplySum>(*expected_sum);
 				}
 				default:
 					return nullptr;
@@ -319,6 +424,41 @@ namespace Test {
 				// Move data out of the packet so the shared_ptr can die without retaining 20 MiB
 				return answer_packet->TakeData();
 			}
+
+			bool RequestPing() noexcept {
+				Packet::Ping request_packet;
+				auto response_packet = Send(request_packet);
+				if (!response_packet) {
+					return false;
+				}
+				return std::dynamic_pointer_cast<Packet::Pong>(response_packet) != nullptr;
+			}
+
+			NetExpected<std::string> RequestEchoText(std::string text) noexcept {
+				Packet::EchoText request_packet(std::move(text));
+				auto response_packet = Send(request_packet);
+				if (!response_packet) {
+					return SB::Unexpected<Net::Exception>("Client::RequestEchoText: failed to send/receive packet");
+				}
+				auto answer_packet = std::dynamic_pointer_cast<Packet::ReplyText>(response_packet);
+				if (!answer_packet) {
+					return SB::Unexpected<Net::Exception>("Client::RequestEchoText: received unexpected packet opcode ({})", response_packet->Opcode());
+				}
+				return answer_packet->GetText();
+			}
+
+			NetExpected<int> RequestSum(std::vector<int> numbers) noexcept {
+				Packet::SumNumbers request_packet(std::move(numbers));
+				auto response_packet = Send(request_packet);
+				if (!response_packet) {
+					return SB::Unexpected<Net::Exception>("Client::RequestSum: failed to send/receive packet");
+				}
+				auto answer_packet = std::dynamic_pointer_cast<Packet::ReplySum>(response_packet);
+				if (!answer_packet) {
+					return SB::Unexpected<Net::Exception>("Client::RequestSum: received unexpected packet opcode ({})", response_packet->Opcode());
+				}
+				return answer_packet->GetSum();
+			}
 	};
 
 	class Server: public Net::Server {
@@ -375,6 +515,24 @@ namespace Test {
 						}
 						// Move payload into the answer — no extra 20 MiB copy
 						return std::make_shared<Packet::AnswerLargeDataEchoed>(large_data_packet->TakeData());
+					}
+					case Packet::Opcode::C_MSG_PING:
+						return std::make_shared<Packet::Pong>();
+					case Packet::Opcode::C_MSG_ECHOTEXT: {
+						auto text_packet = std::dynamic_pointer_cast<Packet::EchoText>(packet);
+						if (!text_packet) {
+							return nullptr;
+						}
+						return std::make_shared<Packet::ReplyText>(text_packet->GetText());
+					}
+					case Packet::Opcode::C_MSG_SUMNUMBERS: {
+						auto numbers_packet = std::dynamic_pointer_cast<Packet::SumNumbers>(packet);
+						if (!numbers_packet) {
+							return nullptr;
+						}
+						const auto& numbers = numbers_packet->GetNumbers();
+						const int sum = std::accumulate(numbers.begin(), numbers.end(), 0);
+						return std::make_shared<Packet::ReplySum>(sum);
 					}
 					default:
 						return nullptr;
@@ -486,11 +644,46 @@ int TestRequestLargeDataEchoed() {
 	RETURN_TEST(fn_name, 0);
 }
 
+int TestRequestAdditionalCommands() {
+	const std::string fn_name = "TestRequestAdditionalCommands";
+
+	Test::Server server(logger);
+	if (!server.Connect(Net::Connection::Protocol::IPv4, HOST, PORT)) {
+		logger << Level::Error << fn_name << ": server.Connect failed." << std::endl;
+		RETURN_TEST(fn_name, 1);
+	}
+
+	std::this_thread::sleep_for(std::chrono::milliseconds(100));
+
+	Test::Client client(logger);
+	if (!client.Connect(Net::Connection::Protocol::IPv4, HOST, PORT)) {
+		logger << Level::Error << fn_name << ": client.Connect failed." << std::endl;
+		RETURN_TEST(fn_name, 1);
+	}
+
+	ASSERT_TRUE(fn_name, client.RequestPing());
+
+	const std::string text = "StormByte network command with spaces and UTF-8: cafe";
+	auto echoed_text = client.RequestEchoText(text);
+	ASSERT_TRUE(fn_name, echoed_text.has_value());
+	ASSERT_TRUE(fn_name, echoed_text.value() == text);
+
+	const std::vector<int> numbers{ -100, 0, 1, 2, 42, 1000 };
+	auto sum = client.RequestSum(numbers);
+	ASSERT_TRUE(fn_name, sum.has_value());
+	ASSERT_EQUAL(fn_name, sum.value(), 945);
+
+	client.Disconnect();
+	server.Disconnect();
+	RETURN_TEST(fn_name, 0);
+}
+
 int main() {
 	int result = 0;
 	result += TestRequestNameList();
 	result += TestRequestRandomNumber();
 	result += TestRequestLargeDataEchoed();
+	result += TestRequestAdditionalCommands();
 
 	if (result == 0) {
 		std::cout << "All tests passed!" << std::endl;
