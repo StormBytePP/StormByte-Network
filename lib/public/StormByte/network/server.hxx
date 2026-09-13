@@ -141,10 +141,9 @@ namespace StormByte::Network {
 			void CloseWakeup() noexcept;
 
 			/**
-			 * @brief Wait for listener activity or a shutdown wakeup.
-			 * @return Read result.
+			 * @brief Accept and register one ready client.
 			 */
-			ExpectedReadResult WaitForAccept() noexcept;
+			void AcceptOneClient() noexcept;
 
 			/**
 			 * @brief Per-client communication thread body.

@@ -18,17 +18,16 @@
  */
 
 #include <StormByte/network/connection/client.hxx>
+#include <StormByte/network/event_loop.hxx>
 #include <StormByte/network/server.hxx>
 #include <StormByte/network/session.hxx>
 #include <StormByte/network/socket/server.hxx>
 #ifdef UNIX
-#include <poll.h>
 #include <unistd.h>
 #else
 #include <winsock2.h>
 #include <ws2tcpip.h>
 #endif
-#include <array>
 using namespace StormByte::Network;
 Server::Server(const DeserializePacketFunction& deserialize_packet_function, std::shared_ptr<Logger::Log> logger) noexcept:
 	Endpoint(deserialize_packet_function, logger),
@@ -222,53 +221,6 @@ void Server::CloseWakeup() noexcept {
 #endif
 }
 
-ExpectedReadResult Server::WaitForAccept() noexcept {
-#ifdef UNIX
-	std::array<pollfd, 2> descriptors{{
-		{ m_socket_server->Handle(), POLLIN, 0 },
-		{ m_wakeup_read, POLLIN, 0 }
-	}};
-	const int result = poll(descriptors.data(), descriptors.size(), 1000);
-	if (result < 0) {
-		return Unexpected<ConnectionClosed>("Failed to wait for server events");
-	}
-	if (result == 0) {
-		return Connection::Read::Result::Timeout;
-	}
-	if (descriptors[1].revents & POLLIN) {
-		char signal;
-		[[maybe_unused]] const ssize_t received = ::read(m_wakeup_read, &signal, sizeof(signal));
-		return Connection::Read::Result::Closed;
-	}
-	if (descriptors[0].revents & POLLIN) {
-		return Connection::Read::Result::Success;
-	}
-	return Unexpected<ConnectionClosed>("Server listener reported an invalid event");
-#else
-	fd_set read_fds;
-	FD_ZERO(&read_fds);
-	FD_SET(m_socket_server->Handle(), &read_fds);
-	FD_SET(m_wakeup_read, &read_fds);
-	timeval timeout{ .tv_sec = 1, .tv_usec = 0 };
-	const int result = select(0, &read_fds, nullptr, nullptr, &timeout);
-	if (result == SOCKET_ERROR) {
-		return Unexpected<ConnectionClosed>("Failed to wait for server events");
-	}
-	if (result == 0) {
-		return Connection::Read::Result::Timeout;
-	}
-	if (FD_ISSET(m_wakeup_read, &read_fds)) {
-		char signal;
-		(void)::recv(m_wakeup_read, &signal, sizeof(signal), 0);
-		return Connection::Read::Result::Closed;
-	}
-	if (FD_ISSET(m_socket_server->Handle(), &read_fds)) {
-		return Connection::Read::Result::Success;
-	}
-	return Unexpected<ConnectionClosed>("Server listener reported an invalid event");
-#endif
-}
-
 void Server::DisconnectClient(const std::string& uuid) noexcept {
 	std::thread thread_to_join;
 	std::shared_ptr<Connection::Client> client;
@@ -302,47 +254,32 @@ void Server::DisconnectClient(const std::string& uuid) noexcept {
 		thread_to_join.join();
 	}
 }
-void Server::AcceptClients() noexcept {
-	m_logger << Logger::Level::LowLevel << "Started accept clients thread" << std::endl;
-	while (Connection::IsConnected(m_status.load())) {
-		auto expected_wait = WaitForAccept();
-		if (!expected_wait) {
-			m_logger << Logger::Level::Error << expected_wait.error()->what() << std::endl;
-			return;
+void Server::AcceptOneClient() noexcept {
+	auto expected_client = m_socket_server->Accept();
+	if (!expected_client) {
+		if (Connection::IsConnected(m_status.load())) {
+			m_logger << Logger::Level::LowLevel << expected_client.error()->what() << std::endl;
 		}
-		switch (expected_wait.value()) {
-			case Connection::Read::Result::Success: {
-				auto expected_client = m_socket_server->Accept();
-				if (!expected_client) {
-					// Transient accept failure (e.g. raced with disconnect): keep listening
-					if (!Connection::IsConnected(m_status.load())) {
-						return;
-					}
-					m_logger << Logger::Level::LowLevel << expected_client.error()->what() << std::endl;
-					break;
-				}
-				const std::string client_uuid = expected_client.value()->UUID();
-				{
-					std::scoped_lock lock_guard(m_mutex);
-					m_clients.emplace(client_uuid, CreateConnection(expected_client.value()));
-					m_handle_msg_threads.emplace(
-						client_uuid,
-						std::thread(&Server::HandleClientCommunication, this, client_uuid));
-				}
-				m_logger << Logger::Level::LowLevel << "AcceptClients: accepted client uuid=" << client_uuid << std::endl;
-				break;
-			}
-			case Connection::Read::Result::Timeout:
-				// Idle listen socket — loop again without yield spin
-				continue;
-			case Connection::Read::Result::Closed:
-				m_logger << Logger::Level::LowLevel << "Listening socket closed; stopping accept loop" << std::endl;
-				return;
-			default:
-				continue;
-		}
+		return;
 	}
-	m_logger << Logger::Level::LowLevel << "Stopped accept clients thread" << std::endl;
+	const std::string client_uuid = expected_client.value()->UUID();
+	{
+		std::scoped_lock lock_guard(m_mutex);
+		m_clients.emplace(client_uuid, CreateConnection(expected_client.value()));
+		m_handle_msg_threads.emplace(
+			client_uuid,
+			std::thread(&Server::HandleClientCommunication, this, client_uuid));
+	}
+	m_logger << Logger::Level::LowLevel << "AcceptClients: accepted client uuid=" << client_uuid << std::endl;
+}
+
+void Server::AcceptClients() noexcept {
+	m_logger << Logger::Level::LowLevel << "Started accept event loop" << std::endl;
+	Detail::EventLoop event_loop(*m_socket_server, m_wakeup_read, m_status, m_logger);
+	event_loop.Run([this]() noexcept {
+		AcceptOneClient();
+	});
+	m_logger << Logger::Level::LowLevel << "Stopped accept event loop" << std::endl;
 }
 void Server::HandleClientCommunication(const std::string& client_uuid) noexcept {
 	m_logger << Logger::Level::LowLevel << "Started communication thread for client uuid=" << client_uuid << std::endl;
