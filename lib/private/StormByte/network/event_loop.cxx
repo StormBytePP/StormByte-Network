@@ -53,9 +53,17 @@ namespace StormByte::Network::Detail {
 			return Event{ EventKind::Listener, nullptr };
 		}
 		for (std::size_t index = 0; index < sessions.size(); ++index) {
-			if (descriptors[index + 2].revents & (POLLIN | POLLOUT | POLLERR | POLLHUP | POLLRDHUP)) {
+			short terminal_events = POLLIN | POLLOUT | POLLERR | POLLHUP;
+#ifdef POLLRDHUP
+			terminal_events = static_cast<short>(terminal_events | POLLRDHUP);
+#endif
+			if (descriptors[index + 2].revents & terminal_events) {
+				short readable_events = POLLIN | POLLERR | POLLHUP;
+#ifdef POLLRDHUP
+				readable_events = static_cast<short>(readable_events | POLLRDHUP);
+#endif
 				return Event{ EventKind::Session, sessions[index],
-					(descriptors[index + 2].revents & (POLLIN | POLLERR | POLLHUP | POLLRDHUP)) != 0,
+					(descriptors[index + 2].revents & readable_events) != 0,
 					(descriptors[index + 2].revents & POLLOUT) != 0 };
 			}
 		}
