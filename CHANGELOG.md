@@ -31,6 +31,8 @@ IPv4 and IPv6, framed request/response, POSIX and Winsock stay behind the public
 - Routed worker-originated client/server disconnect requests through EventLoop commands without worker self-joins.
 - Added bounded per-session output streaming with non-blocking writes and POLLOUT/select-driven draining.
 - Added integration coverage for slow handlers, concurrent client progress, and server stop requested by a packet handler.
+- Added shutdown coverage while a slow packet task is still pending in the worker pool.
+- Added coverage for client disconnect during a slow handler and discarded late completions.
 
 ### Fixed
 

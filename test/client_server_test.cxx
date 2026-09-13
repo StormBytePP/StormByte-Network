@@ -920,6 +920,53 @@ int TestStopRequestedByHandler() {
 	RETURN_TEST(fn_name, 0);
 }
 
+int TestShutdownWithPendingTask() {
+	const std::string fn_name = "TestShutdownWithPendingTask";
+	Test::Server server(logger);
+	if (!server.Connect(Net::Connection::Protocol::IPv4, HOST, PORT)) {
+		RETURN_TEST(fn_name, 1);
+	}
+	std::this_thread::sleep_for(std::chrono::milliseconds(100));
+	Test::Client client(logger);
+	ASSERT_TRUE(fn_name, client.Connect(Net::Connection::Protocol::IPv4, HOST, PORT));
+	std::thread pending_thread([&]() {
+		(void)client.RequestSlow();
+	});
+	std::this_thread::sleep_for(std::chrono::milliseconds(50));
+	server.Disconnect();
+	if (pending_thread.joinable()) {
+		pending_thread.join();
+	}
+	client.Disconnect();
+	ASSERT_TRUE(fn_name, server.Status() == Connection::Status::Disconnected);
+	RETURN_TEST(fn_name, 0);
+}
+
+int TestDisconnectDuringSlowHandler() {
+	const std::string fn_name = "TestDisconnectDuringSlowHandler";
+	Test::Server server(logger);
+	if (!server.Connect(Net::Connection::Protocol::IPv4, HOST, PORT)) {
+		RETURN_TEST(fn_name, 1);
+	}
+	std::this_thread::sleep_for(std::chrono::milliseconds(100));
+	Test::Client abandoned_client(logger);
+	ASSERT_TRUE(fn_name, abandoned_client.Connect(Net::Connection::Protocol::IPv4, HOST, PORT));
+	std::thread pending_thread([&]() {
+		(void)abandoned_client.RequestSlow();
+	});
+	std::this_thread::sleep_for(std::chrono::milliseconds(50));
+	abandoned_client.Disconnect();
+	if (pending_thread.joinable()) {
+		pending_thread.join();
+	}
+	Test::Client surviving_client(logger);
+	ASSERT_TRUE(fn_name, surviving_client.Connect(Net::Connection::Protocol::IPv4, HOST, PORT));
+	ASSERT_TRUE(fn_name, surviving_client.RequestPing());
+	surviving_client.Disconnect();
+	server.Disconnect();
+	RETURN_TEST(fn_name, 0);
+}
+
 int TestFragmentedAndBatchedFrames() {
 	const std::string fn_name = "TestFragmentedAndBatchedFrames";
 	constexpr std::size_t frame_header_size = sizeof(Transport::Packet::OpcodeType) + sizeof(std::size_t);
@@ -1012,6 +1059,8 @@ int main() {
 	result += TestDisconnectRequestedByHandler();
 	result += TestSlowHandlerDoesNotBlockOtherClients();
 	result += TestStopRequestedByHandler();
+	result += TestShutdownWithPendingTask();
+	result += TestDisconnectDuringSlowHandler();
 	result += TestFragmentedAndBatchedFrames();
 
 	if (result == 0) {
