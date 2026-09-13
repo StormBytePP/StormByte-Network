@@ -37,6 +37,18 @@ Frame::Frame(const Packet& packet) noexcept {
 		packet_raw.Read(0, m_payload);
 	}
 }
+Frame Frame::FromWire(Packet::OpcodeType opcode, DataType&& payload,
+	Pipeline& in_pipeline, std::shared_ptr<Logger::Log> logger) noexcept {
+	if (opcode >= Packet::PROCESS_THRESHOLD) {
+		Producer payload_producer;
+		payload_producer.Write(std::move(payload));
+		payload_producer.Close();
+		Consumer processed_payload = in_pipeline.Process(payload_producer.Consumer(), Buffer::ExecutionMode::Async, logger);
+		payload.clear();
+		processed_payload.ExtractUntilEoF(payload);
+	}
+	return Frame(opcode, std::move(payload));
+}
 Frame Frame::ProcessInput(std::shared_ptr<Socket::Client> client, Buffer::Pipeline& in_pipeline, std::shared_ptr<Logger::Log> logger) noexcept {
 	// Read opcode
 	ExpectedBuffer expected_opcode_buffer = client->Receive(sizeof(Packet::OpcodeType));
@@ -71,16 +83,8 @@ Frame Frame::ProcessInput(std::shared_ptr<Socket::Client> client, Buffer::Pipeli
 			logger << Logger::Level::Error << "Failed to read full frame from socket: " << into.error()->what() << std::endl;
 			return Frame();
 		}
-		if (opcode >= Packet::PROCESS_THRESHOLD) {
-			Producer payload_producer;
-			payload_producer.Write(std::move(payload));
-			payload_producer.Close();
-			Consumer processed_payload = in_pipeline.Process(payload_producer.Consumer(), Buffer::ExecutionMode::Async, logger);
-			payload.clear();
-			processed_payload.ExtractUntilEoF(payload);
-		}
 	}
-	return Frame(opcode, std::move(payload));
+	return FromWire(opcode, std::move(payload), in_pipeline, logger);
 }
 PacketPointer Frame::ProcessPacket(const DeserializePacketFunction& packet_fn, std::shared_ptr<Logger::Log> logger) noexcept {
 	Producer payload_producer;

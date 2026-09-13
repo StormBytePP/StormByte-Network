@@ -30,6 +30,15 @@
 #include <thread>
 #include <random>
 #include <utility>
+#ifdef UNIX
+#include <arpa/inet.h>
+#include <netinet/in.h>
+#include <sys/socket.h>
+#include <unistd.h>
+#else
+#include <winsock2.h>
+#include <ws2tcpip.h>
+#endif
 // Namespace aliases and commonly used types to reduce verbosity
 namespace SB = StormByte;
 namespace Net = SB::Network;
@@ -56,6 +65,78 @@ constexpr const std::size_t large_data_size = 20 * 1024 * 1024; // 20 MB
 constexpr const char large_data_repeat_char = 'x';
 constexpr const char* HOST = "localhost";
 constexpr const unsigned short PORT = 7080;
+#ifdef WINDOWS
+using RawSocket = SOCKET;
+constexpr RawSocket invalid_raw_socket = INVALID_SOCKET;
+#else
+using RawSocket = int;
+constexpr RawSocket invalid_raw_socket = -1;
+#endif
+
+RawSocket ConnectRawSocket() {
+	RawSocket socket_handle = ::socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+	if (socket_handle == invalid_raw_socket) {
+		return invalid_raw_socket;
+	}
+	sockaddr_in address{};
+	address.sin_family = AF_INET;
+	address.sin_port = htons(PORT);
+	if (inet_pton(AF_INET, "127.0.0.1", &address.sin_addr) != 1) {
+#ifdef WINDOWS
+		closesocket(socket_handle);
+#else
+		close(socket_handle);
+#endif
+		return invalid_raw_socket;
+	}
+	if (::connect(socket_handle, reinterpret_cast<const sockaddr*>(&address), sizeof(address)) < 0) {
+#ifdef WINDOWS
+		closesocket(socket_handle);
+#else
+		close(socket_handle);
+#endif
+		return invalid_raw_socket;
+	}
+	return socket_handle;
+}
+
+void CloseRawSocket(RawSocket socket_handle) noexcept {
+#ifdef WINDOWS
+	closesocket(socket_handle);
+#else
+	close(socket_handle);
+#endif
+}
+
+bool SendRawBytes(RawSocket socket_handle, std::span<const std::byte> data) {
+	while (!data.empty()) {
+#ifdef WINDOWS
+		const int sent = ::send(socket_handle, reinterpret_cast<const char*>(data.data()), static_cast<int>(data.size()), 0);
+#else
+		const ssize_t sent = ::send(socket_handle, data.data(), data.size(), 0);
+#endif
+		if (sent <= 0) {
+			return false;
+		}
+		data = data.subspan(static_cast<std::size_t>(sent));
+	}
+	return true;
+}
+
+bool ReceiveRawBytes(RawSocket socket_handle, std::span<std::byte> data) {
+	while (!data.empty()) {
+#ifdef WINDOWS
+		const int received = ::recv(socket_handle, reinterpret_cast<char*>(data.data()), static_cast<int>(data.size()), 0);
+#else
+		const ssize_t received = ::recv(socket_handle, data.data(), data.size(), 0);
+#endif
+		if (received <= 0) {
+			return false;
+		}
+		data = data.subspan(static_cast<std::size_t>(received));
+	}
+	return true;
+}
 namespace Test {
 	namespace Packet {
 		enum class Opcode: unsigned short {
@@ -678,12 +759,129 @@ int TestRequestAdditionalCommands() {
 	RETURN_TEST(fn_name, 0);
 }
 
+int TestClientDisconnectKeepsServerAlive() {
+	const std::string fn_name = "TestClientDisconnectKeepsServerAlive";
+
+	Test::Server server(logger);
+	if (!server.Connect(Net::Connection::Protocol::IPv4, HOST, PORT)) {
+		logger << Level::Error << fn_name << ": server.Connect failed." << std::endl;
+		RETURN_TEST(fn_name, 1);
+	}
+
+	std::this_thread::sleep_for(std::chrono::milliseconds(100));
+
+	Test::Client first_client(logger);
+	if (!first_client.Connect(Net::Connection::Protocol::IPv4, HOST, PORT)) {
+		logger << Level::Error << fn_name << ": first client.Connect failed." << std::endl;
+		RETURN_TEST(fn_name, 1);
+	}
+	ASSERT_TRUE(fn_name, first_client.RequestPing());
+	first_client.Disconnect();
+
+	std::this_thread::sleep_for(std::chrono::milliseconds(100));
+
+	Test::Client second_client(logger);
+	if (!second_client.Connect(Net::Connection::Protocol::IPv4, HOST, PORT)) {
+		logger << Level::Error << fn_name << ": second client.Connect failed." << std::endl;
+		RETURN_TEST(fn_name, 1);
+	}
+	ASSERT_TRUE(fn_name, second_client.RequestPing());
+	second_client.Disconnect();
+
+	server.Disconnect();
+	RETURN_TEST(fn_name, 0);
+}
+
+int TestFragmentedAndBatchedFrames() {
+	const std::string fn_name = "TestFragmentedAndBatchedFrames";
+	constexpr std::size_t frame_header_size = sizeof(Transport::Packet::OpcodeType) + sizeof(std::size_t);
+
+	Test::Server server(logger);
+	if (!server.Connect(Net::Connection::Protocol::IPv4, HOST, PORT)) {
+		logger << Level::Error << fn_name << ": server.Connect failed." << std::endl;
+		RETURN_TEST(fn_name, 1);
+	}
+
+	std::this_thread::sleep_for(std::chrono::milliseconds(100));
+
+	const RawSocket socket_handle = ConnectRawSocket();
+	if (socket_handle == invalid_raw_socket) {
+		logger << Level::Error << fn_name << ": raw socket connect failed." << std::endl;
+		RETURN_TEST(fn_name, 1);
+	}
+	auto make_wire_frame = [](const Test::Packet::Opcode opcode, const DataType& payload) {
+		DataType frame = Serializable<Transport::Packet::OpcodeType>(
+			static_cast<Transport::Packet::OpcodeType>(opcode)).Serialize();
+		const DataType payload_size = Serializable<std::size_t>(payload.size()).Serialize();
+		frame.insert(frame.end(), payload_size.begin(), payload_size.end());
+		frame.insert(frame.end(), payload.begin(), payload.end());
+		return frame;
+	};
+
+	auto receive_frame = [&](const Test::Packet::Opcode expected_opcode, const std::string* expected_text = nullptr) -> bool {
+		DataType header(frame_header_size);
+		if (!ReceiveRawBytes(socket_handle, std::span<std::byte>(header.data(), header.size()))) {
+			return false;
+		}
+		auto opcode = Serializable<Transport::Packet::OpcodeType>::Deserialize(header);
+		auto payload_size = Serializable<std::size_t>::Deserialize(
+			DataType(header.begin() + sizeof(Transport::Packet::OpcodeType), header.end()));
+		if (!opcode || !payload_size || *opcode != static_cast<Transport::Packet::OpcodeType>(expected_opcode)) {
+			return false;
+		}
+		if (*payload_size == 0) {
+			return expected_text == nullptr;
+		}
+		if (expected_text == nullptr) {
+			return false;
+		}
+		DataType payload(*payload_size);
+		if (!ReceiveRawBytes(socket_handle, std::span<std::byte>(payload.data(), payload.size()))) {
+			return false;
+		}
+		for (auto& byte: payload) {
+			byte ^= std::byte{0xAB};
+		}
+		auto text = Serializable<std::string>::Deserialize(payload);
+		return text && *text == *expected_text;
+	};
+
+	const DataType ping_data = make_wire_frame(Test::Packet::Opcode::C_MSG_PING, {});
+	ASSERT_TRUE(fn_name, SendRawBytes(socket_handle, std::span<const std::byte>(ping_data.data(), 1)));
+	ASSERT_TRUE(fn_name, SendRawBytes(socket_handle, std::span<const std::byte>(ping_data.data() + 1, ping_data.size() - 1)));
+	ASSERT_TRUE(fn_name, receive_frame(Test::Packet::Opcode::S_MSG_PONG));
+
+	const std::string text = "fragmented payload";
+	DataType text_payload = Serializable<std::string>(text).Serialize();
+	for (auto& byte: text_payload) {
+		byte ^= std::byte{0xAB};
+	}
+	const DataType text_data = make_wire_frame(Test::Packet::Opcode::C_MSG_ECHOTEXT, text_payload);
+	const std::size_t split = frame_header_size + 2;
+	ASSERT_TRUE(fn_name, SendRawBytes(socket_handle, std::span<const std::byte>(text_data.data(), split)));
+	ASSERT_TRUE(fn_name, SendRawBytes(socket_handle, std::span<const std::byte>(text_data.data() + split, text_data.size() - split)));
+	ASSERT_TRUE(fn_name, receive_frame(Test::Packet::Opcode::S_MSG_REPLYTEXT, &text));
+
+	DataType batched;
+	batched.insert(batched.end(), ping_data.begin(), ping_data.end());
+	batched.insert(batched.end(), ping_data.begin(), ping_data.end());
+	ASSERT_TRUE(fn_name, SendRawBytes(socket_handle, std::span<const std::byte>(batched.data(), batched.size())));
+	ASSERT_TRUE(fn_name, receive_frame(Test::Packet::Opcode::S_MSG_PONG));
+	ASSERT_TRUE(fn_name, receive_frame(Test::Packet::Opcode::S_MSG_PONG));
+
+	CloseRawSocket(socket_handle);
+	server.Disconnect();
+	RETURN_TEST(fn_name, 0);
+}
+
 int main() {
 	int result = 0;
 	result += TestRequestNameList();
 	result += TestRequestRandomNumber();
 	result += TestRequestLargeDataEchoed();
 	result += TestRequestAdditionalCommands();
+	result += TestClientDisconnectKeepsServerAlive();
+	result += TestFragmentedAndBatchedFrames();
 
 	if (result == 0) {
 		std::cout << "All tests passed!" << std::endl;

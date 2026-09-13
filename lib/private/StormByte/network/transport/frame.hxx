@@ -27,6 +27,10 @@ namespace StormByte::Network::Socket {
 	class Client;	///< Forward declaration
 }
 
+namespace StormByte::Network::Detail {
+	class Session;	///< Forward declaration
+}
+
 /**
  * @brief Transport types of the Network module.
  */
@@ -39,6 +43,7 @@ namespace StormByte::Network::Transport {
 	 * Opcodes >= Packet::PROCESS_THRESHOLD run payload through pipelines.
 	 */
 	class STORMBYTE_NETWORK_PRIVATE Frame {
+		friend class StormByte::Network::Detail::Session;
 		public:
 			/**
 			 * @brief Build a frame from a packet.
@@ -99,6 +104,17 @@ namespace StormByte::Network::Transport {
 		private:
 			Packet::OpcodeType m_opcode;	///< Opcode
 			Buffer::DataType m_payload;		///< Payload bytes
+
+			/**
+			 * @brief Build a frame from already parsed wire fields.
+			 * @param opcode Frame opcode.
+			 * @param payload Raw payload bytes.
+			 * @param in_pipeline Input pipeline.
+			 * @param logger Diagnostic logger.
+			 * @return Parsed frame.
+			 */
+			static Frame FromWire(Packet::OpcodeType opcode, Buffer::DataType&& payload,
+				Buffer::Pipeline& in_pipeline, std::shared_ptr<Logger::Log> logger) noexcept;
 
 			/**
 			 * @brief Empty frame (error path).

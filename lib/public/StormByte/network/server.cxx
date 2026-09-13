@@ -19,6 +19,7 @@
 
 #include <StormByte/network/connection/client.hxx>
 #include <StormByte/network/server.hxx>
+#include <StormByte/network/session.hxx>
 #include <StormByte/network/socket/server.hxx>
 using namespace StormByte::Network;
 Server::Server(const DeserializePacketFunction& deserialize_packet_function, std::shared_ptr<Logger::Log> logger) noexcept:
@@ -182,7 +183,8 @@ void Server::HandleClientCommunication(const std::string& client_uuid) noexcept 
 		}
 		client = it->second;
 	}
-	while (Connection::IsConnected(m_status.load()) && Connection::IsConnected(client->Status())) {
+	Detail::Session session(client_uuid, client);
+	while (Connection::IsConnected(m_status.load()) && Connection::IsConnected(session.Client()->Status())) {
 		auto expected_wait = client->Socket()->WaitForData();
 		if (!expected_wait) {
 			m_logger << Logger::Level::Error << expected_wait.error()->what() << std::endl;
@@ -190,29 +192,41 @@ void Server::HandleClientCommunication(const std::string& client_uuid) noexcept 
 		}
 		switch (expected_wait.value()) {
 			case Connection::Read::Result::Success: {
-				PacketPointer packet;
-				{
-					Transport::Frame frame = client->Receive(m_logger);
-					packet = frame.ProcessPacket(m_deserialize_packet_function, m_logger);
-				}
-				if (!packet) {
-					m_logger << Logger::Level::Error << "Failed to process packet from client="
-							<< client_uuid << std::endl;
+				auto expected_frames = session.AppendAndTakeFrames(client->InputPipeline(), m_logger);
+				if (!expected_frames) {
+					m_logger << Logger::Level::Error << "Failed to process frame from client="
+							<< client_uuid << ": " << expected_frames.error()->what() << std::endl;
 					break;
 				}
-				if (!Connection::IsConnected(m_status.load())) {
+				bool stop_client = false;
+				for (auto& frame : expected_frames.value()) {
+					PacketPointer packet = frame.ProcessPacket(m_deserialize_packet_function, m_logger);
+					if (!packet) {
+						m_logger << Logger::Level::Error << "Failed to process packet from client="
+								<< client_uuid << std::endl;
+						stop_client = true;
+						break;
+					}
+					if (!Connection::IsConnected(m_status.load())) {
+						stop_client = true;
+						break;
+					}
+					PacketPointer response_packet = ProcessClientPacket(client_uuid, packet);
+					if (!response_packet) {
+						m_logger << Logger::Level::Error
+								<< "HandleClientCommunication: response packet was null" << std::endl;
+						stop_client = true;
+						break;
+					}
+					if (session.Client()->Socket()->HasShutdownRequest() || !Connection::IsConnected(m_status.load())) {
+						stop_client = true;
+						break;
+					}
+					Reply(session.Client(), *response_packet);
+				}
+				if (stop_client) {
 					break;
 				}
-				PacketPointer response_packet = ProcessClientPacket(client_uuid, packet);
-				if (!response_packet) {
-					m_logger << Logger::Level::Error
-							<< "HandleClientCommunication: response packet was null" << std::endl;
-					break;
-				}
-				if (client->Socket()->HasShutdownRequest() || !Connection::IsConnected(m_status.load())) {
-					break;
-				}
-				Reply(client, *response_packet);
 				continue; // success path: wait for next message
 			}
 			case Connection::Read::Result::Closed:
