@@ -16,6 +16,10 @@ IPv4 and IPv6, framed request/response, POSIX and Winsock stay behind the public
 
 ## [Unreleased]
 
+### Changed
+
+- Doxygen (`ENABLE_DOC`) resolves Buffer, Logger and Base headers via `INCLUDE_PATH` and skips `thirdparty`. No dependency pin change.
+
 ## [1.1.0] - 2026-09-13
 
 ### Changed
