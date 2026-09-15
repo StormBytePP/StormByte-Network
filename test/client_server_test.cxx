@@ -78,6 +78,7 @@ RawSocket ConnectRawSocket() {
 	if (socket_handle == invalid_raw_socket) {
 		return invalid_raw_socket;
 	}
+
 	sockaddr_in address{};
 	address.sin_family = AF_INET;
 	address.sin_port = htons(PORT);
@@ -89,6 +90,7 @@ RawSocket ConnectRawSocket() {
 #endif
 		return invalid_raw_socket;
 	}
+
 	if (::connect(socket_handle, reinterpret_cast<const sockaddr*>(&address), sizeof(address)) < 0) {
 #ifdef WINDOWS
 		closesocket(socket_handle);
@@ -97,6 +99,7 @@ RawSocket ConnectRawSocket() {
 #endif
 		return invalid_raw_socket;
 	}
+
 	return socket_handle;
 }
 
@@ -118,8 +121,10 @@ bool SendRawBytes(RawSocket socket_handle, std::span<const std::byte> data) {
 		if (sent <= 0) {
 			return false;
 		}
+
 		data = data.subspan(static_cast<std::size_t>(sent));
 	}
+
 	return true;
 }
 
@@ -133,10 +138,13 @@ bool ReceiveRawBytes(RawSocket socket_handle, std::span<std::byte> data) {
 		if (received <= 0) {
 			return false;
 		}
+
 		data = data.subspan(static_cast<std::size_t>(received));
 	}
+
 	return true;
 }
+
 namespace Test {
 	namespace Packet {
 		enum class Opcode: unsigned short {
@@ -164,30 +172,37 @@ namespace Test {
 		class AskNameList: public Generic {
 			public:
 				AskNameList(const std::size_t& amount): Generic(Opcode::C_MSG_ASKNAMELIST), m_amount(amount) {}
+
 				DataType DoSerialize() const noexcept override {
 					return Serializable<std::size_t>(m_amount).Serialize();
 				}
+
 				std::size_t GetAmount() const noexcept {
 					return m_amount;
 				}
+
 			private:
 				std::size_t m_amount;
 		};
 		class AnswerNameList: public Generic {
 			public:
 				AnswerNameList(const std::vector<std::string>& names): Generic(Opcode::S_MSG_RESPONDNAMELIST), m_names(names) {}
+
 				DataType DoSerialize() const noexcept override {
 					return Serializable<std::vector<std::string>>(m_names).Serialize();
 				}
+
 				const std::vector<std::string>& GetNames() const noexcept {
 					return m_names;
 				}
+
 			private:
 				std::vector<std::string> m_names;
 		};
 		class AskRandomNumber: public Generic {
 			public:
 				AskRandomNumber(): Generic(Opcode::C_MSG_ASKRANDOMNUMBER) {}
+
 				DataType DoSerialize() const noexcept override {
 					return {};
 				}
@@ -195,12 +210,15 @@ namespace Test {
 		class AnswerRandomNumber: public Generic {
 			public:
 				AnswerRandomNumber(const int& number): Generic(Opcode::S_MSG_RESPONDRANDOMNUMBER), m_number(number) {}
+
 				DataType DoSerialize() const noexcept override {
 					return Serializable<int>(m_number).Serialize();
 				}
+
 				int GetNumber() const noexcept {
 					return m_number;
 				}
+
 			private:
 				int m_number;
 		};
@@ -251,6 +269,7 @@ namespace Test {
 		class Ping: public Generic {
 			public:
 				Ping(): Generic(Opcode::C_MSG_PING) {}
+
 				DataType DoSerialize() const noexcept override {
 					return {};
 				}
@@ -258,6 +277,7 @@ namespace Test {
 		class Pong: public Generic {
 			public:
 				Pong(): Generic(Opcode::S_MSG_PONG) {}
+
 				DataType DoSerialize() const noexcept override {
 					return {};
 				}
@@ -265,33 +285,40 @@ namespace Test {
 		class DisconnectRequest: public Generic {
 			public:
 				DisconnectRequest(): Generic(Opcode::C_MSG_DISCONNECT) {}
+
 				DataType DoSerialize() const noexcept override { return {}; }
 		};
 		class SlowRequest: public Generic {
 			public:
 				SlowRequest(): Generic(Opcode::C_MSG_SLOW) {}
+
 				DataType DoSerialize() const noexcept override { return {}; }
 		};
 		class SlowReply: public Generic {
 			public:
 				SlowReply(): Generic(Opcode::S_MSG_SLOW) {}
+
 				DataType DoSerialize() const noexcept override { return {}; }
 		};
 		class StopServerRequest: public Generic {
 			public:
 				StopServerRequest(): Generic(Opcode::C_MSG_STOPSERVER) {}
+
 				DataType DoSerialize() const noexcept override { return {}; }
 		};
 		class EchoText: public Generic {
 			public:
 				explicit EchoText(std::string text) noexcept:
 					Generic(Opcode::C_MSG_ECHOTEXT), m_text(std::move(text)) {}
+
 				DataType DoSerialize() const noexcept override {
 					return Serializable<std::string>(m_text).Serialize();
 				}
+
 				const std::string& GetText() const noexcept {
 					return m_text;
 				}
+
 			private:
 				std::string m_text;
 		};
@@ -299,12 +326,15 @@ namespace Test {
 			public:
 				explicit ReplyText(std::string text) noexcept:
 					Generic(Opcode::S_MSG_REPLYTEXT), m_text(std::move(text)) {}
+
 				DataType DoSerialize() const noexcept override {
 					return Serializable<std::string>(m_text).Serialize();
 				}
+
 				const std::string& GetText() const noexcept {
 					return m_text;
 				}
+
 			private:
 				std::string m_text;
 		};
@@ -312,12 +342,15 @@ namespace Test {
 			public:
 				explicit SumNumbers(std::vector<int> numbers) noexcept:
 					Generic(Opcode::C_MSG_SUMNUMBERS), m_numbers(std::move(numbers)) {}
+
 				DataType DoSerialize() const noexcept override {
 					return Serializable<std::vector<int>>(m_numbers).Serialize();
 				}
+
 				const std::vector<int>& GetNumbers() const noexcept {
 					return m_numbers;
 				}
+
 			private:
 				std::vector<int> m_numbers;
 		};
@@ -325,12 +358,15 @@ namespace Test {
 			public:
 				explicit ReplySum(const int& sum) noexcept:
 					Generic(Opcode::S_MSG_REPLYSUM), m_sum(sum) {}
+
 				DataType DoSerialize() const noexcept override {
 					return Serializable<int>(m_sum).Serialize();
 				}
+
 				int GetSum() const noexcept {
 					return m_sum;
 				}
+
 			private:
 				int m_sum;
 		};
@@ -347,18 +383,23 @@ namespace Test {
 					if (!expected_amount) {
 						return nullptr;
 					}
+
 					return std::make_shared<Packet::AskNameList>(*expected_amount);
 				}
+
 				case Packet::Opcode::S_MSG_RESPONDNAMELIST: {
 					auto expected_names = Serializable<std::vector<std::string>>::Deserialize(data);
 					if (!expected_names) {
 						return nullptr;
 					}
+
 					return std::make_shared<Packet::AnswerNameList>(*expected_names);
 				}
+
 				case Packet::Opcode::C_MSG_ASKRANDOMNUMBER: {
 					return std::make_shared<Packet::AskRandomNumber>();
 				}
+
 				case Packet::Opcode::C_MSG_DISCONNECT:
 					return std::make_shared<Packet::DisconnectRequest>();
 				case Packet::Opcode::C_MSG_SLOW:
@@ -372,23 +413,29 @@ namespace Test {
 					if (!expected_number) {
 						return nullptr;
 					}
+
 					return std::make_shared<Packet::AnswerRandomNumber>(*expected_number);
 				}
+
 				case Packet::Opcode::C_MSG_SENDLARGEDATA: {
 					// Real payload (moved into packet) — no second synthetic 20 MiB string
 					auto expected_data = Serializable<std::string>::Deserialize(data);
 					if (!expected_data) {
 						return nullptr;
 					}
+
 					return std::make_shared<Packet::LargeData>(std::move(*expected_data));
 				}
+
 				case Packet::Opcode::S_MSG_REPLYLARGEDATAECHOED: {
 					auto expected_data = Serializable<std::string>::Deserialize(data);
 					if (!expected_data) {
 						return nullptr;
 					}
+
 					return std::make_shared<Packet::AnswerLargeDataEchoed>(std::move(*expected_data));
 				}
+
 				case Packet::Opcode::C_MSG_PING:
 					return std::make_shared<Packet::Ping>();
 				case Packet::Opcode::S_MSG_PONG:
@@ -398,29 +445,37 @@ namespace Test {
 					if (!expected_text) {
 						return nullptr;
 					}
+
 					return std::make_shared<Packet::EchoText>(std::move(*expected_text));
 				}
+
 				case Packet::Opcode::S_MSG_REPLYTEXT: {
 					auto expected_text = Serializable<std::string>::Deserialize(data);
 					if (!expected_text) {
 						return nullptr;
 					}
+
 					return std::make_shared<Packet::ReplyText>(std::move(*expected_text));
 				}
+
 				case Packet::Opcode::C_MSG_SUMNUMBERS: {
 					auto expected_numbers = Serializable<std::vector<int>>::Deserialize(data);
 					if (!expected_numbers) {
 						return nullptr;
 					}
+
 					return std::make_shared<Packet::SumNumbers>(std::move(*expected_numbers));
 				}
+
 				case Packet::Opcode::S_MSG_REPLYSUM: {
 					auto expected_sum = Serializable<int>::Deserialize(data);
 					if (!expected_sum) {
 						return nullptr;
 					}
+
 					return std::make_shared<Packet::ReplySum>(*expected_sum);
 				}
+
 				default:
 					return nullptr;
 			}
@@ -482,6 +537,7 @@ namespace Test {
 		public:
 			Client(std::shared_ptr<Log> logger) noexcept:
 			Net::Client(DeserializeFunction(), logger) {}
+
 			~Client() noexcept = default;
 
 			Pipeline InputPipeline() const noexcept override {
@@ -489,6 +545,7 @@ namespace Test {
 				pipeline.AddPipe(CreateXorPipe());
 				return pipeline;
 			}
+
 			Pipeline OutputPipeline() const noexcept override {
 				Pipeline pipeline;
 				pipeline.AddPipe(CreateXorPipe());
@@ -506,6 +563,7 @@ namespace Test {
 				if (!namelist_packet) {
 					return SB::Unexpected<Net::Exception>("Client::RequestNameList: received unexpected packet opcode ({})", received_packet->Opcode());
 				}
+
 				return namelist_packet->GetNames();
 			}
 
@@ -520,6 +578,7 @@ namespace Test {
 				if (!answer_packet) {
 					return SB::Unexpected<Net::Exception>("Client::RequestRandomNumber: received unexpected packet opcode ({})", response_packet->Opcode());
 				}
+
 				return answer_packet->GetNumber();
 			}
 
@@ -534,6 +593,7 @@ namespace Test {
 				if (!answer_packet) {
 					return SB::Unexpected<Net::Exception>("Client::RequestLargeDataSize: received unexpected packet opcode ({})", response_packet->Opcode());
 				}
+
 				// Move data out of the packet so the shared_ptr can die without retaining 20 MiB
 				return answer_packet->TakeData();
 			}
@@ -544,6 +604,7 @@ namespace Test {
 				if (!response_packet) {
 					return false;
 				}
+
 				return std::dynamic_pointer_cast<Packet::Pong>(response_packet) != nullptr;
 			}
 
@@ -569,10 +630,12 @@ namespace Test {
 				if (!response_packet) {
 					return SB::Unexpected<Net::Exception>("Client::RequestEchoText: failed to send/receive packet");
 				}
+
 				auto answer_packet = std::dynamic_pointer_cast<Packet::ReplyText>(response_packet);
 				if (!answer_packet) {
 					return SB::Unexpected<Net::Exception>("Client::RequestEchoText: received unexpected packet opcode ({})", response_packet->Opcode());
 				}
+
 				return answer_packet->GetText();
 			}
 
@@ -582,10 +645,12 @@ namespace Test {
 				if (!response_packet) {
 					return SB::Unexpected<Net::Exception>("Client::RequestSum: failed to send/receive packet");
 				}
+
 				auto answer_packet = std::dynamic_pointer_cast<Packet::ReplySum>(response_packet);
 				if (!answer_packet) {
 					return SB::Unexpected<Net::Exception>("Client::RequestSum: received unexpected packet opcode ({})", response_packet->Opcode());
 				}
+
 				return answer_packet->GetSum();
 			}
 	};
@@ -594,6 +659,7 @@ namespace Test {
 		public:
 			Server(std::shared_ptr<Log> logger) noexcept:
 			Net::Server(DeserializeFunction(), logger) {}
+
 			~Server() noexcept = default;
 
 			Pipeline InputPipeline() const noexcept override {
@@ -601,6 +667,7 @@ namespace Test {
 				pipeline.AddPipe(CreateXorPipe());
 				return pipeline;
 			}
+
 			Pipeline OutputPipeline() const noexcept override {
 				Pipeline pipeline;
 				pipeline.AddPipe(CreateXorPipe());
@@ -616,14 +683,17 @@ namespace Test {
 						if (!ask_packet) {
 							return nullptr;
 						}
+
 						std::size_t amount = ask_packet->GetAmount();
 
 						std::vector<std::string> names;
 						for (std::size_t i = 0; i < amount; ++i) {
 							names.push_back("Name_" + std::to_string(i + 1));
 						}
+
 						return std::make_shared<Packet::AnswerNameList>(names);
 					}
+
 					case Packet::Opcode::C_MSG_ASKRANDOMNUMBER: {
 						static thread_local std::mt19937 gen{[](){
 							std::random_device rd;
@@ -631,20 +701,24 @@ namespace Test {
 							if (seed == 0) {
 								seed = static_cast<unsigned int>(std::chrono::high_resolution_clock::now().time_since_epoch().count());
 							}
+
 							return seed;
 						}()};
 						std::uniform_int_distribution<int> dist(0, 99);
 						int random_number = dist(gen);
 						return std::make_shared<Packet::AnswerRandomNumber>(random_number);
 					}
+
 					case Packet::Opcode::C_MSG_SENDLARGEDATA: {
 						auto large_data_packet = std::dynamic_pointer_cast<Packet::LargeData>(packet);
 						if (!large_data_packet) {
 							return nullptr;
 						}
+
 						// Move payload into the answer — no extra 20 MiB copy
 						return std::make_shared<Packet::AnswerLargeDataEchoed>(large_data_packet->TakeData());
 					}
+
 					case Packet::Opcode::C_MSG_PING:
 						return std::make_shared<Packet::Pong>();
 					case Packet::Opcode::C_MSG_SLOW:
@@ -661,20 +735,25 @@ namespace Test {
 						if (!text_packet) {
 							return nullptr;
 						}
+
 						return std::make_shared<Packet::ReplyText>(text_packet->GetText());
 					}
+
 					case Packet::Opcode::C_MSG_SUMNUMBERS: {
 						auto numbers_packet = std::dynamic_pointer_cast<Packet::SumNumbers>(packet);
 						if (!numbers_packet) {
 							return nullptr;
 						}
+
 						const auto& numbers = numbers_packet->GetNumbers();
 						const int sum = std::accumulate(numbers.begin(), numbers.end(), 0);
 						return std::make_shared<Packet::ReplySum>(sum);
 					}
+
 					default:
 						return nullptr;
 				}
+
 				return {};
 			}
 	};
@@ -703,6 +782,7 @@ int TestRequestNameList() {
 		logger << Level::Error << fn_name << ": RequestNameList failed: " << names_expected.error()->what() << std::endl;
 		RETURN_TEST(fn_name, 1);
 	}
+
 	auto names = names_expected.value();
 	std::string all_names;
 	ASSERT_TRUE(fn_name, names.size() == amount);
@@ -710,6 +790,7 @@ int TestRequestNameList() {
 		all_names += names[i] + " ";
 		ASSERT_TRUE(fn_name, names[i] == ("Name_" + std::to_string(i + 1)));
 	}
+
 	logger << Level::Info << fn_name << ": Received names: " << all_names << std::endl;
 
 	client.Disconnect();
@@ -739,6 +820,7 @@ int TestRequestRandomNumber() {
 		logger << Level::Error << fn_name << ": RequestRandomNumber failed: " << number_expected.error()->what() << std::endl;
 		RETURN_TEST(fn_name, 1);
 	}
+
 	int n = number_expected.value();
 	ASSERT_TRUE(fn_name, n >= 0 && n < 100);
 	logger << Level::Info << fn_name << ": Received random number: " << n << std::endl;
@@ -832,6 +914,7 @@ int TestClientDisconnectKeepsServerAlive() {
 		logger << Level::Error << fn_name << ": first client.Connect failed." << std::endl;
 		RETURN_TEST(fn_name, 1);
 	}
+
 	ASSERT_TRUE(fn_name, first_client.RequestPing());
 	first_client.Disconnect();
 
@@ -842,6 +925,7 @@ int TestClientDisconnectKeepsServerAlive() {
 		logger << Level::Error << fn_name << ": second client.Connect failed." << std::endl;
 		RETURN_TEST(fn_name, 1);
 	}
+
 	ASSERT_TRUE(fn_name, second_client.RequestPing());
 	second_client.Disconnect();
 
@@ -855,11 +939,13 @@ int TestDisconnectRequestedByHandler() {
 	if (!server.Connect(Net::Connection::Protocol::IPv4, HOST, PORT)) {
 		RETURN_TEST(fn_name, 1);
 	}
+
 	std::this_thread::sleep_for(std::chrono::milliseconds(100));
 	Test::Client first_client(logger);
 	if (!first_client.Connect(Net::Connection::Protocol::IPv4, HOST, PORT)) {
 		RETURN_TEST(fn_name, 1);
 	}
+
 	ASSERT_TRUE(fn_name, first_client.RequestDisconnect());
 	first_client.Disconnect();
 	std::this_thread::sleep_for(std::chrono::milliseconds(100));
@@ -867,6 +953,7 @@ int TestDisconnectRequestedByHandler() {
 	if (!second_client.Connect(Net::Connection::Protocol::IPv4, HOST, PORT)) {
 		RETURN_TEST(fn_name, 1);
 	}
+
 	ASSERT_TRUE(fn_name, second_client.RequestPing());
 	second_client.Disconnect();
 	server.Disconnect();
@@ -879,6 +966,7 @@ int TestSlowHandlerDoesNotBlockOtherClients() {
 	if (!server.Connect(Net::Connection::Protocol::IPv4, HOST, PORT)) {
 		RETURN_TEST(fn_name, 1);
 	}
+
 	std::this_thread::sleep_for(std::chrono::milliseconds(100));
 	Test::Client slow_client(logger);
 	Test::Client fast_client(logger);
@@ -895,6 +983,7 @@ int TestSlowHandlerDoesNotBlockOtherClients() {
 	if (slow_thread.joinable()) {
 		slow_thread.join();
 	}
+
 	ASSERT_TRUE(fn_name, slow_result.load());
 	slow_client.Disconnect();
 	fast_client.Disconnect();
@@ -908,6 +997,7 @@ int TestStopRequestedByHandler() {
 	if (!server.Connect(Net::Connection::Protocol::IPv4, HOST, PORT)) {
 		RETURN_TEST(fn_name, 1);
 	}
+
 	std::this_thread::sleep_for(std::chrono::milliseconds(100));
 	Test::Client client(logger);
 	ASSERT_TRUE(fn_name, client.Connect(Net::Connection::Protocol::IPv4, HOST, PORT));
@@ -916,6 +1006,7 @@ int TestStopRequestedByHandler() {
 	for (int attempt = 0; attempt < 40 && server.Status() != Connection::Status::Disconnected; ++attempt) {
 		std::this_thread::sleep_for(std::chrono::milliseconds(25));
 	}
+
 	ASSERT_TRUE(fn_name, server.Status() == Connection::Status::Disconnected);
 	RETURN_TEST(fn_name, 0);
 }
@@ -926,6 +1017,7 @@ int TestShutdownWithPendingTask() {
 	if (!server.Connect(Net::Connection::Protocol::IPv4, HOST, PORT)) {
 		RETURN_TEST(fn_name, 1);
 	}
+
 	std::this_thread::sleep_for(std::chrono::milliseconds(100));
 	Test::Client client(logger);
 	ASSERT_TRUE(fn_name, client.Connect(Net::Connection::Protocol::IPv4, HOST, PORT));
@@ -937,6 +1029,7 @@ int TestShutdownWithPendingTask() {
 	if (pending_thread.joinable()) {
 		pending_thread.join();
 	}
+
 	client.Disconnect();
 	ASSERT_TRUE(fn_name, server.Status() == Connection::Status::Disconnected);
 	RETURN_TEST(fn_name, 0);
@@ -948,6 +1041,7 @@ int TestDisconnectDuringSlowHandler() {
 	if (!server.Connect(Net::Connection::Protocol::IPv4, HOST, PORT)) {
 		RETURN_TEST(fn_name, 1);
 	}
+
 	std::this_thread::sleep_for(std::chrono::milliseconds(100));
 	Test::Client abandoned_client(logger);
 	ASSERT_TRUE(fn_name, abandoned_client.Connect(Net::Connection::Protocol::IPv4, HOST, PORT));
@@ -959,6 +1053,7 @@ int TestDisconnectDuringSlowHandler() {
 	if (pending_thread.joinable()) {
 		pending_thread.join();
 	}
+
 	Test::Client surviving_client(logger);
 	ASSERT_TRUE(fn_name, surviving_client.Connect(Net::Connection::Protocol::IPv4, HOST, PORT));
 	ASSERT_TRUE(fn_name, surviving_client.RequestPing());
@@ -984,6 +1079,7 @@ int TestFragmentedAndBatchedFrames() {
 		logger << Level::Error << fn_name << ": raw socket connect failed." << std::endl;
 		RETURN_TEST(fn_name, 1);
 	}
+
 	auto make_wire_frame = [](const Test::Packet::Opcode opcode, const DataType& payload) {
 		DataType frame = Serializable<Transport::Packet::OpcodeType>(
 			static_cast<Transport::Packet::OpcodeType>(opcode)).Serialize();
@@ -998,25 +1094,31 @@ int TestFragmentedAndBatchedFrames() {
 		if (!ReceiveRawBytes(socket_handle, std::span<std::byte>(header.data(), header.size()))) {
 			return false;
 		}
+
 		auto opcode = Serializable<Transport::Packet::OpcodeType>::Deserialize(header);
 		auto payload_size = Serializable<std::size_t>::Deserialize(
 			DataType(header.begin() + sizeof(Transport::Packet::OpcodeType), header.end()));
 		if (!opcode || !payload_size || *opcode != static_cast<Transport::Packet::OpcodeType>(expected_opcode)) {
 			return false;
 		}
+
 		if (*payload_size == 0) {
 			return expected_text == nullptr;
 		}
+
 		if (expected_text == nullptr) {
 			return false;
 		}
+
 		DataType payload(*payload_size);
 		if (!ReceiveRawBytes(socket_handle, std::span<std::byte>(payload.data(), payload.size()))) {
 			return false;
 		}
+
 		for (auto& byte: payload) {
 			byte ^= std::byte{0xAB};
 		}
+
 		auto text = Serializable<std::string>::Deserialize(payload);
 		return text && *text == *expected_text;
 	};
@@ -1031,6 +1133,7 @@ int TestFragmentedAndBatchedFrames() {
 	for (auto& byte: text_payload) {
 		byte ^= std::byte{0xAB};
 	}
+
 	const DataType text_data = make_wire_frame(Test::Packet::Opcode::C_MSG_ECHOTEXT, text_payload);
 	const std::size_t split = frame_header_size + 2;
 	ASSERT_TRUE(fn_name, SendRawBytes(socket_handle, std::span<const std::byte>(text_data.data(), split)));
@@ -1068,5 +1171,6 @@ int main() {
 	} else {
 		std::cout << result << " tests failed." << std::endl;
 	}
+
 	return result;
 }

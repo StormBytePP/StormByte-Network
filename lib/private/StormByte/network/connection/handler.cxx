@@ -34,15 +34,18 @@ Handler::Handler() noexcept {
 	m_initialized = true;
 	#endif
 }
+
 Handler::~Handler() noexcept {
 	#ifdef WINDOWS
 	WSACleanup();
 	#endif
 }
+
 Handler& Handler::Instance() noexcept {
 	static Handler instance;
 	return instance;
 }
+
 std::string Handler::LastError() const noexcept {
 	std::string error_string;
 	#ifdef WINDOWS
@@ -64,6 +67,7 @@ std::string Handler::LastError() const noexcept {
 	#endif
 	return error_string;
 }
+
 int Handler::LastErrorCode() const noexcept {
 	#ifdef WINDOWS
 	return WSAGetLastError();
@@ -71,6 +75,7 @@ int Handler::LastErrorCode() const noexcept {
 	return errno;
 	#endif
 }
+
 std::string Handler::ErrnoToString(int errnum) const noexcept {
 	#ifdef WINDOWS
 	char buf[256] = {0};

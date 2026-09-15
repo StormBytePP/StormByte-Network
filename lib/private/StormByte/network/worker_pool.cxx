@@ -19,6 +19,7 @@ namespace StormByte::Network::Detail {
 		if (worker_count == 0) {
 			worker_count = 4;
 		}
+
 		m_workers.reserve(worker_count);
 		for (std::size_t index = 0; index < worker_count; ++index) {
 			m_workers.emplace_back(&WorkerPool::Run, this);
@@ -35,6 +36,7 @@ namespace StormByte::Network::Detail {
 			std::scoped_lock lock(m_mutex);
 			m_stopping = true;
 		}
+
 		m_condition.notify_all();
 	}
 
@@ -51,6 +53,7 @@ namespace StormByte::Network::Detail {
 		if (m_stopping || m_tasks.size() >= m_queue_capacity) {
 			return false;
 		}
+
 		m_tasks.push_back(std::move(task));
 		m_condition.notify_one();
 		return true;
@@ -76,11 +79,14 @@ namespace StormByte::Network::Detail {
 					if (m_stopping) {
 						break;
 					}
+
 					continue;
 				}
+
 				task = std::move(m_tasks.front());
 				m_tasks.pop_front();
 			}
+
 			Completion completion{ task.uuid, nullptr, CompletionReason::Error };
 			try {
 				completion.packet = m_handler(task.uuid, std::move(task.packet));
@@ -88,8 +94,10 @@ namespace StormByte::Network::Detail {
 			} catch (...) {
 				completion.reason = CompletionReason::Error;
 			}
+
 			m_on_completion(Completion{ std::move(task.uuid), std::move(completion.packet), completion.reason });
 		}
+
 		current_pool = nullptr;
 	}
 }

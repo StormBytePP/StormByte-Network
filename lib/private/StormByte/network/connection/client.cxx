@@ -30,8 +30,10 @@ bool Client::Send(Transport::Frame&& frame, std::shared_ptr<Logger::Log> logger)
 		logger << Logger::Level::Error << "Failed to send frame to socket: " << result.error()->what();
 		return false;
 	}
+
 	return true;
 }
+
 StormByte::Network::Transport::Frame Client::Receive(std::shared_ptr<Logger::Log> logger) noexcept {
 	return Transport::Frame::ProcessInput(m_socket, m_in_pipeline, logger);
 }

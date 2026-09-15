@@ -62,9 +62,11 @@ Server::Server(Server&& other) noexcept:
 #endif
 	other.m_status.store(Connection::Status::Disconnected, std::memory_order_relaxed);
 }
+
 Server::~Server() noexcept {
 	Disconnect();
 }
+
 Server& Server::operator=(Server&& other) noexcept {
 	if (this != &other) {
 		Disconnect();
@@ -85,13 +87,16 @@ Server& Server::operator=(Server&& other) noexcept {
 #endif
 		other.m_status.store(Connection::Status::Disconnected, std::memory_order_relaxed);
 	}
+
 	return *this;
 }
+
 bool Server::Connect(const Connection::Protocol& protocol, const std::string& address, const unsigned short& port) {
 	if (m_socket_server) {
 		m_logger << Logger::Level::Error << "Server is already running." << std::endl;
 		return false;
 	}
+
 	try {
 		m_socket_server = std::make_unique<Socket::Server>(protocol, m_logger);
 		if (!m_socket_server->Listen(address, port)) {
@@ -100,12 +105,14 @@ bool Server::Connect(const Connection::Protocol& protocol, const std::string& ad
 			m_socket_server.reset();
 			return false;
 		}
+
 		if (!CreateWakeup()) {
 			m_logger << Logger::Level::Error << "Failed to create server wakeup channel" << std::endl;
 			m_socket_server->Disconnect();
 			m_socket_server.reset();
 			return false;
 		}
+
 		std::size_t worker_count = std::thread::hardware_concurrency();
 		worker_count = worker_count == 0 ? 4 : std::min(worker_count, static_cast<std::size_t>(8));
 		m_pool = std::make_unique<Detail::WorkerPool>(worker_count, 64,
@@ -119,6 +126,7 @@ bool Server::Connect(const Connection::Protocol& protocol, const std::string& ad
 					case Detail::WorkerPool::CompletionReason::NullHandler: reason = CompletionReason::NullHandler; break;
 					case Detail::WorkerPool::CompletionReason::Error: reason = CompletionReason::Error; break;
 				}
+
 				PostCompletion({ std::move(completion.uuid), std::move(completion.packet), reason });
 			});
 		m_status.store(Connection::Status::Connected);
@@ -131,24 +139,29 @@ bool Server::Connect(const Connection::Protocol& protocol, const std::string& ad
 		return false;
 	}
 }
+
 void Server::Disconnect() noexcept {
 	if (!m_socket_server && !m_accept_thread.joinable() && !m_pool) {
 		return;
 	}
+
 	if (m_pool && m_pool->IsWorkerThread()) {
 		PostCommand({ CommandType::Stop, {} });
 		return;
 	}
+
 	if (m_socket_server) {
 		m_logger << Logger::Level::LowLevel
 				<< "Stopping server and disconnecting all clients." << std::endl;
 		m_status.store(Connection::Status::Disconnecting, std::memory_order_release);
 		SignalWakeup();
 	}
+
 	// The event loop owns all sessions. It performs cleanup after observing stop.
 	if (m_accept_thread.joinable() && m_accept_thread.get_id() != std::this_thread::get_id()) {
 		m_accept_thread.join();
 	}
+
 	if (m_pool) {
 		const bool from_worker = m_pool->IsWorkerThread();
 		m_pool->Stop();
@@ -164,6 +177,7 @@ bool Server::CreateWakeup() noexcept {
 	if (::pipe(handles) != 0) {
 		return false;
 	}
+
 	m_wakeup_read = handles[0];
 	m_wakeup_write = handles[1];
 	return true;
@@ -174,6 +188,7 @@ bool Server::CreateWakeup() noexcept {
 		CloseWakeup();
 		return false;
 	}
+
 	sockaddr_in address{};
 	address.sin_family = AF_INET;
 	address.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
@@ -182,12 +197,14 @@ bool Server::CreateWakeup() noexcept {
 		CloseWakeup();
 		return false;
 	}
+
 	int address_size = sizeof(address);
 	if (::getsockname(m_wakeup_read, reinterpret_cast<sockaddr*>(&address), &address_size) == SOCKET_ERROR ||
 		::connect(m_wakeup_write, reinterpret_cast<const sockaddr*>(&address), sizeof(address)) == SOCKET_ERROR) {
 		CloseWakeup();
 		return false;
 	}
+
 	return true;
 #endif
 }
@@ -216,6 +233,7 @@ void Server::CloseWakeup() noexcept {
 		closesocket(m_wakeup_read);
 		m_wakeup_read = INVALID_SOCKET;
 	}
+
 	if (m_wakeup_write != INVALID_SOCKET) {
 		closesocket(m_wakeup_write);
 		m_wakeup_write = INVALID_SOCKET;
@@ -225,6 +243,7 @@ void Server::CloseWakeup() noexcept {
 		close(m_wakeup_read);
 		m_wakeup_read = -1;
 	}
+
 	if (m_wakeup_write >= 0) {
 		close(m_wakeup_write);
 		m_wakeup_write = -1;
@@ -237,6 +256,7 @@ void Server::DisconnectClient(const std::string& uuid) noexcept {
 		PostCommand({ CommandType::DisconnectClient, uuid });
 		return;
 	}
+
 	DisconnectClientOnLoop(uuid);
 }
 
@@ -245,6 +265,7 @@ void Server::DisconnectClientOnLoop(const std::string& uuid) noexcept {
 	if (session_it == m_sessions.end()) {
 		return;
 	}
+
 	auto session = session_it->second;
 	m_sessions.erase(session_it);
 	session->Close();
@@ -253,12 +274,14 @@ void Server::DisconnectClientOnLoop(const std::string& uuid) noexcept {
 		m_logger << Logger::Level::LowLevel << "Disconnected client: " << uuid << std::endl;
 	}
 }
+
 void Server::AcceptOneClient() noexcept {
 	auto expected_client = m_socket_server->Accept();
 	if (!expected_client) {
 		if (Connection::IsConnected(m_status.load())) {
 			m_logger << Logger::Level::LowLevel << expected_client.error()->what() << std::endl;
 		}
+
 		return;
 	}
 #ifdef WINDOWS
@@ -279,6 +302,7 @@ void Server::PostCompletion(Completion completion) noexcept {
 		std::scoped_lock lock(m_completion_mutex);
 		m_completions.push_back(std::move(completion));
 	}
+
 	SignalWakeup();
 }
 
@@ -287,6 +311,7 @@ void Server::PostCommand(Command command) noexcept {
 		std::scoped_lock lock(m_command_mutex);
 		m_commands.push_back(std::move(command));
 	}
+
 	SignalWakeup();
 }
 
@@ -296,6 +321,7 @@ void Server::DrainCommands() noexcept {
 		std::scoped_lock lock(m_command_mutex);
 		commands.swap(m_commands);
 	}
+
 	for (const auto& command: commands) {
 		switch (command.type) {
 			case CommandType::DisconnectClient:
@@ -308,10 +334,12 @@ void Server::DrainCommands() noexcept {
 					for (const auto& [uuid, _]: m_sessions) {
 						uuids.push_back(uuid);
 					}
+
 					for (const auto& uuid: uuids) {
 						DisconnectClientOnLoop(uuid);
 					}
 				}
+
 				break;
 			case CommandType::Stop:
 				m_status.store(Connection::Status::Disconnecting, std::memory_order_release);
@@ -326,20 +354,24 @@ void Server::DrainCompletions() noexcept {
 		std::scoped_lock lock(m_completion_mutex);
 		completions.swap(m_completions);
 	}
+
 	for (auto& [_, session]: m_sessions) {
 		session->SetTaskBlocked(false);
 	}
+
 	for (auto& completion: completions) {
 		auto session_it = m_sessions.find(completion.uuid);
 		if (session_it == m_sessions.end()) {
 			continue;
 		}
+
 		auto session = session_it->second;
 		session->SetInFlight(false);
 		if (completion.reason != CompletionReason::Success || !completion.packet) {
 			DisconnectClient(completion.uuid);
 			continue;
 		}
+
 		if (!session->QueueResponse(completion.packet, m_logger)) {
 			DisconnectClient(completion.uuid);
 		}
@@ -357,18 +389,21 @@ void Server::AcceptClients() noexcept {
 			for (const auto& [_, session]: m_sessions) {
 				sessions.push_back(session);
 			}
+
 			return sessions;
 		},
 		[this](const std::shared_ptr<Detail::Session>& session, bool readable, bool writable) noexcept {
 			if (!session) {
 				return;
 			}
+
 			ProcessSession(session, readable, writable);
 		},
 		[this]() noexcept {
 			DrainCommands();
 			DrainCompletions();
 		}
+
 	);
 	for (auto& [uuid, session]: m_sessions) {
 		(void)uuid;
@@ -377,6 +412,7 @@ void Server::AcceptClients() noexcept {
 			session->Client()->Socket()->Disconnect();
 		}
 	}
+
 	m_sessions.clear();
 	m_socket_server->Disconnect();
 	m_socket_server.reset();
@@ -384,23 +420,28 @@ void Server::AcceptClients() noexcept {
 	m_status.store(Connection::Status::Disconnected, std::memory_order_release);
 	m_logger << Logger::Level::LowLevel << "Stopped accept event loop" << std::endl;
 }
+
 void Server::ProcessSession(const std::shared_ptr<Detail::Session>& session, bool readable, bool writable) noexcept {
 	if (!session || session->Closed() || session->InFlight() || !session->Client() || !m_pool) {
 		return;
 	}
+
 	if (writable && session->HasOutput()) {
 		auto flushed = session->FlushOutput();
 		if (!flushed) {
 			DisconnectClient(session->UUID());
 			return;
 		}
+
 		if (!flushed.value()) {
 			return;
 		}
 	}
+
 	if (!readable || session->InFlight()) {
 		return;
 	}
+
 	const std::string client_uuid = session->UUID();
 	if (!session->HasPendingFrame()) {
 		auto expected_frames = session->ReadReady(session->Client()->InputPipeline(), m_logger);
@@ -408,21 +449,26 @@ void Server::ProcessSession(const std::shared_ptr<Detail::Session>& session, boo
 			DisconnectClient(client_uuid);
 			return;
 		}
+
 		session->QueueFrames(std::move(expected_frames.value()));
 	}
+
 	if (!session->HasPendingFrame()) {
 		return;
 	}
+
 	if (!m_pool->HasCapacity()) {
 		session->SetTaskBlocked(true);
 		return;
 	}
+
 	Transport::Frame frame = session->TakeFrame();
 	PacketPointer packet = frame.ProcessPacket(m_deserialize_packet_function, m_logger);
 	if (!packet) {
 		DisconnectClient(client_uuid);
 		return;
 	}
+
 	session->SetInFlight(true);
 	if (!m_pool->Submit({ client_uuid, std::move(packet) })) {
 		session->SetInFlight(false);

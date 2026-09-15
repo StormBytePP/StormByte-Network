@@ -74,28 +74,33 @@ namespace {
 #endif
 	}
 }
+
 Socket::Client::Client(const Connection::Protocol& protocol, std::shared_ptr<Logger::Log> logger) noexcept
 :Socket(protocol, logger) {
 	m_logger << Logger::Level::LowLevel << "Created client socket with UUID: " << m_UUID << std::endl;
 }
+
 ExpectedVoid Socket::Client::Connect(const std::string& hostname, const unsigned short& port) noexcept {
 	m_logger << Logger::Level::LowLevel << "Connecting to " << hostname << ":" << port << std::endl;
 	if (m_status.load(std::memory_order_acquire) != Connection::Status::Disconnected) {
 		m_logger << Logger::Level::Error << "Client is already connected" << std::endl;
 		return Unexpected<ConnectionError>("Client is already connected");
 	}
+
 	m_status.store(Connection::Status::Connecting, std::memory_order_release);
 	auto expected_socket = CreateSocket();
 	if (!expected_socket) {
 		m_logger << Logger::Level::Error << "Failed to create socket: " << expected_socket.error()->what() << std::endl;
 		return Unexpected<ConnectionError>(expected_socket.error()->what());
 	}
+
 	m_handle = expected_socket.value();
 	auto expected_conn_info = Connection::Info::FromHost(hostname, port, m_protocol);
 	if (!expected_conn_info) {
 		m_logger << Logger::Level::Error << "Failed to resolve host: " << expected_conn_info.error()->what() << std::endl;
 		return Unexpected<ConnectionError>(expected_conn_info.error()->what());
 	}
+
 	m_conn_info = std::make_unique<Connection::Info>(std::move(expected_conn_info.value()));
 #ifdef WINDOWS
 	if (::connect(m_handle, m_conn_info->SockAddr().get(), sizeof(*m_conn_info->SockAddr())) == SOCKET_ERROR) {
@@ -105,23 +110,29 @@ ExpectedVoid Socket::Client::Connect(const std::string& hostname, const unsigned
 		m_logger << Logger::Level::Error << "Failed to connect: " << Connection::Handler::Instance().LastError() << std::endl;
 		return Unexpected<ConnectionError>(Connection::Handler::Instance().LastError());
 	}
+
 	InitializeAfterConnect();
 	m_logger << Logger::Level::LowLevel << "Successfully connected to " << hostname << ":" << port << std::endl;
 	return {};
 }
+
 ExpectedVoid Socket::Client::Send(const Buffer::FIFO& buffer) noexcept {
 	return Send(std::span<const std::byte>(buffer.Data().data(), buffer.Size()));
 }
+
 ExpectedVoid Socket::Client::Send(const std::vector<std::byte>& buffer) noexcept {
 	return Send(std::span<const std::byte>(buffer.data(), buffer.size()));
 }
+
 ExpectedVoid Socket::Client::Send(std::span<const std::byte> data) noexcept {
 	if (m_status.load(std::memory_order_acquire) != Connection::Status::Connected) {
 		return Unexpected<ConnectionError>("Failed to send: Client is not connected");
 	}
+
 	if (!m_handle) {
 		return Unexpected<ConnectionError>("Failed to send: Invalid socket handle");
 	}
+
 	std::size_t total_bytes_sent = 0;
 	const std::size_t preferred = (m_effective_send_buf > 0)
 		? static_cast<std::size_t>(m_effective_send_buf)
@@ -164,20 +175,25 @@ ExpectedVoid Socket::Client::Send(std::span<const std::byte> data) noexcept {
 				Connection::Handler::Instance().LastError(),
 				Connection::Handler::Instance().LastErrorCode());
 		}
+
 		total_bytes_sent += static_cast<std::size_t>(written);
 		data = data.subspan(static_cast<std::size_t>(written));
 	}
+
 	m_logger << Logger::Level::LowLevel << "All data sent successfully! Total bytes sent: "
 			<< humanreadable_bytes << total_bytes_sent << nohumanreadable << std::endl;
 	return {};
 }
+
 ExpectedVoid Socket::Client::Send(Buffer::Consumer data) noexcept {
 	if (m_status.load(std::memory_order_acquire) != Connection::Status::Connected) {
 		return Unexpected<ConnectionError>("Failed to send: Client is not connected");
 	}
+
 	if (!m_handle) {
 		return Unexpected<ConnectionError>("Failed to send: Invalid socket handle");
 	}
+
 	while (true) {
 		Buffer::DataType byte_data;
 		if (!data.Extract(0, byte_data) || byte_data.empty()) {
@@ -185,13 +201,16 @@ ExpectedVoid Socket::Client::Send(Buffer::Consumer data) noexcept {
 				break;
 			continue;
 		}
+
 		auto expected_send = Send(std::span<const std::byte>(byte_data.data(), byte_data.size()));
 		if (!expected_send) {
 			return Unexpected(expected_send.error());
 		}
 	}
+
 	return {};
 }
+
 bool Socket::Client::HasShutdownRequest() noexcept {
 	char buffer[1];
 #ifdef UNIX
@@ -218,21 +237,27 @@ bool Socket::Client::HasShutdownRequest() noexcept {
 		}
 #endif
 	}
+
 	return false;
 }
+
 ExpectedBuffer Socket::Client::Receive(const std::size_t& max_size) noexcept {
 	return Receive(max_size, 0);
 }
+
 ExpectedBuffer Socket::Client::Peek(const std::size_t& size) const noexcept {
 	return const_cast<Client*>(this)->ReadOnce(size, MSG_PEEK);
 }
+
 ExpectedBuffer Socket::Client::ReadOnce(const std::size_t& size, int flags) noexcept {
 	if (size == 0) {
 		return Unexpected<ConnectionError>("Read failed: size must be greater than 0");
 	}
+
 	if (!m_handle) {
 		return Unexpected<ConnectionError>("Read failed: Invalid socket handle");
 	}
+
 	const std::size_t preferred = (m_effective_recv_buf > 0)
 		? static_cast<std::size_t>(m_effective_recv_buf)
 		: DEFAULT_IO_CHUNK;
@@ -265,20 +290,24 @@ ExpectedBuffer Socket::Client::ReadOnce(const std::size_t& size, int flags) noex
 		return Unexpected<ConnectionError>("Read failed: {}", Connection::Handler::Instance().LastError());
 	}
 }
+
 ExpectedVoid Socket::Client::ReceiveLoop(const std::size_t& max_size, Buffer::DataType& out,
 	const unsigned short& timeout_seconds, bool require_exact) noexcept {
 	if (!m_handle) {
 		return Unexpected<ConnectionError>("Receive failed: Invalid socket handle");
 	}
+
 	if (require_exact && max_size == 0) {
 		return {};
 	}
+
 	const std::size_t preferred = (m_effective_recv_buf > 0)
 		? static_cast<std::size_t>(m_effective_recv_buf)
 		: DEFAULT_IO_CHUNK;
 	if (max_size > 0) {
 		out.reserve(out.size() + max_size);
 	}
+
 	std::size_t total_bytes_read = 0;
 	const auto start_time = std::chrono::steady_clock::now();
 	const std::size_t buf_cap = ClampChunk(preferred, max_size > 0 ? max_size : MAX_SINGLE_IO);
@@ -287,6 +316,7 @@ ExpectedVoid Socket::Client::ReceiveLoop(const std::size_t& max_size, Buffer::Da
 		if (timeout_seconds == 0) {
 			return false;
 		}
+
 		const auto now = std::chrono::steady_clock::now();
 		return std::chrono::duration_cast<std::chrono::seconds>(now - start_time).count() >= timeout_seconds;
 	};
@@ -294,6 +324,7 @@ ExpectedVoid Socket::Client::ReceiveLoop(const std::size_t& max_size, Buffer::Da
 		if (max_size > 0 && total_bytes_read >= max_size) {
 			break;
 		}
+
 		const std::size_t remaining = (max_size > 0) ? (max_size - total_bytes_read) : buf_cap;
 		const std::size_t bytes_to_read = ClampChunk(preferred, remaining);
 		if (internal_buffer.size() < bytes_to_read) {
@@ -312,6 +343,7 @@ ExpectedVoid Socket::Client::ReceiveLoop(const std::size_t& max_size, Buffer::Da
 			total_bytes_read += static_cast<std::size_t>(valread);
 			continue;
 		}
+
 		if (valread == 0) {
 			m_logger << Logger::Level::Debug << "Connection closed by peer. Exiting read loop." << std::endl;
 			if (require_exact && total_bytes_read < max_size) {
@@ -319,6 +351,7 @@ ExpectedVoid Socket::Client::ReceiveLoop(const std::size_t& max_size, Buffer::Da
 					"Receive failed: connection closed by peer (got {} of {} bytes)",
 					total_bytes_read, max_size);
 			}
+
 			break;
 		}
 #ifdef WINDOWS
@@ -330,30 +363,39 @@ ExpectedVoid Socket::Client::ReceiveLoop(const std::size_t& max_size, Buffer::Da
 			if (timed_out()) {
 				return Unexpected<ConnectionError>("Receive timed out");
 			}
+
 			auto wait_res = WaitForData(100000);
 			if (!wait_res) {
 				if (require_exact) {
 					return Unexpected<ConnectionError>("Receive failed: wait error");
 				}
+
 				break;
 			}
+
 			if (wait_res.value() == Connection::Read::Result::Timeout) {
 				if (timed_out()) {
 					return Unexpected<ConnectionError>("Receive timed out");
 				}
+
 				if (!require_exact && max_size == 0 && total_bytes_read > 0) {
 					break;
 				}
+
 				continue;
 			}
+
 			continue;
 		}
+
 		return Unexpected<ConnectionError>("Receive failed: {}", Connection::Handler::Instance().LastError());
 	}
+
 	m_logger << Logger::Level::LowLevel << "Total data received: "
 			<< humanreadable_bytes << total_bytes_read << nohumanreadable << std::endl;
 	return {};
 }
+
 ExpectedBuffer Socket::Client::Receive(const std::size_t& max_size, const unsigned short& timeout_seconds) noexcept {
 	m_logger << Logger::Level::LowLevel << "Starting to read data with max_size: "
 			<< humanreadable_bytes << max_size << nohumanreadable << std::endl;
@@ -362,24 +404,29 @@ ExpectedBuffer Socket::Client::Receive(const std::size_t& max_size, const unsign
 	if (!loop) {
 		return Unexpected(loop.error());
 	}
+
 	Buffer::FIFO buffer;
 	if (!bytes.empty()) {
 		(void)buffer.Write(std::span(bytes.data(), bytes.size()));
 	}
+
 	return buffer;
 }
+
 ExpectedVoid Socket::Client::ReceiveInto(const std::size_t& max_size, Buffer::DataType& out,
 	const unsigned short& timeout_seconds) noexcept {
 	m_logger << Logger::Level::LowLevel << "Starting ReceiveInto with max_size: "
 			<< humanreadable_bytes << max_size << nohumanreadable << std::endl;
 	return ReceiveLoop(max_size, out, timeout_seconds, true);
 }
+
 ExpectedVoid Socket::Client::Write(std::span<const std::byte> data, const std::size_t& size) noexcept {
 	m_logger << Logger::Level::LowLevel << "Starting to write data..." << std::endl;
 	if (m_status.load(std::memory_order_acquire) != Connection::Status::Connected) {
 		m_logger << Logger::Level::LowLevel << "Failed to write: Client is not connected" << std::endl;
 		return Unexpected<ConnectionError>("Failed to write: Client is not connected");
 	}
+
 	std::size_t bytes_to_write = std::min(size, data.size());
 	std::size_t total_written = 0;
 	const std::size_t preferred = (m_effective_send_buf > 0)
@@ -422,18 +469,22 @@ ExpectedVoid Socket::Client::Write(std::span<const std::byte> data, const std::s
 				Connection::Handler::Instance().LastError(),
 				Connection::Handler::Instance().LastErrorCode());
 		}
+
 		total_written += static_cast<std::size_t>(written);
 	}
+
 	m_logger << Logger::Level::LowLevel << "Write of size " << humanreadable_bytes << bytes_to_write
 			<< nohumanreadable << " bytes completed successfully" << std::endl;
 	return {};
 }
+
 StormByte::Expected<std::size_t, ConnectionError> Socket::Client::TryWrite(
 	std::span<const std::byte> data, bool& would_block) noexcept {
 	would_block = false;
 	if (m_status.load(std::memory_order_acquire) != Connection::Status::Connected || !m_handle) {
 		return Unexpected<ConnectionError>("Failed to write: Client is not connected");
 	}
+
 	if (data.empty()) {
 		return static_cast<std::size_t>(0);
 	}
@@ -457,13 +508,16 @@ StormByte::Expected<std::size_t, ConnectionError> Socket::Client::TryWrite(
 		would_block = true;
 		return static_cast<std::size_t>(0);
 	}
+
 	return Unexpected<ConnectionError>("Failed to write: {}", Connection::Handler::Instance().LastError());
 }
+
 StormByte::Expected<StormByte::Buffer::DataType, ConnectionError> Socket::Client::TryRead(bool& would_block) noexcept {
 	would_block = false;
 	if (m_status.load(std::memory_order_acquire) != Connection::Status::Connected || !m_handle) {
 		return Unexpected<ConnectionError>("Failed to read: Client is not connected");
 	}
+
 	const std::size_t size = ClampChunk(
 		m_effective_recv_buf > 0 ? static_cast<std::size_t>(m_effective_recv_buf) : DEFAULT_IO_CHUNK,
 		MAX_SINGLE_IO);
@@ -477,6 +531,7 @@ StormByte::Expected<StormByte::Buffer::DataType, ConnectionError> Socket::Client
 		data.resize(static_cast<std::size_t>(received));
 		return data;
 	}
+
 	if (received == 0) {
 		return Unexpected<ConnectionError>("Read failed: connection closed by peer");
 	}
@@ -489,12 +544,15 @@ StormByte::Expected<StormByte::Buffer::DataType, ConnectionError> Socket::Client
 		data.clear();
 		return data;
 	}
+
 	return Unexpected<ConnectionError>("Failed to read: {}", Connection::Handler::Instance().LastError());
 }
+
 bool Socket::Client::Ping() noexcept {
 	if (m_status.load(std::memory_order_acquire) != Connection::Status::Connected) {
 		return false;
 	}
+
 	bool ping_success = false;
 	char buffer[1];
 #ifdef UNIX
@@ -521,11 +579,13 @@ bool Socket::Client::Ping() noexcept {
 		}
 #endif
 	}
+
 	if (ping_success) {
 		m_logger << Logger::Level::LowLevel << "Ping successful" << std::endl;
 	} else {
 		m_logger << Logger::Level::LowLevel << "Ping failed" << std::endl;
 		m_status.store(Connection::Status::Disconnected, std::memory_order_release);
 	}
+
 	return ping_success;
 }

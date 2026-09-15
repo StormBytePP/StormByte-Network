@@ -25,11 +25,13 @@ using namespace StormByte::Network;
 Client::~Client() noexcept {
 	Disconnect();
 }
+
 bool Client::Connect(const Connection::Protocol& protocol, const std::string& address, const unsigned short& port) {
 	if (m_connection) {
 		m_logger << Logger::Level::Error << "Client is already connected." << std::endl;
 		return false;
 	}
+
 	try {
 		std::shared_ptr<Socket::Client> socket = std::make_shared<Socket::Client>(protocol, m_logger);
 		if (!socket->Connect(address, port)) {
@@ -37,6 +39,7 @@ bool Client::Connect(const Connection::Protocol& protocol, const std::string& ad
 					<< " using protocol " << Connection::ProtocolString(protocol) << std::endl;
 			return false;
 		}
+
 		m_connection = CreateConnection(socket);
 		m_logger << Logger::Level::LowLevel << "Successfully connected to " << address << ":" << port
 				<< " using protocol " << Connection::ProtocolString(protocol) << std::endl;
@@ -46,15 +49,18 @@ bool Client::Connect(const Connection::Protocol& protocol, const std::string& ad
 		return false;
 	}
 }
+
 void Client::Disconnect() noexcept {
 	if (m_connection) {
 		m_logger << Logger::Level::LowLevel << "Disconnecting client." << std::endl;
 		m_connection.reset();
 	}
 }
+
 Connection::Status Client::Status() const noexcept {
 	return m_connection ? m_connection->Status() : Connection::Status::Disconnected;
 }
+
 PacketPointer Client::Send(const Transport::Packet& packet) noexcept {
 	return Endpoint::Send(m_connection, packet);
 }

@@ -35,6 +35,7 @@ Socket::Server::Server(const Connection::Protocol& protocol, std::shared_ptr<Log
 Socket(protocol, logger) {
 	m_logger << Logger::Level::LowLevel << "Created server socket with UUID: " << m_UUID << std::endl;
 }
+
 ExpectedVoid Socket::Server::Listen(const std::string& hostname, const unsigned short& port) noexcept {
 	if (Connection::IsConnected(m_status.load(std::memory_order_acquire)))
 		return Unexpected<ConnectionError>("Server is already connected");
@@ -82,6 +83,7 @@ ExpectedVoid Socket::Server::Listen(const std::string& hostname, const unsigned 
 			Connection::Handler::Instance().LastError(),
 			Connection::Handler::Instance().LastErrorCode());
 	}
+
 	auto listen_result = ::listen(m_handle, SOMAXCONN);
 	if (listen_result == -1) {
 		m_status.store(Connection::Status::Disconnected, std::memory_order_release);
@@ -94,10 +96,12 @@ ExpectedVoid Socket::Server::Listen(const std::string& hostname, const unsigned 
 			Connection::Handler::Instance().LastError(),
 			Connection::Handler::Instance().LastErrorCode());
 	}
+
 	InitializeAfterConnect();
 	m_logger << Logger::Level::LowLevel << "Server listening on " << hostname << ":" << port << std::endl;
 	return {};
 }
+
 ExpectedClient Socket::Server::Accept() noexcept {
 	if (!Connection::IsConnected(m_status.load(std::memory_order_acquire)))
 		return Unexpected<ConnectionError>("Socket is not connected");
@@ -131,20 +135,24 @@ ExpectedClient Socket::Server::Accept() noexcept {
 #endif
 		return Unexpected<ConnectionError>("Failed to accept client connection.");
 	}
+
 	Client client_socket(m_protocol, m_logger);
 	client_socket.m_handle = client_handle;
 	client_socket.InitializeAfterConnect();
 	m_active_clients.push_back(std::make_shared<Client>(std::move(client_socket)));
 	return m_active_clients.back();
 }
+
 void Socket::Server::Disconnect() noexcept {
 	for (auto& client : m_active_clients) {
 		if (!client) continue;
 		client->Disconnect();
 	}
+
 	m_active_clients.clear();
 	Socket::Disconnect();
 }
+
 void Socket::Server::DisconnectClient(const std::string& client_uuid) noexcept {
 	auto it = std::find_if(m_active_clients.begin(), m_active_clients.end(),
 		[&client_uuid](const std::shared_ptr<Client>& client) {

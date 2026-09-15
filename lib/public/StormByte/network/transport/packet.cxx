@@ -29,5 +29,6 @@ FIFO Packet::Serialize() const noexcept {
 	if (!payload.empty()) {
 		result.Write(std::move(payload));
 	}
+
 	return result;
 }

@@ -24,9 +24,11 @@ using namespace StormByte::Network::Socket;
 bool Writer::IsWritable() const noexcept {
 	return m_writable && !m_error;
 }
+
 bool Writer::Write(const Buffer::DataType& data) noexcept {
 	return Write(data.size(), data);
 }
+
 bool Writer::Write(Buffer::DataType&& data) noexcept {
 	if (!IsWritable())
 		return false;
@@ -34,6 +36,7 @@ bool Writer::Write(Buffer::DataType&& data) noexcept {
 		return true;
 	return m_client.get().Send(std::move(data)).has_value();
 }
+
 bool Writer::Write(std::size_t count, const Buffer::DataType& data) noexcept {
 	if (!IsWritable())
 		return false;
@@ -44,6 +47,7 @@ bool Writer::Write(std::size_t count, const Buffer::DataType& data) noexcept {
 		data.begin() + static_cast<std::ptrdiff_t>(n));
 	return m_client.get().Send(std::move(slice)).has_value();
 }
+
 bool Writer::Write(std::size_t count, Buffer::DataType&& data) noexcept {
 	if (!IsWritable())
 		return false;
@@ -54,9 +58,11 @@ bool Writer::Write(std::size_t count, Buffer::DataType&& data) noexcept {
 		return Write(std::move(data));
 	return Write(n, static_cast<const Buffer::DataType&>(data));
 }
+
 void Writer::Close() noexcept {
 	m_writable = false;
 }
+
 void Writer::SetError() noexcept {
 	m_error    = true;
 	m_writable = false;

@@ -80,6 +80,7 @@ namespace StormByte::Network::Detail {
 		if (!packet || m_closed || m_output_frame_count >= MAX_OUTPUT_FRAMES) {
 			return false;
 		}
+
 		Transport::Frame frame(*packet);
 		Buffer::Consumer consumer = frame.ProcessOutput(m_client->OutputPipeline(), std::move(logger));
 		m_output_frames.emplace_back(std::move(consumer));
@@ -92,6 +93,7 @@ namespace StormByte::Network::Detail {
 				stream.data = std::move(chunk);
 			}
 		}
+
 		return true;
 	}
 
@@ -99,9 +101,11 @@ namespace StormByte::Network::Detail {
 		if (m_output_frames.empty()) {
 			return true;
 		}
+
 		if (!PrepareOutput()) {
 			return false;
 		}
+
 		bool would_block = false;
 		auto& frame = m_output_frames.front();
 		const std::span<const std::byte> remaining(frame.data.data() + frame.offset, frame.data.size() - frame.offset);
@@ -109,9 +113,11 @@ namespace StormByte::Network::Detail {
 		if (!written) {
 			return Unexpected(written.error());
 		}
+
 		if (would_block) {
 			return false;
 		}
+
 		frame.offset += written.value();
 		m_output_bytes -= written.value();
 		if (frame.offset == frame.data.size()) {
@@ -122,6 +128,7 @@ namespace StormByte::Network::Detail {
 				--m_output_frame_count;
 			}
 		}
+
 		return m_output_frames.empty() || PrepareOutput();
 	}
 
@@ -129,28 +136,34 @@ namespace StormByte::Network::Detail {
 		if (m_output_frames.empty()) {
 			return false;
 		}
+
 		auto& frame = m_output_frames.front();
 		if (!frame.data.empty()) {
 			return true;
 		}
+
 		if (frame.source.EoF()) {
 			m_output_frames.pop_front();
 			--m_output_frame_count;
 			return !m_output_frames.empty() && PrepareOutput();
 		}
+
 		const std::size_t available_room = MAX_OUTPUT_BYTES - m_output_bytes;
 		if (available_room == 0) {
 			return false;
 		}
+
 		Buffer::DataType chunk;
 		const std::size_t available = frame.source.AvailableBytes();
 		if (available == 0) {
 			return false;
 		}
+
 		const std::size_t count = std::min<std::size_t>({ available_room, available, 64 * 1024 });
 		if (!frame.source.Extract(count, chunk) || chunk.empty()) {
 			return false;
 		}
+
 		frame.data = std::move(chunk);
 		m_output_bytes += frame.data.size();
 		return true;
@@ -162,10 +175,12 @@ namespace StormByte::Network::Detail {
 		if (m_closed) {
 			return Unexpected<ConnectionError>("Session is closed");
 		}
+
 		if (received.empty()) {
 			m_closed = true;
 			return Unexpected<ConnectionError>("Session received no data");
 		}
+
 		m_input.insert(m_input.end(), std::make_move_iterator(received.begin()), std::make_move_iterator(received.end()));
 		FrameList frames;
 		while (!m_closed) {
@@ -174,6 +189,7 @@ namespace StormByte::Network::Detail {
 					m_bytes_needed = FRAME_HEADER_SIZE - m_input.size();
 					break;
 				}
+
 				DataType opcode_data(m_input.begin(), m_input.begin() + sizeof(Transport::Packet::OpcodeType));
 				DataType size_data(m_input.begin() + sizeof(Transport::Packet::OpcodeType), m_input.begin() + FRAME_HEADER_SIZE);
 				auto expected_opcode = Serializable<Transport::Packet::OpcodeType>::Deserialize(opcode_data);
@@ -182,6 +198,7 @@ namespace StormByte::Network::Detail {
 					m_closed = true;
 					return Unexpected<ConnectionError>("Session received an invalid frame header");
 				}
+
 				m_opcode = *expected_opcode;
 				m_payload.clear();
 				m_payload.reserve(*expected_size);
@@ -189,6 +206,7 @@ namespace StormByte::Network::Detail {
 				m_phase = ParsePhase::Payload;
 				m_input.erase(m_input.begin(), m_input.begin() + FRAME_HEADER_SIZE);
 			}
+
 			if (m_phase == ParsePhase::Payload) {
 				const std::size_t available = std::min(m_bytes_needed, m_input.size());
 				if (available > 0) {
@@ -196,15 +214,18 @@ namespace StormByte::Network::Detail {
 					m_input.erase(m_input.begin(), m_input.begin() + available);
 					m_bytes_needed -= available;
 				}
+
 				if (m_bytes_needed > 0) {
 					break;
 				}
+
 				frames.emplace_back(Transport::Frame::FromWire(m_opcode, std::move(m_payload), in_pipeline, logger));
 				m_payload.clear();
 				m_phase = ParsePhase::Header;
 				m_bytes_needed = FRAME_HEADER_SIZE;
 			}
 		}
+
 		return frames;
 	}
 
@@ -214,15 +235,18 @@ namespace StormByte::Network::Detail {
 			m_closed = true;
 			return Unexpected<ConnectionError>("Session is closed");
 		}
+
 		bool would_block = false;
 		auto expected_buffer = m_client->Socket()->TryRead(would_block);
 		if (!expected_buffer) {
 			m_closed = true;
 			return Unexpected(expected_buffer.error());
 		}
+
 		if (would_block || expected_buffer->empty()) {
 			return FrameList{};
 		}
+
 		return AppendReceived(std::move(expected_buffer.value()), in_pipeline, std::move(logger));
 	}
 }

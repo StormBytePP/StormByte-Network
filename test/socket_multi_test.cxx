@@ -65,6 +65,7 @@ int TestSocketMulti() {
                 // Accept may time out; check stop flag and continue
                 continue;
             }
+
             Socket::Client client_socket = std::move(expected_client.value());
             // Handler thread per client
             handler_results.emplace_back(0);
@@ -75,6 +76,7 @@ int TestSocketMulti() {
                 struct FinishedGuard {
                     std::atomic<std::size_t> &counter;
                     FinishedGuard(std::atomic<std::size_t> &c) noexcept : counter(c) {}
+
                     ~FinishedGuard() { counter.fetch_add(1); }
                 } guard(clients_finished);
                 // Accumulate until we've received the full payload from this client
@@ -91,11 +93,13 @@ int TestSocketMulti() {
                     accumulated.insert(accumulated.end(), chunk.begin(), chunk.end());
                     total_received = accumulated.size();
                 }
+
                 // Echo back the accumulated payload
                 if (!accumulated.empty()) {
                     auto send_res = client.Send(std::span<const std::byte>(accumulated.data(), accumulated.size()));
                     ASSERT_TRUE(fn_name_inner, send_res.has_value());
                 }
+
                 client.Disconnect();
                 return 0;
             };
@@ -103,11 +107,13 @@ int TestSocketMulti() {
                 handler_results[handler_idx] = worker();
             });
         }
+
         // Join handler threads
         for (auto &t : client_handlers) if (t.joinable()) t.join();
         if (Connection::IsConnected(server.Status())) {
             server.Disconnect();
         }
+
         return 0;
     });
     // Small delay to ensure server is listening
@@ -132,6 +138,7 @@ int TestSocketMulti() {
                 ASSERT_TRUE(fn_name_inner, res.has_value());
                 sent += to_send;
             }
+
             // Receive echoed data and accumulate into a std::string
             std::string received;
             received.reserve(TOTAL_BYTES_PER_CLIENT);
@@ -144,6 +151,7 @@ int TestSocketMulti() {
                 auto vec = expected_data.value();
                 received.append(reinterpret_cast<const char*>(vec.data()), vec.size());
             }
+
             // Simple equality check
             ASSERT_TRUE(fn_name_inner, received == send_data);
             client.Disconnect();
@@ -153,6 +161,7 @@ int TestSocketMulti() {
             client_results[client_idx] = worker();
         });
     }
+
     // Wait for all clients to finish
     for (auto &t : clients) if (t.joinable()) t.join();
     // Aggregate client results into failures
@@ -163,12 +172,14 @@ int TestSocketMulti() {
     while (clients_finished.load() < N) {
         std::this_thread::sleep_for(std::chrono::milliseconds(50));
     }
+
     if (server_thread.joinable()) server_thread.join();
     // Aggregate handler results into failures
     for (auto v : handler_results) if (v != 0) failures.fetch_add(1);
     // Return 1 if any thread reported failures, 0 otherwise
     RETURN_TEST(fn_name, failures.load() ? 1 : 0);
 }
+
 int TestReceiveTimeout() {
     const std::string fn_name = "TestReceiveTimeout";
     const std::string send_data(1024, 'T'); // 1 KiB payload
@@ -219,6 +230,7 @@ int TestReceiveTimeout() {
         auto vec = expected_data.value();
         received.append(reinterpret_cast<const char*>(vec.data()), vec.size());
     }
+
     ASSERT_TRUE(fn_name, received == send_data);
     // Now attempt an extra receive with 1 second timeout - expect timeout (no more data)
     auto extra_recv = client.Receive(10, 1);
@@ -227,6 +239,7 @@ int TestReceiveTimeout() {
     if (server_thread.joinable()) server_thread.join();
     RETURN_TEST(fn_name, 0);
 }
+
 int main() {
     int result = 0;
     result += TestSocketMulti();
@@ -236,5 +249,6 @@ int main() {
     } else {
         std::cout << result << " tests failed." << std::endl;
     }
+
     return result;
 }

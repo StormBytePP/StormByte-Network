@@ -37,6 +37,7 @@ Frame::Frame(const Packet& packet) noexcept {
 		packet_raw.Read(0, m_payload);
 	}
 }
+
 Frame Frame::FromWire(Packet::OpcodeType opcode, DataType&& payload,
 	Pipeline& in_pipeline, std::shared_ptr<Logger::Log> logger) noexcept {
 	if (opcode >= Packet::PROCESS_THRESHOLD) {
@@ -47,8 +48,10 @@ Frame Frame::FromWire(Packet::OpcodeType opcode, DataType&& payload,
 		payload.clear();
 		processed_payload.ExtractUntilEoF(payload);
 	}
+
 	return Frame(opcode, std::move(payload));
 }
+
 Frame Frame::ProcessInput(std::shared_ptr<Socket::Client> client, Buffer::Pipeline& in_pipeline, std::shared_ptr<Logger::Log> logger) noexcept {
 	// Read opcode
 	ExpectedBuffer expected_opcode_buffer = client->Receive(sizeof(Packet::OpcodeType));
@@ -56,11 +59,13 @@ Frame Frame::ProcessInput(std::shared_ptr<Socket::Client> client, Buffer::Pipeli
 		logger << Logger::Level::Error << "Failed to read opcode from socket: " << expected_opcode_buffer.error()->what();
 		return Frame();
 	}
+
 	auto expected_opcode = Serializable<Packet::OpcodeType>::Deserialize(expected_opcode_buffer->Data());
 	if (!expected_opcode) {
 		logger << Logger::Level::Error << "Failed to deserialize opcode from socket: insufficient data" << std::endl;
 		return Frame();
 	}
+
 	const Packet::OpcodeType opcode = *expected_opcode;
 	// Read payload size
 	ExpectedBuffer expected_size_buffer = client->Receive(sizeof(std::size_t));
@@ -68,11 +73,13 @@ Frame Frame::ProcessInput(std::shared_ptr<Socket::Client> client, Buffer::Pipeli
 		logger << Logger::Level::Error << "Failed to read payload size from socket: " << expected_size_buffer.error()->what() << std::endl;
 		return Frame();
 	}
+
 	auto expected_payload_size = Serializable<std::size_t>::Deserialize(expected_size_buffer->Data());
 	if (!expected_payload_size) {
 		logger << Logger::Level::Error << "Failed to deserialize payload size from socket: insufficient data" << std::endl;
 		return Frame();
 	}
+
 	const std::size_t payload_size = expected_payload_size.value();
 	DataType payload;
 	if (payload_size > 0) {
@@ -84,14 +91,17 @@ Frame Frame::ProcessInput(std::shared_ptr<Socket::Client> client, Buffer::Pipeli
 			return Frame();
 		}
 	}
+
 	return FromWire(opcode, std::move(payload), in_pipeline, logger);
 }
+
 PacketPointer Frame::ProcessPacket(const DeserializePacketFunction& packet_fn, std::shared_ptr<Logger::Log> logger) noexcept {
 	Producer payload_producer;
 	payload_producer.Write(std::move(m_payload));
 	payload_producer.Close();
 	return packet_fn(m_opcode, payload_producer.Consumer(), logger);
 }
+
 Consumer Frame::ProcessOutput(Buffer::Pipeline& pipeline, std::shared_ptr<Logger::Log> logger) noexcept {
 	Producer producer;
 	producer.Write(sizeof(Packet::OpcodeType), Serializable<Packet::OpcodeType>(m_opcode).Serialize());
@@ -104,10 +114,12 @@ Consumer Frame::ProcessOutput(Buffer::Pipeline& pipeline, std::shared_ptr<Logger
 		payload.clear();
 		processed_payload.ExtractUntilEoF(payload);
 	}
+
 	producer.Write(sizeof(std::size_t), Serializable<std::size_t>(payload.size()).Serialize());
 	if (!payload.empty()) {
 		producer.Write(std::move(payload));
 	}
+
 	producer.Close();
 	return producer.Consumer();
 }
